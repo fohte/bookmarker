@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "format:eslint": "eslint --fix .",
     "format:prettier": "prettier --write .",
-    "format": "conc -m 1 bun:format:eslint bun:format:prettier"
+    "format": "conc -m 1 bun:format:eslint bun:format:prettier",
+    "postinstall": "typewind generate"
   },
   "dependencies": {
     "react": "18.2.0",
