@@ -1,8 +1,4 @@
 {
-  "presets": [
-    "next/babel"
-  ],
-  "plugins": [
-    "typewind/babel"
-  ]
+  "presets": ["next/babel"],
+  "plugins": ["typewind/babel"]
 }
