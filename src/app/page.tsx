@@ -1,7 +1,9 @@
+import { tw } from 'typewind'
+
 export default function Home() {
   return (
     <main>
-      <button className="btn">Button</button>
+      <button className={tw.btn}>Button</button>
     </main>
   )
 }

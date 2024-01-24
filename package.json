@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "format:eslint": "eslint --fix .",
     "format:prettier": "prettier --write .",
-    "format": "conc -m 1 bun:format:eslint bun:format:prettier"
+    "format": "conc -m 1 bun:format:eslint bun:format:prettier",
+    "postinstall": "typewind generate"
   },
   "dependencies": {
     "react": "18.2.0",
@@ -29,7 +30,8 @@
     "eslint-config-next": "14.1.0",
     "postcss": "8.4.33",
     "prettier": "3.2.4",
-    "tailwindcss": "3.4.1",
-    "typescript": "5.3.3"
+    "tailwindcss": "3.3.7",
+    "typescript": "5.3.3",
+    "typewind": "0.1.4"
   }
 }
