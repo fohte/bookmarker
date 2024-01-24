@@ -34,3 +34,5 @@ jobs:
           git commit -m 'style: $ bun run format'
           git push
         if: steps.files-formatted.outputs.formatted == 'true'
+
+      - run: bun run test
