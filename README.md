@@ -2,7 +2,7 @@
 
 # Bookmarker
 
-Bookmarker is a web application that posts to any services like Mastodon, Hatena Bookmark, Raindrop, and so on. 
+Bookmarker is a web application that posts to any services like Mastodon, Hatena Bookmark, Raindrop, and so on.
 
 ## Usage
 
