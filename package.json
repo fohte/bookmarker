@@ -21,7 +21,7 @@
   "devDependencies": {
     "@fohte/eslint-config": "0.0.4",
     "@types/node": "20.11.24",
-    "@types/react": "18.2.61",
+    "@types/react": "18.2.62",
     "@types/react-dom": "18.2.19",
     "autoprefixer": "10.4.18",
     "concurrently": "8.2.2",
