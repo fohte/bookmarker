@@ -22,7 +22,7 @@
     "@fohte/eslint-config": "0.0.4",
     "@types/node": "20.11.30",
     "@types/react": "18.2.74",
-    "@types/react-dom": "18.2.23",
+    "@types/react-dom": "18.2.24",
     "autoprefixer": "10.4.19",
     "concurrently": "8.2.2",
     "daisyui": "4.6.3",
