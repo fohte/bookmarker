@@ -20,7 +20,7 @@
   },
   "devDependencies": {
     "@fohte/eslint-config": "0.0.4",
-    "@types/node": "20.11.30",
+    "@types/node": "20.14.9",
     "@types/react": "18.2.74",
     "@types/react-dom": "18.2.24",
     "autoprefixer": "10.4.19",
