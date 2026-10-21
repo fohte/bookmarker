@@ -36,3 +36,14 @@ jobs:
         if: steps.files-formatted.outputs.formatted == 'true'
 
       - run: bun run test
+
+  unit-test:
+    needs: test
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: verify test job succeeded
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+        run: test "$TEST_RESULT" = success

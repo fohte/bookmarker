@@ -1,0 +1,6 @@
+issuer: https://token.actions.githubusercontent.com
+subject_pattern: ^repo:fohte@11088009/bookmarker@745105199:ref:refs/heads/.+$
+claim_pattern:
+  job_workflow_ref: ^fohte/bookmarker/\.github/workflows/test\.yml@[^@]+$
+permissions:
+  contents: write
