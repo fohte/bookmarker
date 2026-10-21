@@ -1,14 +1,26 @@
-⚠️ This project is under development.
-
 # Bookmarker
 
-Bookmarker is a web application that posts to any services like Mastodon, Hatena Bookmark, Raindrop, and so on.
+Bookmarker is a personal tool for collecting and managing bookmarks across multiple services. The repository contains a web SPA and a Node.js API workspace.
 
-## Usage
+## Getting started
 
-```bash
-bun install
-bun dev
+Requires Node.js 24.21.0 and Corepack. With mise installed, run the bootstrap script to install the pinned tools and workspace dependencies:
+
+```sh
+./scripts/bootstrap
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Run the web development server and watch API source changes in separate terminals:
+
+```sh
+pnpm --filter web dev
+pnpm --filter api dev
+```
+
+Run tests and build both workspaces:
+
+```sh
+pnpm test
+pnpm --filter web build
+pnpm --filter api build
+```
