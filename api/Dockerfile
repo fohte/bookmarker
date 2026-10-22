@@ -26,7 +26,8 @@ WORKDIR /app/api
 CMD ["pnpm", "dev"]
 
 FROM deps AS builder
-COPY . .
+# The API bundle is self-contained and does not need root-level local files.
+COPY api/ api/
 RUN pnpm --filter api build
 
 # Built fresh from `base`, not `builder`, so the runtime image doesn't inherit
