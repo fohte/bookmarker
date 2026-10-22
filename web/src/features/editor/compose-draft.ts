@@ -49,6 +49,30 @@ export function updateDraftArticle(
   return { ...draft, article: article.data }
 }
 
+export function clearDraftAnalysis(draft: BookmarkDraft): BookmarkDraft {
+  if (draft.analysis === undefined) return draft
+  const updated = { ...draft }
+  delete updated.analysis
+  return updated
+}
+
+export function clearDraftVerification(draft: BookmarkDraft): BookmarkDraft {
+  const analysis = draft.analysis
+  if (analysis?.verification === undefined) return draft
+  if (analysis.summary === undefined) return clearDraftAnalysis(draft)
+  return { ...draft, analysis: { summary: analysis.summary } }
+}
+
+export function updateDraftArticleText(
+  draft: BookmarkDraft,
+  text: string,
+): BookmarkDraft {
+  const currentText = draft.article?.text ?? draft.source.sharedText ?? ''
+  const updated = updateDraftArticle(draft, { text })
+  if (updated.article?.text === currentText) return updated
+  return clearDraftAnalysis(updated)
+}
+
 export function createNewDraft(source: ShareInput, intake: 'manual' | 'share') {
   if (
     typeof crypto === 'undefined' ||

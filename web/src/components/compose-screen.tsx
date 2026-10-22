@@ -9,8 +9,19 @@ import {
 } from '@fohte/ui/dialog'
 import { Input } from '@fohte/ui/input'
 import { Panel } from '@fohte/ui/panel'
+import type {
+  DestinationDraft,
+  DestinationId,
+  DestinationMetadata,
+} from 'api/contracts'
 
+import {
+  type AnalysisDisplayState,
+  ComposeAnalysisPanel,
+} from '#components/compose-analysis-panel'
 import { ComposeCommonCommentPanel } from '#components/compose-common-comment-panel'
+import { ComposeDeliveryPanel } from '#components/compose-delivery-panel'
+import { ComposeDestinationsPanel } from '#components/compose-destinations-panel'
 import { ComposeDraftPanel } from '#components/compose-draft-panel'
 import type { ComposeState } from '#features/editor/compose-controller'
 
@@ -23,6 +34,14 @@ export type ComposeScreenProps = {
   onTitleChange: (value: string) => void
   onArticleTextChange: (value: string) => void
   onCommonCommentChange: (value: string) => void
+  onDestinationChange: (destination: DestinationDraft) => void
+  analysisSummaryState: AnalysisDisplayState
+  analysisVerificationState: AnalysisDisplayState
+  destinationMetadata?: DestinationMetadata
+  copyConfirmationDestination: DestinationId | null
+  onRequestCopyCommonComment: (destination: DestinationId) => void
+  onCancelCopyCommonComment: () => void
+  onCopyCommonComment: (destination: DestinationId) => void
   onRetrySave: () => void
   onRetryLock: () => void
   onRequestDiscard: () => void
@@ -39,6 +58,14 @@ export function ComposeScreen({
   onTitleChange,
   onArticleTextChange,
   onCommonCommentChange,
+  onDestinationChange,
+  analysisSummaryState,
+  analysisVerificationState,
+  destinationMetadata,
+  copyConfirmationDestination,
+  onRequestCopyCommonComment,
+  onCancelCopyCommonComment,
+  onCopyCommonComment,
   onRetrySave,
   onRetryLock,
   onRequestDiscard,
@@ -156,23 +183,48 @@ export function ComposeScreen({
           Loading drafts…
         </Panel>
       ) : (
-        <section className="grid gap-6 lg:grid-cols-2">
-          <ComposeDraftPanel
-            activeDraft={activeDraft}
-            canEdit={state.canEdit}
-            drafts={state.drafts}
-            onArticleTextChange={onArticleTextChange}
-            onRequestDiscard={onRequestDiscard}
-            onSelectDraft={onSelectDraft}
-            onTitleChange={onTitleChange}
-          />
-          <ComposeCommonCommentPanel
-            activeDraft={activeDraft}
-            canEdit={state.canEdit}
-            onCommentChange={onCommonCommentChange}
-            onRetrySave={onRetrySave}
-            saveState={state.saveState}
-          />
+        <section className="grid items-start gap-6 lg:grid-cols-2">
+          <div className="space-y-6">
+            <ComposeDraftPanel
+              activeDraft={activeDraft}
+              canEdit={state.canEdit}
+              drafts={state.drafts}
+              onArticleTextChange={onArticleTextChange}
+              onRequestDiscard={onRequestDiscard}
+              onSelectDraft={onSelectDraft}
+              onTitleChange={onTitleChange}
+            />
+            <ComposeAnalysisPanel
+              article={activeDraft?.article ?? null}
+              summary={activeDraft?.analysis?.summary ?? null}
+              summaryState={analysisSummaryState}
+              verification={activeDraft?.analysis?.verification ?? null}
+              verificationState={analysisVerificationState}
+            />
+            <ComposeDeliveryPanel delivery={activeDraft?.delivery ?? []} />
+          </div>
+          <div className="space-y-6">
+            <ComposeCommonCommentPanel
+              activeDraft={activeDraft}
+              canEdit={state.canEdit}
+              onCommentChange={onCommonCommentChange}
+              onRetrySave={onRetrySave}
+              saveState={state.saveState}
+            />
+            <ComposeDestinationsPanel
+              canEdit={state.canEdit}
+              commonComment={activeDraft?.commonComment ?? ''}
+              copyConfirmationDestination={copyConfirmationDestination}
+              destinations={activeDraft?.destinations ?? []}
+              {...(destinationMetadata === undefined
+                ? {}
+                : { metadata: destinationMetadata })}
+              onCancelCopyCommonComment={onCancelCopyCommonComment}
+              onCopyCommonComment={onCopyCommonComment}
+              onDestinationChange={onDestinationChange}
+              onRequestCopyCommonComment={onRequestCopyCommonComment}
+            />
+          </div>
         </section>
       )}
 

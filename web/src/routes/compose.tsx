@@ -1,4 +1,4 @@
-import { ShareInputSchema } from 'api/contracts'
+import { type DestinationId, ShareInputSchema } from 'api/contracts'
 import { useState } from 'react'
 
 import { ComposeScreen } from '#components/compose-screen'
@@ -7,6 +7,8 @@ import { useComposeController } from '#features/editor/use-compose-controller'
 
 export function ComposeRoute() {
   const [sourceUrl, setSourceUrl] = useState('')
+  const [copyConfirmationDestination, setCopyConfirmationDestination] =
+    useState<DestinationId | null>(null)
   const controller = useComposeController()
 
   const openManualSource = async () => {
@@ -44,6 +46,18 @@ export function ComposeRoute() {
       onTitleChange={controller.updateTitle}
       onArticleTextChange={controller.updateArticleText}
       onCommonCommentChange={controller.updateCommonComment}
+      onDestinationChange={controller.updateDestination}
+      analysisSummaryState="unavailable"
+      analysisVerificationState="unavailable"
+      copyConfirmationDestination={copyConfirmationDestination}
+      onRequestCopyCommonComment={setCopyConfirmationDestination}
+      onCancelCopyCommonComment={() => {
+        setCopyConfirmationDestination(null)
+      }}
+      onCopyCommonComment={(destination) => {
+        controller.copyCommonComment(destination)
+        setCopyConfirmationDestination(null)
+      }}
       onRetrySave={() => void controller.retrySave()}
       onRetryLock={() => void controller.retryLock()}
       onRequestDiscard={controller.requestDiscard}

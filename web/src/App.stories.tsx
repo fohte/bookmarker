@@ -34,6 +34,13 @@ export const Preview: Story = {
         onTitleChange={() => undefined}
         onArticleTextChange={() => undefined}
         onCommonCommentChange={() => undefined}
+        onDestinationChange={() => undefined}
+        analysisSummaryState="unavailable"
+        analysisVerificationState="unavailable"
+        copyConfirmationDestination={null}
+        onRequestCopyCommonComment={() => undefined}
+        onCancelCopyCommonComment={() => undefined}
+        onCopyCommonComment={() => undefined}
         onRetrySave={() => undefined}
         onRetryLock={() => undefined}
         onRequestDiscard={() => undefined}

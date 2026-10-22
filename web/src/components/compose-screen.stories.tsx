@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import type { BookmarkDraft } from 'api/contracts'
+import type { BookmarkDraft, DestinationMetadata } from 'api/contracts'
 
 import {
   ComposeScreen,
@@ -56,6 +56,13 @@ const handlers: Omit<ComposeScreenProps, 'state' | 'sourceUrl'> = {
   onTitleChange: () => undefined,
   onArticleTextChange: () => undefined,
   onCommonCommentChange: () => undefined,
+  onDestinationChange: () => undefined,
+  analysisSummaryState: 'unavailable',
+  analysisVerificationState: 'unavailable',
+  copyConfirmationDestination: null,
+  onRequestCopyCommonComment: () => undefined,
+  onCancelCopyCommonComment: () => undefined,
+  onCopyCommonComment: () => undefined,
   onRetrySave: () => undefined,
   onRetryLock: () => undefined,
   onRequestDiscard: () => undefined,
@@ -133,4 +140,44 @@ export const ConfirmDiscard: Story = {
     sourceUrl: '',
   },
   name: 'The editor asks before discarding the saved draft.',
+}
+
+const unconfiguredMetadata: DestinationMetadata = {
+  destinations: {
+    hatena: { configured: false },
+    mastodon: { configured: true },
+    raindrop: { configured: true },
+    x: { configured: true },
+  },
+}
+
+export const DestinationUnavailable: Story = {
+  args: { state: savedState, destinationMetadata: unconfiguredMetadata },
+  name: 'The editor keeps saved settings visible when a service is unconfigured.',
+}
+
+export const ConfirmCopy: Story = {
+  args: {
+    state: {
+      ...savedState,
+      activeDraft: {
+        ...exampleDraft,
+        destinations: [
+          {
+            destination: 'mastodon',
+            selected: true,
+            commentMode: 'custom',
+            customComment: 'An existing individual comment.',
+            options: {
+              visibility: 'unlisted',
+              spoilerText: '',
+              sensitive: false,
+            },
+          },
+        ],
+      },
+    },
+    copyConfirmationDestination: 'mastodon',
+  },
+  name: 'The editor confirms before replacing a saved custom comment.',
 }

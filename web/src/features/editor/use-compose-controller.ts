@@ -1,4 +1,9 @@
-import type { BookmarkDraft, ShareInput } from 'api/contracts'
+import type {
+  BookmarkDraft,
+  DestinationDraft,
+  DestinationId,
+  ShareInput,
+} from 'api/contracts'
 import { err } from 'neverthrow'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -64,6 +69,14 @@ export function useComposeController() {
     controllerRef.current?.updateCommonComment(comment)
   }, [])
 
+  const updateDestination = useCallback((destination: DestinationDraft) => {
+    controllerRef.current?.updateDestination(destination)
+  }, [])
+
+  const copyCommonComment = useCallback((destination: DestinationId) => {
+    controllerRef.current?.copyCommonComment(destination)
+  }, [])
+
   const selectDraft = useCallback((draftId: string) => {
     const controller = controllerRef.current
     if (controller !== null) return controller.selectDraft(draftId)
@@ -103,6 +116,8 @@ export function useComposeController() {
     updateTitle,
     updateArticleText,
     updateCommonComment,
+    updateDestination,
+    copyCommonComment,
     selectDraft,
     retryLock,
     retrySave,

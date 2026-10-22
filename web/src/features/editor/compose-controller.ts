@@ -1,4 +1,9 @@
-import { type BookmarkDraft, type ShareInput } from 'api/contracts'
+import {
+  type BookmarkDraft,
+  type DestinationDraft,
+  type DestinationId,
+  type ShareInput,
+} from 'api/contracts'
 import { err, ok, type Result } from 'neverthrow'
 
 import {
@@ -16,8 +21,14 @@ import {
   type DraftStore,
 } from '#features/drafts/draft-store'
 import {
+  getDestinationDraft,
+  replaceDestinationDraft,
+} from '#features/editor/compose-destination'
+import {
+  clearDraftVerification,
   recoverPendingDeliveries,
   updateDraftArticle,
+  updateDraftArticleText,
 } from '#features/editor/compose-draft'
 import {
   cleanupDraftNavigation,
@@ -130,11 +141,58 @@ export class ComposeController {
   }
 
   updateArticleText(text: string): void {
-    this.#updateDraft((draft) => updateDraftArticle(draft, { text }))
+    this.#updateDraft((draft) => updateDraftArticleText(draft, text))
   }
 
   updateCommonComment(commonComment: string): void {
-    this.#updateDraft((draft) => ({ ...draft, commonComment }))
+    this.#updateDraft((draft) =>
+      clearDraftVerification({ ...draft, commonComment }),
+    )
+  }
+
+  updateDestination(destination: DestinationDraft): void {
+    this.#updateDraft((draft) => {
+      const previous = getDestinationDraft(
+        draft.destinations,
+        destination.destination,
+      )
+      const previousComment =
+        previous.commentMode === 'common'
+          ? draft.commonComment
+          : previous.customComment
+      const nextComment =
+        destination.commentMode === 'common'
+          ? draft.commonComment
+          : destination.customComment
+      const updated = {
+        ...draft,
+        destinations: replaceDestinationDraft(draft.destinations, destination),
+      }
+      return previousComment === nextComment
+        ? updated
+        : clearDraftVerification(updated)
+    })
+  }
+
+  copyCommonComment(destinationId: DestinationId): void {
+    this.#updateDraft((draft) => {
+      const destination = getDestinationDraft(draft.destinations, destinationId)
+      const previousComment =
+        destination.commentMode === 'common'
+          ? draft.commonComment
+          : destination.customComment
+      const updated = {
+        ...draft,
+        destinations: replaceDestinationDraft(draft.destinations, {
+          ...destination,
+          commentMode: 'custom',
+          customComment: draft.commonComment,
+        }),
+      }
+      return previousComment === draft.commonComment
+        ? updated
+        : clearDraftVerification(updated)
+    })
   }
 
   async selectDraft(draftId: string): Promise<void> {
