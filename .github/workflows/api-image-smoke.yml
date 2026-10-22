@@ -1,0 +1,25 @@
+name: API image smoke
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  api-image-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build the production API image
+        run: docker build --file api/Dockerfile --tag bookmarker-api:smoke .
+
+      - name: Start the image and check its health endpoint
+        run: bash .github/scripts/api-image-smoke.sh bookmarker-api:smoke
