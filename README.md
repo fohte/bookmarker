@@ -2,6 +2,10 @@
 
 Bookmarker is a personal tool for collecting and managing bookmarks across multiple services. The repository contains a web SPA and a Node.js API workspace.
 
+## Production site
+
+The production site is [https://b.fohte.net](https://b.fohte.net). The former host, `bookmarker.fohte.net`, is retired and does not redirect. Browser drafts, analysis results, and post history are stored in IndexedDB under the site's origin, so data saved at the former origin is not automatically migrated to the new one.
+
 ## Getting started
 
 Requires Node.js 24.21.0 and Corepack. With mise installed, run the bootstrap script to install the pinned tools and workspace dependencies:
