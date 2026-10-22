@@ -15,7 +15,7 @@ type AccessConfigurationResult = Result<
   AccessConfigurationError
 >
 
-export type AccessConfiguration = {
+type AccessConfiguration = {
   appOrigin: string
   issuer: string
   audience: string
