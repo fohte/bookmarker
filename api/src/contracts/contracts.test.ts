@@ -450,6 +450,74 @@ describe('BookmarkDraft and API errors', () => {
     })
   })
 
+  it('preserves the sent article in a pending delivery snapshot', () => {
+    expect(
+      BookmarkDraftSchema.safeParse({
+        version: 1,
+        id: '9fcb8334-cd5c-4375-8a41-caecc57def69',
+        source: { version: 1, url: 'https://example.com/story' },
+        article: {
+          url: 'https://example.com/current',
+          title: 'Current article',
+          text: 'Current article text',
+          source: 'manual',
+          partial: false,
+        },
+        commonComment: '',
+        delivery: [
+          {
+            article: {
+              url: 'https://example.com/sent',
+              title: 'Sent article',
+            },
+            target: {
+              destination: 'hatena',
+              operationId: 'a813a5ad-d795-42fb-a2a0-c08b305d7684',
+              comment: 'Sent comment',
+              options: { tags: ['sample'], private: false },
+            },
+          },
+        ],
+        updatedAt: '2000-01-01T00:00:00.000Z',
+      }),
+    ).toEqual({
+      success: true,
+      data: {
+        version: 1,
+        id: '9fcb8334-cd5c-4375-8a41-caecc57def69',
+        source: {
+          version: 1,
+          url: 'https://example.com/story',
+          partial: false,
+        },
+        article: {
+          url: 'https://example.com/current',
+          title: 'Current article',
+          text: 'Current article text',
+          source: 'manual',
+          partial: false,
+        },
+        commonComment: '',
+        destinations: [],
+        delivery: [
+          {
+            article: {
+              url: 'https://example.com/sent',
+              title: 'Sent article',
+            },
+            target: {
+              destination: 'hatena',
+              operationId: 'a813a5ad-d795-42fb-a2a0-c08b305d7684',
+              comment: 'Sent comment',
+              options: { tags: ['sample'], private: false },
+            },
+          },
+        ],
+        updatedAt: '2000-01-01T00:00:00.000Z',
+      },
+    })
+  })
+
   it('validates the shared API error envelope', () => {
     expect(
       ApiErrorEnvelopeSchema.safeParse({

@@ -7,12 +7,13 @@ import {
 } from '#contracts/article'
 import { DeliveryResultSchema } from '#contracts/delivery'
 import { DestinationDraftSchema } from '#contracts/destination'
-import { PublishTargetSchema } from '#contracts/publish'
+import { PublishArticleSchema, PublishTargetSchema } from '#contracts/publish'
 import { ShareInputSchema } from '#contracts/share-input'
 import { findDuplicateDestinationIndexes } from '#contracts/unique-destinations'
 
 const DeliverySnapshotSchema = z
   .object({
+    article: PublishArticleSchema,
     target: PublishTargetSchema,
     result: DeliveryResultSchema.optional(),
   })

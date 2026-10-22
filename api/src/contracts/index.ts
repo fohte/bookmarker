@@ -26,7 +26,15 @@ export type { BookmarkDraft } from '#contracts/draft'
 export { BookmarkDraftSchema } from '#contracts/draft'
 export type { ApiErrorEnvelope } from '#contracts/error'
 export { ApiErrorEnvelopeSchema } from '#contracts/error'
-export type { PublishRequest, PublishTarget } from '#contracts/publish'
-export { PublishRequestSchema, PublishTargetSchema } from '#contracts/publish'
+export type {
+  PublishArticle,
+  PublishRequest,
+  PublishTarget,
+} from '#contracts/publish'
+export {
+  PublishArticleSchema,
+  PublishRequestSchema,
+  PublishTargetSchema,
+} from '#contracts/publish'
 export type { ShareInput } from '#contracts/share-input'
 export { ShareInputSchema } from '#contracts/share-input'

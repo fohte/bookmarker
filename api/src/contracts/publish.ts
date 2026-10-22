@@ -37,11 +37,15 @@ export const PublishTargetSchema = z.discriminatedUnion('destination', [
 
 export type PublishTarget = z.infer<typeof PublishTargetSchema>
 
+export const PublishArticleSchema = z
+  .object({ url: HttpUrlSchema, title: z.string().optional() })
+  .strict()
+
+export type PublishArticle = z.infer<typeof PublishArticleSchema>
+
 export const PublishRequestSchema = z
   .object({
-    article: z
-      .object({ url: HttpUrlSchema, title: z.string().optional() })
-      .strict(),
+    article: PublishArticleSchema,
     targets: z.array(PublishTargetSchema).min(1),
   })
   .strict()
