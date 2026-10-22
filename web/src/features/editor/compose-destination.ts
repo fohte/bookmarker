@@ -1,4 +1,10 @@
-import type { DestinationDraft, DestinationId } from 'api/contracts'
+import type {
+  BookmarkDraft,
+  DestinationDraft,
+  DestinationId,
+} from 'api/contracts'
+
+import { clearDraftVerification } from '#features/editor/compose-draft'
 
 export const destinationIds: DestinationId[] = [
   'hatena',
@@ -66,4 +72,51 @@ export function replaceDestinationDraft(
   return destinations.map((item, itemIndex) =>
     itemIndex === index ? updated : item,
   )
+}
+
+export function updateDestinationDraft(
+  draft: BookmarkDraft,
+  destination: DestinationDraft,
+): BookmarkDraft {
+  const previous = getDestinationDraft(
+    draft.destinations,
+    destination.destination,
+  )
+  const previousComment =
+    previous.commentMode === 'common'
+      ? draft.commonComment
+      : previous.customComment
+  const nextComment =
+    destination.commentMode === 'common'
+      ? draft.commonComment
+      : destination.customComment
+  const updated = {
+    ...draft,
+    destinations: replaceDestinationDraft(draft.destinations, destination),
+  }
+  return previousComment === nextComment
+    ? updated
+    : clearDraftVerification(updated)
+}
+
+export function copyCommonCommentDraft(
+  draft: BookmarkDraft,
+  destinationId: DestinationId,
+): BookmarkDraft {
+  const destination = getDestinationDraft(draft.destinations, destinationId)
+  const previousComment =
+    destination.commentMode === 'common'
+      ? draft.commonComment
+      : destination.customComment
+  const updated = {
+    ...draft,
+    destinations: replaceDestinationDraft(draft.destinations, {
+      ...destination,
+      commentMode: 'custom',
+      customComment: draft.commonComment,
+    }),
+  }
+  return previousComment === draft.commonComment
+    ? updated
+    : clearDraftVerification(updated)
 }

@@ -21,8 +21,8 @@ import {
   type DraftStore,
 } from '#features/drafts/draft-store'
 import {
-  getDestinationDraft,
-  replaceDestinationDraft,
+  copyCommonCommentDraft,
+  updateDestinationDraft,
 } from '#features/editor/compose-destination'
 import {
   clearDraftVerification,
@@ -151,48 +151,11 @@ export class ComposeController {
   }
 
   updateDestination(destination: DestinationDraft): void {
-    this.#updateDraft((draft) => {
-      const previous = getDestinationDraft(
-        draft.destinations,
-        destination.destination,
-      )
-      const previousComment =
-        previous.commentMode === 'common'
-          ? draft.commonComment
-          : previous.customComment
-      const nextComment =
-        destination.commentMode === 'common'
-          ? draft.commonComment
-          : destination.customComment
-      const updated = {
-        ...draft,
-        destinations: replaceDestinationDraft(draft.destinations, destination),
-      }
-      return previousComment === nextComment
-        ? updated
-        : clearDraftVerification(updated)
-    })
+    this.#updateDraft((draft) => updateDestinationDraft(draft, destination))
   }
 
   copyCommonComment(destinationId: DestinationId): void {
-    this.#updateDraft((draft) => {
-      const destination = getDestinationDraft(draft.destinations, destinationId)
-      const previousComment =
-        destination.commentMode === 'common'
-          ? draft.commonComment
-          : destination.customComment
-      const updated = {
-        ...draft,
-        destinations: replaceDestinationDraft(draft.destinations, {
-          ...destination,
-          commentMode: 'custom',
-          customComment: draft.commonComment,
-        }),
-      }
-      return previousComment === draft.commonComment
-        ? updated
-        : clearDraftVerification(updated)
-    })
+    this.#updateDraft((draft) => copyCommonCommentDraft(draft, destinationId))
   }
 
   async selectDraft(draftId: string): Promise<void> {
