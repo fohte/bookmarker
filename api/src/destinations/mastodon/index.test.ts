@@ -28,7 +28,7 @@ type RequestCall = {
 }
 
 const stubFetch = (
-  response: () => Response | Promise<Response>,
+  response: (request: RequestCall) => Response | Promise<Response>,
 ): RequestCall[] => {
   const requests: RequestCall[] = []
   const fakeFetch: typeof fetch = async (input, init) => {
@@ -38,8 +38,9 @@ const stubFetch = (
         : input instanceof URL
           ? input.href
           : input.url
-    requests.push({ url, ...(init ? { init } : {}) })
-    return response()
+    const request = { url, ...(init ? { init } : {}) }
+    requests.push(request)
+    return response(request)
   }
   vi.stubGlobal('fetch', fakeFetch)
   return requests
@@ -277,6 +278,41 @@ describe('createMastodonAdapter', () => {
     )
   })
 
+  it.each([
+    { status: 401, code: 'unauthorized' },
+    { status: 403, code: 'unauthorized' },
+    { status: 429, code: 'rate_limited' },
+  ])(
+    'maps instance metadata HTTP $status to a safe error',
+    async ({ status, code }) => {
+      setConfig()
+      const requests = stubFetch(() => jsonResponse({ error: token }, status))
+      const adapter = createMastodonAdapter()
+
+      expectOutput(
+        {
+          configured: adapter.configured,
+          metadata: await summarizeResult(adapter.getMetadata()),
+          requests: requests.map(summarizeRequest),
+        },
+        {
+          configured: true,
+          metadata: { error: { code } },
+          requests: [
+            {
+              url: 'https://mastodon.example.test/api/v2/instance',
+              method: 'GET',
+              headers: {},
+              body: null,
+              redirect: 'manual',
+              hasTimeoutSignal: true,
+            },
+          ],
+        },
+      )
+    },
+  )
+
   it('posts the full comment, article URL, visibility, warning, and idempotency key once', async () => {
     setConfig()
     const requests = stubFetch(() =>
@@ -385,6 +421,62 @@ describe('createMastodonAdapter', () => {
           error: { code: 'unavailable', outcome: 'unknown', retryable: false },
         },
         requestCount: 1,
+      },
+    )
+  })
+
+  it('maps an aborted write to unknown with the configured timeout', async () => {
+    setConfig()
+    const timeoutController = new AbortController()
+    let timeoutMs: number | undefined
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation((milliseconds) => {
+      timeoutMs = milliseconds
+      return timeoutController.signal
+    })
+
+    let signalRequestStarted = () => {}
+    const requestStarted = new Promise<void>((resolve) => {
+      signalRequestStarted = () => {
+        resolve()
+      }
+    })
+    let requestSignal: AbortSignal | undefined
+    const requests = stubFetch(({ init }) => {
+      const signal = init?.signal
+      if (!(signal instanceof AbortSignal)) {
+        return Promise.reject(new Error('request has no abort signal'))
+      }
+      requestSignal = signal
+      signalRequestStarted()
+      return new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener(
+          'abort',
+          () => {
+            reject(new Error('request aborted'))
+          },
+          { once: true },
+        )
+      })
+    })
+    const adapter = createMastodonAdapter()
+    const published = adapter.publish({ article, target })
+    await requestStarted
+    timeoutController.abort(new DOMException('fixture timeout', 'TimeoutError'))
+
+    expectOutput(
+      {
+        result: await summarizeResult(published),
+        requestCount: requests.length,
+        timeoutMs,
+        signalAborted: requestSignal?.aborted,
+      },
+      {
+        result: {
+          error: { code: 'unavailable', outcome: 'unknown', retryable: false },
+        },
+        requestCount: 1,
+        timeoutMs: 10_000,
+        signalAborted: true,
       },
     )
   })

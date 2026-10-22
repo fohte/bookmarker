@@ -29,15 +29,11 @@ export const requestMastodon = (
     unavailable,
   )
 
-const cancelResponseBody = (response: Response): void => {
+export const discardMastodonResponse = (response: Response): void => {
   const cancellation = response.body?.cancel()
   if (cancellation) {
     void cancellation.catch(() => undefined)
   }
-}
-
-export const discardMastodonResponse = (response: Response): void => {
-  cancelResponseBody(response)
 }
 
 const joinChunks = (
@@ -60,7 +56,7 @@ const readBoundedBody = (
 ): ResultAsync<Uint8Array, MastodonHttpError> => {
   const declaredLength = Number(response.headers.get('content-length'))
   if (Number.isFinite(declaredLength) && declaredLength > maxResponseBytes) {
-    cancelResponseBody(response)
+    discardMastodonResponse(response)
     return errAsync(invalidResponse())
   }
 

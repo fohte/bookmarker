@@ -11,7 +11,7 @@ Set these environment variables on the backend only:
 | `MASTODON_BASE_URL`     | The instance HTTPS origin, for example `https://mastodon.example.test`. Do not include a path, query, fragment, or credentials. |
 | `MASTODON_ACCESS_TOKEN` | A user access token with the `write:statuses` scope.                                                                            |
 
-Both values are optional at startup. If either is missing, the adapter is unconfigured and makes no Mastodon requests. If both are present but the base URL is invalid, the adapter remains configured by environment presence, reports metadata as unavailable, and does not send the token.
+Both values are optional at startup. If either is missing or blank, the adapter is unconfigured and makes no Mastodon requests. If both values are non-empty but the base URL is invalid, the adapter remains configured by environment presence, reports metadata as unavailable, and does not send the token.
 
 The adapter reads instance limits from the public `GET /api/v2/instance` endpoint. It returns `configuration.statuses.max_characters` and `configuration.statuses.characters_reserved_per_url` as metadata. A metadata failure does not mark the destination unconfigured or block other destinations.
 
@@ -35,7 +35,7 @@ In AWS Systems Manager Parameter Store, create each parameter with type `SecureS
 | `/infra/bookmarker/mastodon-base-url`     | The target instance HTTPS origin. |
 | `/infra/bookmarker/mastodon-access-token` | The issued user access token.     |
 
-After saving the parameters, wait for the API's ExternalSecret to synchronize and restart the API deployment so it reads the new environment values. Keep parameter values out of logs and deployment output.
+After saving the parameters, inject the values into the API process as `MASTODON_BASE_URL` and `MASTODON_ACCESS_TOKEN`, then restart the process so the adapter reads the new environment values. Keep parameter values out of logs and deployment output.
 
 ## Delivery and failure handling
 
