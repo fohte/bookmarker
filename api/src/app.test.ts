@@ -512,3 +512,32 @@ describe('GET /health', () => {
     })
   })
 })
+
+describe('GET /api/destinations', () => {
+  it('registers the route behind the shared authentication middleware', async () => {
+    const app = createTestApp()
+    const responses = await Promise.all([
+      Promise.resolve(app.request('/api/destinations')).then(summarizeResponse),
+      Promise.resolve(
+        app.request('/api/destinations', {
+          headers: await authenticatedHeaders(),
+        }),
+      ).then(summarizeResponse),
+    ])
+
+    expect(responses).toEqual([
+      unauthorizedResponse,
+      {
+        status: 200,
+        body: {
+          destinations: {
+            hatena: { configured: false },
+            mastodon: { configured: false },
+            raindrop: { configured: false },
+            x: { configured: true },
+          },
+        },
+      },
+    ])
+  })
+})

@@ -2,6 +2,9 @@
   "name": "web",
   "private": true,
   "type": "module",
+  "exports": {
+    "./features/publish": "./src/features/publish/index.ts"
+  },
   "imports": {
     "#*": {
       "types": [
