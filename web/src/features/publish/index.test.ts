@@ -164,6 +164,70 @@ describe('publish client helpers', () => {
     })
   })
 
+  it('keeps definitive validation and capacity failures retryable only when safe', async () => {
+    const responses = [
+      response(
+        { error: { code: 'publish_busy', message: 'Fictional busy message.' } },
+        503,
+      ),
+      response(
+        {
+          error: {
+            code: 'invalid_request',
+            message: 'Fictional validation message.',
+          },
+        },
+        400,
+      ),
+      response(
+        {
+          error: {
+            code: 'operation_conflict',
+            message: 'Fictional conflict message.',
+          },
+        },
+        409,
+      ),
+    ]
+    installFetch(() => responses.shift() ?? new Response(null, { status: 500 }))
+
+    const results = await Promise.all([
+      publishTargets(request),
+      publishTargets(request),
+      publishTargets(request),
+    ])
+
+    expect(results).toEqual([
+      {
+        results: request.targets.map((target) => ({
+          destination: target.destination,
+          operationId: target.operationId,
+          status: 'failed',
+          retryable: true,
+          message: 'Publishing is temporarily busy.',
+        })),
+      },
+      {
+        results: request.targets.map((target) => ({
+          destination: target.destination,
+          operationId: target.operationId,
+          status: 'failed',
+          retryable: false,
+          message: 'The publish request was rejected.',
+        })),
+      },
+      {
+        results: request.targets.map((target) => ({
+          destination: target.destination,
+          operationId: target.operationId,
+          status: 'unknown',
+          retryable: false,
+          message: 'Delivery could not be confirmed.',
+        })),
+      },
+    ])
+  })
+
   it('returns unknown without an authentication claim for transport failures', async () => {
     const fetchMock = vi.fn(() =>
       Promise.reject(new TypeError('network failed')),
@@ -246,6 +310,39 @@ describe('publish client helpers', () => {
         authenticationRequired: true,
       },
     })
+  })
+
+  it('returns configured Mastodon and Raindrop metadata', async () => {
+    const metadata = {
+      destinations: {
+        hatena: { configured: false },
+        mastodon: {
+          configured: true,
+          maxCharacters: 640,
+          charactersReservedPerUrl: 19,
+        },
+        raindrop: {
+          configured: true,
+          collections: [
+            {
+              id: 37,
+              title: '架空のコレクション',
+              parentId: 4,
+              public: false,
+            },
+          ],
+        },
+        x: { configured: true },
+      },
+    }
+    installFetch(() => response(metadata))
+
+    const outcome = await getDestinations().match(
+      (value) => ({ kind: 'success' as const, value }),
+      (error) => ({ kind: 'error' as const, error }),
+    )
+
+    expect(outcome).toEqual({ kind: 'success', value: metadata })
   })
 
   it('returns a safe error for invalid destination metadata without claiming expired auth', async () => {

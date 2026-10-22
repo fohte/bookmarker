@@ -1,4 +1,8 @@
-import type { DeliveryResult, PublishTarget } from 'api/contracts'
+import type {
+  DeliveryResult,
+  PublishArticle,
+  PublishTarget,
+} from 'api/contracts'
 import { Hono } from 'hono'
 import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { describe, expect, it, vi } from 'vitest'
@@ -38,17 +42,22 @@ const success = (target: PublishTarget): DeliveryResult => ({
   remoteUrl: `https://results.example.test/${target.destination}`,
 })
 
+type AdapterInput<D extends keyof DestinationRegistry> = {
+  article: PublishArticle
+  target: Extract<PublishTarget, { destination: D }>
+}
+
 const adapter = <D extends keyof DestinationRegistry>(
   destination: D,
   publish: (
-    target: Extract<PublishTarget, { destination: D }>,
+    input: AdapterInput<D>,
   ) => ResultAsync<DeliveryResult, PublishAdapterError>,
   configured = true,
 ): DestinationAdapter<D> => ({
   destination,
   configured,
   getMetadata: () => okAsync({ configured: true }),
-  publish: ({ target }) => publish(target),
+  publish: (input) => publish(input),
 })
 
 const registry = (
@@ -59,13 +68,14 @@ const registry = (
   }> = {},
 ): DestinationRegistry => ({
   hatena:
-    overrides.hatena ?? adapter('hatena', (target) => okAsync(success(target))),
+    overrides.hatena ??
+    adapter('hatena', (input) => okAsync(success(input.target))),
   mastodon:
     overrides.mastodon ??
-    adapter('mastodon', (target) => okAsync(success(target))),
+    adapter('mastodon', (input) => okAsync(success(input.target))),
   raindrop:
     overrides.raindrop ??
-    adapter('raindrop', (target) => okAsync(success(target))),
+    adapter('raindrop', (input) => okAsync(success(input.target))),
 })
 
 const appWith = (
@@ -109,8 +119,8 @@ const summarizePublications = async (
 
 describe('POST /api/publish', () => {
   it('sends only selected targets and preserves an individual partial failure', async () => {
-    const publishHatena = vi.fn((target: PublishTarget) =>
-      okAsync(success(target)),
+    const publishHatena = vi.fn((input: AdapterInput<'hatena'>) =>
+      okAsync(success(input.target)),
     )
     const publishMastodon = vi.fn(() =>
       errAsync<DeliveryResult, PublishAdapterError>({
@@ -119,8 +129,8 @@ describe('POST /api/publish', () => {
         retryable: true,
       }),
     )
-    const publishRaindrop = vi.fn((target: PublishTarget) =>
-      okAsync(success(target)),
+    const publishRaindrop = vi.fn((input: AdapterInput<'raindrop'>) =>
+      okAsync(success(input.target)),
     )
     const app = appWith(
       registry({
@@ -134,9 +144,12 @@ describe('POST /api/publish', () => {
 
     expect(
       await summarizePublication(response, {
-        hatena: publishHatena.mock.calls.length,
-        mastodon: publishMastodon.mock.calls.length,
-        raindrop: publishRaindrop.mock.calls.length,
+        counts: {
+          hatena: publishHatena.mock.calls.length,
+          mastodon: publishMastodon.mock.calls.length,
+          raindrop: publishRaindrop.mock.calls.length,
+        },
+        hatenaInputs: publishHatena.mock.calls.map(([input]) => input),
       }),
     ).toEqual({
       status: 200,
@@ -152,7 +165,10 @@ describe('POST /api/publish', () => {
           },
         ],
       },
-      calls: { hatena: 1, mastodon: 1, raindrop: 0 },
+      calls: {
+        counts: { hatena: 1, mastodon: 1, raindrop: 0 },
+        hatenaInputs: [{ article, target: hatenaTarget }],
+      },
     })
   })
 
@@ -205,11 +221,11 @@ describe('POST /api/publish', () => {
   })
 
   it('rejects an over-capacity request before any adapter is called', async () => {
-    const publishHatena = vi.fn((target: PublishTarget) =>
-      okAsync(success(target)),
+    const publishHatena = vi.fn((input: AdapterInput<'hatena'>) =>
+      okAsync(success(input.target)),
     )
-    const publishMastodon = vi.fn((target: PublishTarget) =>
-      okAsync(success(target)),
+    const publishMastodon = vi.fn((input: AdapterInput<'mastodon'>) =>
+      okAsync(success(input.target)),
     )
     const app = appWith(
       registry({

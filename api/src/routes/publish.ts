@@ -8,15 +8,6 @@ import {
 } from '#destinations/publish'
 import type { DestinationRegistry } from '#destinations/types'
 
-const errorResponse = (
-  code: string,
-  message: string,
-  status: 400 | 409 | 503,
-) => ({
-  error: { code, message },
-  status,
-})
-
 export const registerPublishRoute = (
   app: Hono,
   registry: DestinationRegistry,
@@ -32,22 +23,28 @@ export const registerPublishRoute = (
     )
 
     if (!body.ok) {
-      const response = errorResponse(
-        'invalid_json',
-        'The request body must be valid JSON.',
+      return context.json(
+        {
+          error: {
+            code: 'invalid_json',
+            message: 'The request body must be valid JSON.',
+          },
+        },
         400,
       )
-      return context.json({ error: response.error }, response.status)
     }
 
     const parsed = PublishRequestSchema.safeParse(body.value)
     if (!parsed.success) {
-      const response = errorResponse(
-        'invalid_request',
-        'The publish request is invalid.',
+      return context.json(
+        {
+          error: {
+            code: 'invalid_request',
+            message: 'The publish request is invalid.',
+          },
+        },
         400,
       )
-      return context.json({ error: response.error }, response.status)
     }
 
     const { article, targets } = parsed.data
@@ -60,14 +57,17 @@ export const registerPublishRoute = (
 
     if (!results.ok) {
       const conflict = results.error.code === 'operation_conflict'
-      const response = errorResponse(
-        conflict ? 'operation_conflict' : 'publish_busy',
-        conflict
-          ? 'An operation ID is already in flight with a different payload.'
-          : 'Publishing is temporarily busy.',
+      return context.json(
+        {
+          error: {
+            code: conflict ? 'operation_conflict' : 'publish_busy',
+            message: conflict
+              ? 'An operation ID is already in flight with a different payload.'
+              : 'Publishing is temporarily busy.',
+          },
+        },
         conflict ? 409 : 503,
       )
-      return context.json({ error: response.error }, response.status)
     }
 
     return context.json({ results: results.value })

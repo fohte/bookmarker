@@ -134,6 +134,20 @@ const unknownTargets = (
   ...(authenticationRequired ? { authenticationRequired: true } : {}),
 })
 
+const failedTargets = (
+  request: PublishRequest,
+  retryable: boolean,
+  message: string,
+): PublishTargetsResult => ({
+  results: request.targets.map((target) => ({
+    destination: target.destination,
+    operationId: target.operationId,
+    status: 'failed',
+    retryable,
+    message,
+  })),
+})
+
 const resultKey = (
   result: Pick<DeliveryResult, 'destination' | 'operationId'>,
 ) => `${result.destination}:${result.operationId}`
@@ -218,6 +232,26 @@ export const publishTargets = async (
           }
 
           if (!value.ok) {
+            const code = apiErrorCode(json)
+            if (value.status === 503 && code === 'publish_busy') {
+              return failedTargets(
+                request,
+                true,
+                'Publishing is temporarily busy.',
+              )
+            }
+
+            if (
+              value.status === 400 &&
+              (code === 'invalid_json' || code === 'invalid_request')
+            ) {
+              return failedTargets(
+                request,
+                false,
+                'The publish request was rejected.',
+              )
+            }
+
             return unknownTargets(request)
           }
 

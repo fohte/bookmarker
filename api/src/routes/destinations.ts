@@ -1,4 +1,6 @@
+import { captureWithFingerprint } from '@fohte/service-kit/observability'
 import {
+  type DestinationMetadata,
   type DestinationMetadataError,
   DestinationMetadataSchema,
 } from 'api/contracts'
@@ -8,7 +10,6 @@ import { z } from 'zod'
 
 import { metadataAdapterError } from '#destinations/http'
 import type {
-  DestinationAdapter,
   DestinationRegistry,
   MetadataAdapterError,
 } from '#destinations/types'
@@ -21,61 +22,72 @@ const metadataFailure = (
   metadataError: metadataAdapterError(error),
 })
 
+type MetadataDestination = keyof DestinationRegistry
+type MetadataEntry<D extends MetadataDestination> =
+  DestinationMetadata['destinations'][D]
+
+const readMetadata = <D extends MetadataDestination>(
+  adapter: DestinationRegistry[D],
+  schema: z.ZodType<MetadataEntry<D>>,
+  unconfigured: MetadataEntry<D>,
+  fallback: (error: MetadataAdapterError) => MetadataEntry<D>,
+): Promise<MetadataEntry<D>> => {
+  if (!adapter.configured) {
+    return Promise.resolve(unconfigured)
+  }
+
+  return ResultAsync.fromPromise(
+    Promise.resolve().then(() =>
+      adapter.getMetadata().match((entry) => {
+        const parsed = schema.safeParse({
+          ...entry,
+          configured: adapter.configured,
+        })
+        return parsed.success
+          ? parsed.data
+          : fallback({ code: 'invalid_response' })
+      }, fallback),
+    ),
+    (error) => {
+      captureWithFingerprint(error, 'destination-metadata-unexpected-error', {
+        tags: { destination: adapter.destination },
+      })
+      return fallback({ code: 'unavailable' })
+    },
+  ).unwrapOr(fallback({ code: 'unavailable' }))
+}
+
 export const registerDestinationsRoute = (
   app: Hono,
   registry: DestinationRegistry,
 ): void => {
   app.get('/api/destinations', async (context) => {
-    const read = <D extends keyof DestinationRegistry>(
-      adapter: DestinationAdapter<D>,
-      schema: z.ZodType,
-      fallback: (error: MetadataAdapterError) => unknown,
-    ) => {
-      if (!adapter.configured) {
-        const parsed = schema.safeParse({ configured: false })
-        return Promise.resolve(
-          parsed.success ? parsed.data : fallback({ code: 'invalid_response' }),
-        )
-      }
-
-      return ResultAsync.fromThrowable(
-        async () =>
-          adapter.getMetadata().match((entry) => {
-            const parsed = schema.safeParse({
-              ...entry,
-              configured: adapter.configured,
-            })
-            return parsed.success
-              ? parsed.data
-              : fallback({ code: 'invalid_response' })
-          }, fallback),
-        () => fallback({ code: 'unavailable' }),
-      )().unwrapOr(fallback({ code: 'unavailable' }))
-    }
-
-    const destinations = await Promise.all([
-      read(
+    const [hatena, mastodon, raindrop] = await Promise.all([
+      readMetadata(
         registry.hatena,
         DestinationMetadataSchema.shape.destinations.shape.hatena,
-        () => ({ configured: registry.hatena.configured }),
+        { configured: false },
+        () => ({ configured: true }),
       ),
-      read(
+      readMetadata(
         registry.mastodon,
         DestinationMetadataSchema.shape.destinations.shape.mastodon,
+        { configured: false },
         (error) => metadataFailure(registry.mastodon.configured, error),
       ),
-      read(
+      readMetadata(
         registry.raindrop,
         DestinationMetadataSchema.shape.destinations.shape.raindrop,
+        { configured: false },
         (error) => metadataFailure(registry.raindrop.configured, error),
       ),
     ])
 
     const parsed = DestinationMetadataSchema.safeParse({
       destinations: {
-        hatena: destinations[0],
-        mastodon: destinations[1],
-        raindrop: destinations[2],
+        hatena,
+        mastodon,
+        raindrop,
         x: { configured: true },
       },
     })

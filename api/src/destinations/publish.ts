@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 
+import { captureWithFingerprint } from '@fohte/service-kit/observability'
 import type {
   DeliveryResult,
   PublishArticle,
@@ -22,7 +23,6 @@ type InflightPublishError = {
 }
 
 type PublishOperation = {
-  article: PublishArticle
   target: PublishTarget
   payloadHash: string
   execute: () => ResultAsync<DeliveryResult, PublishAdapterError>
@@ -79,9 +79,6 @@ const operationConflict = (): InflightPublishError => ({
 const capacityExceeded = (): InflightPublishError => ({
   code: 'capacity_exceeded',
 })
-
-const unknownResult = (target: PublishTarget): DeliveryResult =>
-  invalidAdapterResult(target)
 
 export class InflightPublishGuard {
   private readonly inflight = new Map<string, InflightEntry>()
@@ -141,8 +138,8 @@ export class InflightPublishGuard {
     }
 
     for (const { operation, entry } of newEntries) {
-      const settle = ResultAsync.fromThrowable(
-        async () =>
+      const settle = ResultAsync.fromPromise(
+        Promise.resolve().then(() =>
           operation.execute().match(
             (result) => {
               const parsed = DeliveryResultSchema.safeParse(result)
@@ -152,7 +149,7 @@ export class InflightPublishGuard {
                 parsed.data.operationId.toLowerCase() !==
                   operation.target.operationId.toLowerCase()
               ) {
-                return unknownResult(operation.target)
+                return invalidAdapterResult(operation.target)
               }
 
               return {
@@ -162,8 +159,14 @@ export class InflightPublishGuard {
             },
             (error) => adapterErrorToDeliveryResult(operation.target, error),
           ),
-        () => unknownResult(operation.target),
-      )()
+        ),
+        (error) => {
+          captureWithFingerprint(error, 'publish-adapter-unexpected-error', {
+            tags: { destination: operation.target.destination },
+          })
+          return invalidAdapterResult(operation.target)
+        },
+      )
 
       entry.settlement = settle.match(
         (result) => {
@@ -182,7 +185,8 @@ export class InflightPublishGuard {
             operationKey(operation.target.operationId),
           )
           const resultPromise =
-            entry?.promise ?? Promise.resolve(unknownResult(operation.target))
+            entry?.promise ??
+            Promise.resolve(invalidAdapterResult(operation.target))
 
           return resultPromise.then((result) => ({
             ...result,
@@ -227,7 +231,6 @@ export const createPublishOperations = (
   targets: readonly PublishTarget[],
 ): PublishOperation[] =>
   targets.map((target) => ({
-    article,
     target,
     payloadHash: hashPublishPayload(article, target),
     execute: () => adapterPublish(registry, article, target),
