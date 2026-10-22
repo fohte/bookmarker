@@ -116,6 +116,16 @@ const summarizeListenerResponse = (
   boundAddress: string | null,
 ) => ({ ...response, boundAddress })
 
+const unauthorizedResponse = {
+  status: 401,
+  body: {
+    error: {
+      code: 'unauthorized',
+      message: 'Authentication is required.',
+    },
+  },
+}
+
 const authenticatedHeaders = async (
   extraHeaders: Record<string, string> = {},
 ): Promise<Record<string, string>> => ({
@@ -158,60 +168,12 @@ describe('Access JWT middleware', () => {
     )
 
     expect(responses).toEqual([
-      {
-        status: 401,
-        body: {
-          error: {
-            code: 'unauthorized',
-            message: 'Authentication is required.',
-          },
-        },
-      },
-      {
-        status: 401,
-        body: {
-          error: {
-            code: 'unauthorized',
-            message: 'Authentication is required.',
-          },
-        },
-      },
-      {
-        status: 401,
-        body: {
-          error: {
-            code: 'unauthorized',
-            message: 'Authentication is required.',
-          },
-        },
-      },
-      {
-        status: 401,
-        body: {
-          error: {
-            code: 'unauthorized',
-            message: 'Authentication is required.',
-          },
-        },
-      },
-      {
-        status: 401,
-        body: {
-          error: {
-            code: 'unauthorized',
-            message: 'Authentication is required.',
-          },
-        },
-      },
-      {
-        status: 401,
-        body: {
-          error: {
-            code: 'unauthorized',
-            message: 'Authentication is required.',
-          },
-        },
-      },
+      unauthorizedResponse,
+      unauthorizedResponse,
+      unauthorizedResponse,
+      unauthorizedResponse,
+      unauthorizedResponse,
+      unauthorizedResponse,
     ])
   })
 
@@ -225,13 +187,7 @@ describe('Access JWT middleware', () => {
     })
 
     expect(await summarizeResponse(response)).toEqual({
-      status: 401,
-      body: {
-        error: {
-          code: 'unauthorized',
-          message: 'Authentication is required.',
-        },
-      },
+      ...unauthorizedResponse,
     })
   })
 })
@@ -467,15 +423,17 @@ describe('Fail-closed configuration and development bypass', () => {
   })
 
   it.each([
-    ['production', { ...developmentEnvironment, NODE_ENV: 'production' }],
-    ['test', { ...developmentEnvironment, NODE_ENV: 'test' }],
+    ['production', { ...developmentEnvironment, NODE_ENV: 'production' }, true],
+    ['test', { ...developmentEnvironment, NODE_ENV: 'test' }, true],
     [
       'without DEV_AUTH_BYPASS',
       { ...developmentEnvironment, DEV_AUTH_BYPASS: 'false' },
+      true,
     ],
     [
       'with a non-loopback APP_ORIGIN',
       { ...developmentEnvironment, APP_ORIGIN: 'https://app.example.invalid' },
+      true,
     ],
     [
       'unset NODE_ENV',
@@ -485,12 +443,16 @@ describe('Fail-closed configuration and development bypass', () => {
         CF_ACCESS_AUD: audience,
         DEV_AUTH_BYPASS: 'true',
       },
+      true,
     ],
-    ['without an actual loopback listener', developmentEnvironment],
+    ['without an actual loopback listener', developmentEnvironment, false],
   ] as const)(
     'rejects the development bypass in %s',
-    async (_description, env) => {
-      const app = createTestApp({ env, isLoopbackListenerBound: () => false })
+    async (_description, env, listenerIsLoopback) => {
+      const app = createTestApp({
+        env,
+        isLoopbackListenerBound: () => listenerIsLoopback,
+      })
       const response = await app.request('/protected', {
         headers: {
           Host: '127.0.0.1:8080',
@@ -498,15 +460,7 @@ describe('Fail-closed configuration and development bypass', () => {
         },
       })
 
-      expect(await summarizeResponse(response)).toEqual({
-        status: 401,
-        body: {
-          error: {
-            code: 'unauthorized',
-            message: 'Authentication is required.',
-          },
-        },
-      })
+      expect(await summarizeResponse(response)).toEqual(unauthorizedResponse)
     },
   )
 

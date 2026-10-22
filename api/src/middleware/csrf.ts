@@ -1,40 +1,30 @@
 import { createMiddleware } from 'hono/factory'
 
-import {
-  type AccessEnvironment,
-  parseAccessConfiguration,
-} from '#middleware/access'
+import type { AccessConfigurationState } from '#middleware/access'
+import { respondWithApiError } from '#middleware/error-response'
 
 type CsrfMiddlewareOptions = {
-  env: AccessEnvironment
+  configuration: AccessConfigurationState
 }
 
 const safeMethods = new Set(['GET', 'HEAD', 'OPTIONS'])
 
-export const createCsrfMiddleware = ({ env }: CsrfMiddlewareOptions) => {
-  const configuration = parseAccessConfiguration(env)
-
+export const createCsrfMiddleware = ({
+  configuration,
+}: CsrfMiddlewareOptions) => {
   return createMiddleware(async (context, next) => {
     if (safeMethods.has(context.req.method)) {
       return next()
     }
 
-    const accessConfiguration = configuration.match(
-      (value) => value,
-      () => undefined,
-    )
-
-    if (accessConfiguration === undefined) {
-      return context.json(
-        {
-          error: {
-            code: 'service_unavailable',
-            message: 'API authentication is not configured.',
-          },
-        },
-        503,
-      )
+    if (configuration.status === 'invalid') {
+      return respondWithApiError(context, 503, {
+        code: 'service_unavailable',
+        message: 'API authentication is not configured.',
+      })
     }
+
+    const accessConfiguration = configuration.value
 
     const contentType = context.req
       .header('Content-Type')
@@ -43,27 +33,17 @@ export const createCsrfMiddleware = ({ env }: CsrfMiddlewareOptions) => {
       .toLowerCase()
 
     if (contentType !== 'application/json') {
-      return context.json(
-        {
-          error: {
-            code: 'unsupported_media_type',
-            message: 'Content-Type must be application/json.',
-          },
-        },
-        415,
-      )
+      return respondWithApiError(context, 415, {
+        code: 'unsupported_media_type',
+        message: 'Content-Type must be application/json.',
+      })
     }
 
     if (context.req.header('Origin') !== accessConfiguration.appOrigin) {
-      return context.json(
-        {
-          error: {
-            code: 'origin_not_allowed',
-            message: 'Origin is not allowed.',
-          },
-        },
-        403,
-      )
+      return respondWithApiError(context, 403, {
+        code: 'origin_not_allowed',
+        message: 'Origin is not allowed.',
+      })
     }
 
     return next()

@@ -30,6 +30,8 @@ pnpm --filter api dev
 
 Run `pnpm --filter api dev` in the terminal where `.env` was loaded. The API binds to loopback when `NODE_ENV=development`, `DEV_AUTH_BYPASS=true`, and `APP_ORIGIN` is a loopback origin. The bypass is unavailable in test and production environments.
 
+Outside local development, place the API behind an Access proxy that injects a signed `Cf-Access-Jwt-Assertion` header. Configure `APP_ORIGIN`, the HTTPS `CF_ACCESS_ISSUER` origin, and `CF_ACCESS_AUD`; only exact `GET /health` and `HEAD /health` requests bypass JWT verification. Invalid or missing configuration returns `503` on other paths, and write requests also require `application/json` plus an `Origin` exactly matching `APP_ORIGIN`.
+
 Run tests and build both workspaces:
 
 ```sh

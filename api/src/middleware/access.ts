@@ -1,32 +1,38 @@
 import { isIP } from 'node:net'
 
+import { metrics } from '@opentelemetry/api'
 import { createMiddleware } from 'hono/factory'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
 import { err, ok, Result, ResultAsync } from 'neverthrow'
 
+import { respondWithApiError } from '#middleware/error-response'
+
 export type AccessEnvironment = Record<string, string | undefined>
 export type AccessKeyResolver = JWTVerifyGetKey
 type AccessConfigurationError = 'invalid_configuration'
-
-type AccessConfiguration = {
-  appOrigin: string
-  issuer: string
-  audience: string
-  jwksUrl: URL
-}
-
 type AccessConfigurationResult = Result<
   AccessConfiguration,
   AccessConfigurationError
 >
 
+export type AccessConfiguration = {
+  appOrigin: string
+  issuer: string
+  audience: string
+  jwksUrl: URL
+  keyResolver: AccessKeyResolver
+}
+
+export type AccessConfigurationState =
+  { status: 'configured'; value: AccessConfiguration } | { status: 'invalid' }
+
 type AccessMiddlewareOptions = {
   env: AccessEnvironment
-  keyResolver: AccessKeyResolver | undefined
+  configuration: AccessConfigurationState
   isLoopbackListenerBound: () => boolean
 }
 
-const isLoopbackHostname = (hostname: string) => {
+export const isLoopbackHostname = (hostname: string) => {
   const normalizedHostname = hostname.replace(/^\[|\]$/g, '').toLowerCase()
 
   if (normalizedHostname === 'localhost') {
@@ -40,7 +46,7 @@ const isLoopbackHostname = (hostname: string) => {
   return isIP(normalizedHostname) === 6 && normalizedHostname === '::1'
 }
 
-export const isLoopbackOrigin = (value: string) => {
+const isLoopbackOrigin = (value: string) => {
   if (!URL.canParse(value)) {
     return false
   }
@@ -49,14 +55,18 @@ export const isLoopbackOrigin = (value: string) => {
   return url.origin === value && isLoopbackHostname(url.hostname)
 }
 
-export const shouldBindLoopbackForDevelopment = (env: AccessEnvironment) =>
+const isDevelopmentBypassEnabled = (env: AccessEnvironment) =>
   env['NODE_ENV'] === 'development' &&
   env['DEV_AUTH_BYPASS'] === 'true' &&
   env['APP_ORIGIN'] !== undefined &&
   isLoopbackOrigin(env['APP_ORIGIN'])
 
-export const parseAccessConfiguration = (
+export const shouldBindLoopbackForDevelopment = (env: AccessEnvironment) =>
+  isDevelopmentBypassEnabled(env)
+
+const parseAccessConfiguration = (
   env: AccessEnvironment,
+  keyResolver?: AccessKeyResolver,
 ): AccessConfigurationResult => {
   const { APP_ORIGIN, CF_ACCESS_ISSUER, CF_ACCESS_AUD } = env
 
@@ -86,88 +96,90 @@ export const parseAccessConfiguration = (
     return err('invalid_configuration')
   }
 
+  const jwksUrl = new URL('/cdn-cgi/access/certs', issuerUrl)
+
   return ok({
     appOrigin: APP_ORIGIN,
     issuer: CF_ACCESS_ISSUER,
     audience: CF_ACCESS_AUD,
-    jwksUrl: new URL('/cdn-cgi/access/certs', issuerUrl),
+    jwksUrl,
+    keyResolver: keyResolver ?? createRemoteJWKSet(jwksUrl),
   })
 }
+
+export const createAccessConfiguration = (
+  env: AccessEnvironment,
+  keyResolver?: AccessKeyResolver,
+) =>
+  parseAccessConfiguration(env, keyResolver).match(
+    (value) => ({ status: 'configured', value }) as const,
+    () => ({ status: 'invalid' }) as const,
+  )
 
 const isInternalHealthProbe = (method: string, path: string) =>
   path === '/health' && (method === 'GET' || method === 'HEAD')
 
+const jwksResolutionFailures = metrics
+  .getMeter('bookmarker-api')
+  .createCounter('cloudflare_access_jwks_resolution_failures', {
+    description: 'Failed Cloudflare Access JWKS key resolutions',
+  })
+
 export const createAccessMiddleware = ({
   env,
-  keyResolver,
+  configuration,
   isLoopbackListenerBound,
 }: AccessMiddlewareOptions) => {
-  const configuration = parseAccessConfiguration(env)
-
   return createMiddleware(async (context, next) => {
     if (isInternalHealthProbe(context.req.method, context.req.path)) {
       return next()
     }
 
-    const accessConfiguration = configuration.match(
-      (value) => value,
-      () => undefined,
-    )
-
-    if (accessConfiguration === undefined) {
-      return context.json(
-        {
-          error: {
-            code: 'service_unavailable',
-            message: 'API authentication is not configured.',
-          },
-        },
-        503,
-      )
+    if (configuration.status === 'invalid') {
+      return respondWithApiError(context, 503, {
+        code: 'service_unavailable',
+        message: 'API authentication is not configured.',
+      })
     }
 
-    if (
-      env['NODE_ENV'] === 'development' &&
-      env['DEV_AUTH_BYPASS'] === 'true' &&
-      isLoopbackOrigin(accessConfiguration.appOrigin) &&
-      isLoopbackListenerBound()
-    ) {
+    const accessConfiguration = configuration.value
+
+    if (isDevelopmentBypassEnabled(env) && isLoopbackListenerBound()) {
       return next()
     }
 
     const token = context.req.header('Cf-Access-Jwt-Assertion')
 
     if (token === undefined) {
-      return context.json(
-        {
-          error: {
-            code: 'unauthorized',
-            message: 'Authentication is required.',
-          },
-        },
-        401,
-      )
-    }
-
-    if (keyResolver === undefined) {
-      return context.json(
-        {
-          error: {
-            code: 'service_unavailable',
-            message: 'API authentication is not configured.',
-          },
-        },
-        503,
-      )
+      return respondWithApiError(context, 401, {
+        code: 'unauthorized',
+        message: 'Authentication is required.',
+      })
     }
 
     const verification = await ResultAsync.fromPromise(
-      jwtVerify(token, keyResolver, {
-        issuer: accessConfiguration.issuer,
-        audience: accessConfiguration.audience,
-        algorithms: ['RS256'],
-        requiredClaims: ['exp'],
-      }),
+      jwtVerify(
+        token,
+        async (protectedHeader, token) =>
+          ResultAsync.fromPromise(
+            Promise.resolve().then(() =>
+              accessConfiguration.keyResolver(protectedHeader, token),
+            ),
+            () => 'jwks_resolution_failed' as const,
+          ).match(
+            (key) => key,
+            () => {
+              jwksResolutionFailures.add(1)
+              return Promise.reject(new Error('JWKS key resolution failed.'))
+            },
+          ),
+        {
+          issuer: accessConfiguration.issuer,
+          audience: accessConfiguration.audience,
+          algorithms: ['RS256'],
+          requiredClaims: ['exp'],
+        },
+      ),
       () => 'invalid_token' as const,
     ).match(
       () => true,
@@ -175,26 +187,12 @@ export const createAccessMiddleware = ({
     )
 
     if (!verification) {
-      return context.json(
-        {
-          error: {
-            code: 'unauthorized',
-            message: 'Authentication is required.',
-          },
-        },
-        401,
-      )
+      return respondWithApiError(context, 401, {
+        code: 'unauthorized',
+        message: 'Authentication is required.',
+      })
     }
 
     return next()
   })
 }
-
-export const createDefaultAccessKeyResolver = (env: AccessEnvironment) =>
-  parseAccessConfiguration(env).match(
-    (value) => createRemoteJWKSet(value.jwksUrl),
-    () => undefined,
-  )
-
-export const isLoopbackListenerAddress = (address: string) =>
-  isLoopbackHostname(address)

@@ -4,7 +4,7 @@ import { createApp } from '#app'
 import {
   type AccessEnvironment,
   type AccessKeyResolver,
-  isLoopbackListenerAddress,
+  isLoopbackHostname,
   shouldBindLoopbackForDevelopment,
 } from '#middleware/access'
 
@@ -24,8 +24,7 @@ export const startApiServer = ({
     env,
     ...(jwks === undefined ? {} : { jwks }),
     isLoopbackListenerBound: () =>
-      listeningAddress !== undefined &&
-      isLoopbackListenerAddress(listeningAddress),
+      listeningAddress !== undefined && isLoopbackHostname(listeningAddress),
   })
   const server = createAdaptorServer(app)
   server.once('listening', () => {

@@ -4,10 +4,11 @@ import { bodyLimit } from 'hono/body-limit'
 import {
   type AccessEnvironment,
   type AccessKeyResolver,
+  createAccessConfiguration,
   createAccessMiddleware,
-  createDefaultAccessKeyResolver,
 } from '#middleware/access'
 import { createCsrfMiddleware } from '#middleware/csrf'
+import { respondWithApiError } from '#middleware/error-response'
 
 type CreateAppOptions = {
   env?: AccessEnvironment
@@ -21,32 +22,28 @@ export const createApp = ({
   isLoopbackListenerBound = () => false,
 }: CreateAppOptions = {}) => {
   const app = new Hono()
+  const configuration = createAccessConfiguration(env, jwks)
 
   app.use(
     '*',
     bodyLimit({
       maxSize: 1024 * 1024,
       onError: (context) =>
-        context.json(
-          {
-            error: {
-              code: 'payload_too_large',
-              message: 'Request body exceeds the maximum size.',
-            },
-          },
-          413,
-        ),
+        respondWithApiError(context, 413, {
+          code: 'payload_too_large',
+          message: 'Request body exceeds the maximum size.',
+        }),
     }),
   )
   app.use(
     '*',
     createAccessMiddleware({
       env,
-      keyResolver: jwks ?? createDefaultAccessKeyResolver(env),
+      configuration,
       isLoopbackListenerBound,
     }),
   )
-  app.use('*', createCsrfMiddleware({ env }))
+  app.use('*', createCsrfMiddleware({ configuration }))
 
   app.get('/health', (context) => context.json({ status: 'ok' }))
   app.on('HEAD', '/health', (context) => context.body(null))
