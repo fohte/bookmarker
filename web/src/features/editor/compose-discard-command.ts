@@ -22,7 +22,7 @@ export async function discardComposeDraft({
   flushCurrentDraft,
   clearActiveDraft,
   refreshDraftList,
-  lockState,
+  getLockState,
   showError,
   setState,
 }: {
@@ -36,7 +36,7 @@ export async function discardComposeDraft({
   flushCurrentDraft: () => Promise<Result<void, DraftError>>
   clearActiveDraft: () => void
   refreshDraftList: () => Promise<void>
-  lockState: ComposeState['lockState']
+  getLockState: () => ComposeState['lockState']
   showError: (error: DraftError) => void
   setState: (patch: Partial<ComposeState>) => void
 }): Promise<void> {
@@ -86,7 +86,7 @@ export async function discardComposeDraft({
   setState({
     activeDraft: null,
     canEdit: false,
-    lockState,
+    lockState: getLockState(),
     saveState: 'saved',
     errorMessage: cleanup.value.errorMessage,
     discardOpen: false,
