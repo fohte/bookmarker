@@ -50,7 +50,22 @@ This creates or updates these `SecureString` parameters:
 | `HATENA_ACCESS_TOKEN`        | `/infra/bookmarker/hatena-access-token`        |
 | `HATENA_ACCESS_TOKEN_SECRET` | `/infra/bookmarker/hatena-access-token-secret` |
 
-Make these values available as the four backend environment variables, then restart the API process so it reads them at startup.
+The `bookmarker-hatena` ExternalSecret in the `bookmarker` namespace reads these four parameters and creates the `bookmarker-hatena` Kubernetes Secret. After adding or updating the parameters, request an immediate refresh and wait for the ExternalSecret to become ready:
+
+```sh
+kubectl -n bookmarker annotate externalsecret bookmarker-hatena force-sync="$(date +%s)" --overwrite
+kubectl -n bookmarker wait externalsecret/bookmarker-hatena --for=condition=Ready --timeout=120s
+kubectl -n bookmarker get externalsecret bookmarker-hatena
+```
+
+Confirm that `READY` is `True`. The status commands do not show secret values. Once it is ready, restart the API deployment so its environment picks up the synchronized values:
+
+```sh
+kubectl -n bookmarker rollout restart deployment/bookmarker-api
+kubectl -n bookmarker rollout status deployment/bookmarker-api
+```
+
+ExternalSecret synchronization does not reload environment variables in an existing API Pod. Do not inspect the credential values with `kubectl get secret -o yaml` or Pod environment output.
 
 ## Publishing behavior
 
