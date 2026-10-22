@@ -33,10 +33,25 @@ export const Preview: Story = {
         onSelectDraft={() => undefined}
         onTitleChange={() => undefined}
         onArticleTextChange={() => undefined}
+        articleTextError={null}
         onCommonCommentChange={() => undefined}
         onDestinationChange={() => undefined}
-        analysisSummaryState="unavailable"
-        analysisVerificationState="unavailable"
+        analysis={{
+          article: null,
+          extractionState: 'not-requested',
+          summary: null,
+          summaryState: 'unavailable',
+          verification: null,
+          verificationState: 'unavailable',
+          verificationTargets: [],
+          selectedVerificationTargetId: 'common',
+          isCustomComment: false,
+          canVerifyComment: false,
+          onExtractArticle: () => undefined,
+          onSummarizeArticle: () => undefined,
+          onVerifyComment: () => undefined,
+          onVerificationTargetChange: () => undefined,
+        }}
         copyConfirmationDestination={null}
         onRequestCopyCommonComment={() => undefined}
         onCancelCopyCommonComment={() => undefined}

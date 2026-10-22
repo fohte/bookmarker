@@ -31,6 +31,7 @@ const meta = {
     activeDraft: draft,
     drafts: [draft],
     canEdit: true,
+    articleTextError: null,
     onSelectDraft: () => undefined,
     onTitleChange: () => undefined,
     onArticleTextChange: () => undefined,
@@ -54,4 +55,12 @@ export const Empty: Story = {
 export const ReadOnly: Story = {
   args: { canEdit: false },
   name: 'The article fields are disabled while the draft is read-only.',
+}
+
+export const ArticleTextTooLong: Story = {
+  args: {
+    articleTextError:
+      'Article text must be 100,000 UTF-16 code units or fewer.',
+  },
+  name: 'The editor explains why an oversized article text was rejected.',
 }

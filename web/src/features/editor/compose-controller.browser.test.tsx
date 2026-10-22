@@ -1,4 +1,10 @@
-import type { BookmarkDraft, DestinationDraft, ShareInput } from 'api/contracts'
+import type {
+  BookmarkDraft,
+  DestinationDraft,
+  ShareInput,
+  Summary,
+  Verification,
+} from 'api/contracts'
 import { errAsync, type Result, ResultAsync } from 'neverthrow'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -319,6 +325,50 @@ describe('ComposeController in a browser', () => {
     expect(captureOutput(actual)).toEqual(expected)
   })
 
+  it.each(['shared', 'fetched'] as const)(
+    'marks pasted text from a %s article as manual and clears analysis in one saved snapshot',
+    async (source) => {
+      const store = createIndexedDbDraftStore()
+      const initialSnapshot = draft()
+      const originalArticle = initialSnapshot.article
+      if (originalArticle === undefined) {
+        throw new Error('The test draft is missing its article.')
+      }
+      const initialDraft: BookmarkDraft = {
+        ...initialSnapshot,
+        article: { ...originalArticle, source, partial: false },
+      }
+      valueOrThrow(await store.addDraft(initialDraft))
+
+      const editing = new ComposeController(store)
+      await editing.start(initialDraft.id)
+      editing.updateArticleText('Pasted fictional article text.')
+      await editing.dispose()
+
+      const restoring = new ComposeController(store)
+      await restoring.start(initialDraft.id)
+      const restored = restoring.state.activeDraft
+      await restoring.dispose()
+
+      const actual =
+        restored === null
+          ? null
+          : { ...restored, updatedAt: '<saved timestamp>' }
+      const expected = {
+        ...omitAnalysis(initialDraft),
+        article: {
+          ...originalArticle,
+          text: 'Pasted fictional article text.',
+          source: 'manual',
+          partial: true,
+        },
+        updatedAt: '<saved timestamp>',
+      }
+
+      expect(captureOutput(actual)).toEqual(expected)
+    },
+  )
+
   it('clears saved analysis when a title change is restored after reload', async () => {
     const store = createIndexedDbDraftStore()
     const initialDraft = draft()
@@ -349,6 +399,97 @@ describe('ComposeController in a browser', () => {
     }
 
     expect(captureOutput(actual)).toEqual(expected)
+  })
+
+  it('saves analysis results only for the locked draft and matching inputs', async () => {
+    const store = createIndexedDbDraftStore()
+    const initialDraft = draft()
+    const article = initialDraft.article
+    if (article === undefined) {
+      throw new Error('The test draft is missing its article.')
+    }
+    valueOrThrow(await store.addDraft(initialDraft))
+
+    const summary: Summary = {
+      summary: 'A fictional paragraph about a paper kite.',
+      partial: true,
+    }
+    const verification: Verification = {
+      issues: [
+        {
+          kind: 'unsupported',
+          quote: 'A fictional claim.',
+          reason: 'The invented article does not support the claim.',
+        },
+      ],
+      partial: true,
+    }
+    const summaryCommand = {
+      kind: 'summary' as const,
+      expectedDraftId: initialDraft.id,
+      expectedArticle: article,
+      summary,
+    }
+    const verificationCommand = {
+      kind: 'verification' as const,
+      expectedDraftId: initialDraft.id,
+      expectedArticle: article,
+      expectedComment: {
+        id: 'common' as const,
+        value: initialDraft.commonComment,
+      },
+      verification,
+    }
+
+    const editing = new ComposeController(store)
+    await editing.start(initialDraft.id)
+    const lockedView = new ComposeController(store)
+    await lockedView.start(initialDraft.id)
+    const rejectedWhileLocked = lockedView.saveAnalysisResult(summaryCommand)
+    await lockedView.dispose()
+
+    const savedSummary = editing.saveAnalysisResult(summaryCommand)
+    const savedVerification = editing.saveAnalysisResult(verificationCommand)
+    const rejectedComment = editing.saveAnalysisResult({
+      ...verificationCommand,
+      expectedComment: { id: 'common', value: 'A changed fictional comment.' },
+    })
+    const rejectedArticle = editing.saveAnalysisResult({
+      ...summaryCommand,
+      expectedArticle: { ...article, title: 'A different fictional title.' },
+    })
+    await editing.dispose()
+
+    const restoring = new ComposeController(store)
+    await restoring.start(initialDraft.id)
+    const restored = restoring.state.activeDraft
+    await restoring.dispose()
+
+    const actualDraft =
+      restored === null ? null : { ...restored, updatedAt: '<saved timestamp>' }
+    const expectedDraft = {
+      ...initialDraft,
+      analysis: { summary, verification },
+      updatedAt: '<saved timestamp>',
+    }
+
+    expect(
+      captureOutput({
+        rejectedWhileLocked,
+        savedSummary,
+        savedVerification,
+        rejectedComment,
+        rejectedArticle,
+        draft: actualDraft,
+      }),
+    ).toEqual({
+      rejectedWhileLocked: false,
+      savedSummary: true,
+      savedVerification: true,
+      rejectedComment: false,
+      rejectedArticle: false,
+      draft: expectedDraft,
+    })
   })
 
   it('restores every destination setting and unfinished tag input', async () => {

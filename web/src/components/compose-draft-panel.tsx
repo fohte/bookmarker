@@ -17,6 +17,7 @@ export function ComposeDraftPanel({
   activeDraft,
   drafts,
   canEdit,
+  articleTextError,
   onSelectDraft,
   onTitleChange,
   onArticleTextChange,
@@ -25,6 +26,7 @@ export function ComposeDraftPanel({
   activeDraft: BookmarkDraft | null
   drafts: BookmarkDraft[]
   canEdit: boolean
+  articleTextError: string | null
   onSelectDraft: (id: string) => void
   onTitleChange: (value: string) => void
   onArticleTextChange: (value: string) => void
@@ -116,6 +118,9 @@ export function ComposeDraftPanel({
               Manual article text
             </label>
             <textarea
+              aria-describedby={
+                articleTextError === null ? undefined : 'article-text-error'
+              }
               className="min-h-36 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!canEdit}
               id="article-text"
@@ -125,6 +130,15 @@ export function ComposeDraftPanel({
               placeholder="Paste or write article text here."
               value={articleText}
             />
+            {articleTextError !== null && (
+              <p
+                className="text-sm text-destructive"
+                id="article-text-error"
+                role="alert"
+              >
+                {articleTextError}
+              </p>
+            )}
           </div>
         </div>
       )}

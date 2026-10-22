@@ -21,19 +21,24 @@ import {
   type DraftStore,
 } from '#features/drafts/draft-store'
 import {
+  applyAnalysisSaveCommand,
+  type ComposeAnalysisSaveCommand,
+  matchesAnalysisSaveCommand,
+} from '#features/editor/compose-analysis-command'
+import {
   copyCommonCommentDraft,
   updateDestinationDraft,
 } from '#features/editor/compose-destination'
+import {
+  cleanupBeforeDiscard,
+  restoreDraftUrl,
+} from '#features/editor/compose-discard'
 import {
   clearDraftVerification,
   recoverPendingDeliveries,
   updateDraftArticle,
 } from '#features/editor/compose-draft'
-import {
-  cleanupDraftNavigation,
-  currentUrlWithoutDraft,
-  type FailedImportCleanup,
-} from '#features/editor/compose-history'
+import type { FailedImportCleanup } from '#features/editor/compose-history'
 import { ComposeIntake } from '#features/editor/compose-intake'
 import { loadComposeDraftList } from '#features/editor/compose-list'
 import {
@@ -140,13 +145,32 @@ export class ComposeController {
   }
 
   updateArticleText(text: string): void {
-    this.#updateDraft((draft) => updateDraftArticle(draft, { text }))
+    this.#updateDraft((draft) =>
+      updateDraftArticle(draft, { text, source: 'manual', partial: true }),
+    )
   }
 
   updateCommonComment(commonComment: string): void {
     this.#updateDraft((draft) =>
       clearDraftVerification({ ...draft, commonComment }),
     )
+  }
+
+  saveAnalysisResult(command: ComposeAnalysisSaveCommand): boolean {
+    const draft = this.#draft
+    if (
+      draft === null ||
+      this.#queue === null ||
+      this.#lease === null ||
+      !this.state.canEdit ||
+      this.state.isLoading ||
+      !matchesAnalysisSaveCommand(draft, command)
+    ) {
+      return false
+    }
+
+    this.#updateDraft((current) => applyAnalysisSaveCommand(current, command))
+    return true
   }
 
   updateDestination(destination: DestinationDraft): void {
@@ -196,7 +220,12 @@ export class ComposeController {
       return
     }
 
-    const cleanup = this.#cleanupBeforeDiscard(draft)
+    const cleanup = cleanupBeforeDiscard(
+      this.#failedImportCleanups.get(draft.id),
+      () => {
+        this.#failedImportCleanups.delete(draft.id)
+      },
+    )
     if (cleanup.isErr()) {
       this.#resumeCurrentDraft()
       this.#showError(cleanup.error)
@@ -208,7 +237,7 @@ export class ComposeController {
     })
     if (deleted.isErr()) {
       if (!cleanup.value.preserveImportReceipts) {
-        this.#restoreDraftUrl(draft).match(
+        restoreDraftUrl(draft).match(
           () => undefined,
           (error) => {
             this.#showError(error)
@@ -235,33 +264,6 @@ export class ComposeController {
       isLoading: false,
     })
     await this.#refreshDraftList()
-  }
-
-  #cleanupBeforeDiscard(
-    draft: BookmarkDraft,
-  ): Result<
-    { preserveImportReceipts: boolean; errorMessage: string | null },
-    DraftError
-  > {
-    const failedImportCleanup = this.#failedImportCleanups.get(draft.id)
-    const cleaned = cleanupDraftNavigation(
-      failedImportCleanup?.cleanupUrl ?? currentUrlWithoutDraft(),
-      null,
-      failedImportCleanup ?? null,
-    )
-    if (cleaned.isErr() && failedImportCleanup === undefined) {
-      return err(cleaned.error)
-    }
-    if (cleaned.isOk()) this.#failedImportCleanups.delete(draft.id)
-
-    return ok({
-      preserveImportReceipts: cleaned.isErr(),
-      errorMessage: cleaned.isErr() ? cleaned.error.message : null,
-    })
-  }
-
-  #restoreDraftUrl(draft: BookmarkDraft): Result<undefined, DraftError> {
-    return cleanupDraftNavigation(currentUrlWithoutDraft(), draft.id, null)
   }
 
   dispose(): Promise<void> {
