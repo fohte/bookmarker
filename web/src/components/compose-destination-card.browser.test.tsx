@@ -164,7 +164,13 @@ async function selectOption(
   if (!(trigger instanceof HTMLButtonElement)) {
     throw new Error(`Select trigger ${triggerId} was not found.`)
   }
-  await act(async () => userEvent.click(trigger))
+  const triggerLabel = trigger.getAttribute('aria-label')
+  if (triggerLabel === null) {
+    throw new Error(`Select trigger ${triggerId} has no accessible name.`)
+  }
+  await act(async () =>
+    page.getByRole('combobox', { exact: true, name: triggerLabel }).click(),
+  )
   await act(async () =>
     page.getByRole('option', { exact: true, name: optionName }).click(),
   )
