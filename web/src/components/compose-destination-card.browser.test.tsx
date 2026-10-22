@@ -134,14 +134,19 @@ beforeEach(() => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
 })
 
-afterEach(() => {
-  const current = mounted
-  if (current === null) return
-  act(() => {
-    current.root.unmount()
+afterEach(async () => {
+  await act(async () => {
+    await page.viewport(1280, 720)
   })
-  current.container.remove()
-  mounted = null
+
+  const current = mounted
+  if (current !== null) {
+    act(() => {
+      current.root.unmount()
+    })
+    current.container.remove()
+    mounted = null
+  }
 })
 
 describe('ComposeDestinationCard in a browser', () => {
@@ -177,12 +182,6 @@ describe('ComposeDestinationCard in a browser', () => {
 
     mount(createElement(Harness))
     await act(async () => userEvent.click(buttonNamed('Copy common comment')))
-    const layouts: ReturnType<typeof confirmationLayout>[] = []
-    await page.viewport(1280, 900)
-    layouts.push(confirmationLayout())
-    await page.viewport(390, 844)
-    layouts.push(confirmationLayout())
-
     const afterRequest = {
       requestedDestinations: [...requestedDestinations],
       copiedDestinations: [...copiedDestinations],
@@ -198,26 +197,8 @@ describe('ComposeDestinationCard in a browser', () => {
       confirmationOpen: currentConfirmationOpen,
     }
 
-    const actual = { layouts, afterRequest, afterConfirm }
+    const actual = { afterRequest, afterConfirm }
     const expected = {
-      layouts: [
-        {
-          descriptionWithinDialog: true,
-          footerWithinDialog: true,
-          buttonsWithinFooter: true,
-          buttonCount: 2,
-          dialogWithinViewport: true,
-          pageHasHorizontalOverflow: false,
-        },
-        {
-          descriptionWithinDialog: true,
-          footerWithinDialog: true,
-          buttonsWithinFooter: true,
-          buttonCount: 2,
-          dialogWithinViewport: true,
-          pageHasHorizontalOverflow: false,
-        },
-      ],
       afterRequest: {
         requestedDestinations: ['hatena'],
         copiedDestinations: [],
@@ -230,6 +211,50 @@ describe('ComposeDestinationCard in a browser', () => {
     }
 
     expect(captureOutput(actual)).toEqual(expected)
+  })
+
+  it('keeps the copy confirmation within desktop and mobile viewports', async () => {
+    mount(
+      <ComposeDestinationCard
+        canEdit
+        commonComment="A shared comment."
+        copyConfirmationOpen
+        destination={existingDestination}
+        onCancelCopyCommonComment={() => undefined}
+        onCopyCommonComment={() => undefined}
+        onDestinationChange={() => undefined}
+        onRequestCopyCommonComment={() => undefined}
+      />,
+    )
+
+    const layouts: ReturnType<typeof confirmationLayout>[] = []
+    await act(async () => {
+      await page.viewport(1280, 900)
+    })
+    layouts.push(confirmationLayout())
+    await act(async () => {
+      await page.viewport(390, 844)
+    })
+    layouts.push(confirmationLayout())
+
+    expect(captureOutput(layouts)).toEqual([
+      {
+        descriptionWithinDialog: true,
+        footerWithinDialog: true,
+        buttonsWithinFooter: true,
+        buttonCount: 2,
+        dialogWithinViewport: true,
+        pageHasHorizontalOverflow: false,
+      },
+      {
+        descriptionWithinDialog: true,
+        footerWithinDialog: true,
+        buttonsWithinFooter: true,
+        buttonCount: 2,
+        dialogWithinViewport: true,
+        pageHasHorizontalOverflow: false,
+      },
+    ])
   })
 
   it('copies the common comment directly when the individual comment is empty', async () => {
