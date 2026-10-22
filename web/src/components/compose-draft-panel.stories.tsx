@@ -31,6 +31,7 @@ const meta = {
     activeDraft: draft,
     drafts: [draft],
     canEdit: true,
+    canSwitchDraft: true,
     articleTextError: null,
     onSelectDraft: () => undefined,
     onTitleChange: () => undefined,
@@ -54,7 +55,12 @@ export const Empty: Story = {
 
 export const ReadOnly: Story = {
   args: { canEdit: false },
-  name: 'The article fields are disabled while the draft is read-only.',
+  name: 'The article fields are disabled while another saved draft stays available.',
+}
+
+export const DeliveryInProgress: Story = {
+  args: { canEdit: false, canSwitchDraft: false },
+  name: 'The editor prevents draft switching during delivery.',
 }
 
 export const ArticleTextTooLong: Story = {

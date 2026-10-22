@@ -17,6 +17,7 @@ export function ComposeDraftPanel({
   activeDraft,
   drafts,
   canEdit,
+  canSwitchDraft,
   articleTextError,
   onSelectDraft,
   onTitleChange,
@@ -26,6 +27,7 @@ export function ComposeDraftPanel({
   activeDraft: BookmarkDraft | null
   drafts: BookmarkDraft[]
   canEdit: boolean
+  canSwitchDraft: boolean
   articleTextError: string | null
   onSelectDraft: (id: string) => void
   onTitleChange: (value: string) => void
@@ -65,7 +67,7 @@ export function ComposeDraftPanel({
           </label>
           <select
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
-            disabled={!canEdit}
+            disabled={!canSwitchDraft}
             id="draft-selection"
             onChange={(event) => {
               onSelectDraft(event.currentTarget.value)

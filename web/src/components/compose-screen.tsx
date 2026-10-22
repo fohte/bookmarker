@@ -196,6 +196,7 @@ export function ComposeScreen({
             <ComposeDraftPanel
               activeDraft={activeDraft}
               canEdit={canEdit}
+              canSwitchDraft={!deliveryBusy}
               articleTextError={articleTextError}
               drafts={state.drafts}
               onArticleTextChange={onArticleTextChange}
