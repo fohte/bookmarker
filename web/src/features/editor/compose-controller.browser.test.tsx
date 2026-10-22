@@ -212,6 +212,37 @@ async function readRawDraft(id: string): Promise<unknown> {
   return value
 }
 
+async function readRawImport(importId: string): Promise<unknown> {
+  const database = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(databaseName, 1)
+    request.onsuccess = () => {
+      resolve(request.result)
+    }
+    request.onerror = () => {
+      reject(
+        request.error ?? new Error('The test database could not be opened.'),
+      )
+    }
+  })
+
+  const value = await new Promise<unknown>((resolve, reject) => {
+    const transaction = database.transaction('imports', 'readonly')
+    const request = transaction.objectStore('imports').get(importId)
+    request.onsuccess = () => {
+      resolve(request.result)
+    }
+    request.onerror = () => {
+      reject(request.error ?? new Error('The test read failed.'))
+    }
+  })
+  database.close()
+  return value
+}
+
+function normalizeCreatedDraft(value: BookmarkDraft): BookmarkDraft {
+  return { ...value, id: '<draft-id>', updatedAt: '<updated-at>' }
+}
+
 beforeEach(async () => {
   await deleteDatabase()
   window.history.replaceState({ tab: 'compose' }, '', '/compose')
@@ -839,6 +870,195 @@ describe('ComposeController in a browser', () => {
         savedDraftCount: 0,
         url: '/compose?keep=yes#article',
       },
+    })
+  })
+
+  it('imports the same source with a new navigation after discard', async () => {
+    const store = createIndexedDbDraftStore()
+    const controller = new ComposeController(store)
+    await controller.start(null)
+    window.history.replaceState(
+      { tab: 'compose' },
+      '',
+      '/compose?share=payload&keep=yes#article',
+    )
+    const replaceState = window.history.replaceState.bind(window.history)
+    let cleanupAttempts = 0
+    let captureNewNavigation = false
+    const capturedNewImportIds: string[] = []
+    const replaceStateSpy = vi
+      .spyOn(window.history, 'replaceState')
+      .mockImplementation((state, unused, url) => {
+        const nextUrl = typeof url === 'string' ? url : url?.toString()
+        if (
+          captureNewNavigation &&
+          nextUrl === window.location.href &&
+          isRecord(state)
+        ) {
+          const importId = state['__bookmarkerDraftImportId']
+          if (typeof importId === 'string') capturedNewImportIds.push(importId)
+        }
+        if (nextUrl !== undefined && nextUrl.startsWith('/compose?keep=yes')) {
+          cleanupAttempts += 1
+          if (cleanupAttempts <= 2) throw new Error('History is unavailable.')
+        }
+        replaceState(state, unused, url)
+      })
+    const input: ShareInput = {
+      version: 1,
+      url: 'https://example.test/shared-article',
+      title: 'Shared title',
+      sharedText: 'Shared article text',
+      partial: false,
+    }
+    const options = {
+      cleanupUrl: '/compose?keep=yes#article',
+      intake: 'share' as const,
+    }
+
+    let actual: unknown
+    try {
+      const firstOpen = await controller.openSource(input, options)
+      const discardedImportId = isRecord(window.history.state)
+        ? window.history.state['__bookmarkerDraftImportId']
+        : null
+      controller.requestDiscard()
+      const discardConfirmed = controller.state.discardOpen
+      await controller.discardDraft()
+      const tombstoneBeforeNewImport =
+        typeof discardedImportId === 'string'
+          ? await readRawImport(discardedImportId)
+          : null
+
+      window.history.replaceState(
+        { tab: 'compose' },
+        '',
+        '/compose?share=payload&keep=yes#article',
+      )
+      captureNewNavigation = true
+      const newOpen = await controller.openSource(input, options)
+      captureNewNavigation = false
+      const newImportId = capturedNewImportIds[0] ?? null
+
+      const savedDrafts = valueOrThrow(await store.listDrafts()).drafts
+      const savedDraftId = newOpen.isOk() ? newOpen.value.id : null
+      const tombstoneAfterNewImport =
+        typeof discardedImportId === 'string'
+          ? await readRawImport(discardedImportId)
+          : null
+      const newImportReceipt =
+        newImportId === null ? null : await readRawImport(newImportId)
+      const normalizeReceipt = (
+        receipt: unknown,
+        importId: string | null,
+        normalizedImportId: string,
+      ) => {
+        if (!isRecord(receipt)) return null
+        return {
+          draftId:
+            receipt['draftId'] === savedDraftId
+              ? '<draft-id>'
+              : receipt['draftId'],
+          importId:
+            receipt['importId'] === importId
+              ? normalizedImportId
+              : receipt['importId'],
+        }
+      }
+      const currentUrl = new URL(window.location.href)
+      const actualDraftId = currentUrl.searchParams.get('draft')
+      const actualActiveDraft = controller.state.activeDraft
+      actual = {
+        cleanupAttempts,
+        discardConfirmed,
+        discardedImportIdWasPresent: typeof discardedImportId === 'string',
+        newImportIdIsDistinct:
+          typeof discardedImportId === 'string' &&
+          newImportId !== null &&
+          newImportId !== discardedImportId,
+        newImportReceipt: normalizeReceipt(
+          newImportReceipt,
+          newImportId,
+          '<new-import-id>',
+        ),
+        newOpen: {
+          errorCode: newOpen.isErr() ? newOpen.error.code : null,
+          draft: newOpen.isOk() ? normalizeCreatedDraft(newOpen.value) : null,
+        },
+        savedDrafts: savedDrafts.map(normalizeCreatedDraft),
+        activeDraft: actualActiveDraft
+          ? normalizeCreatedDraft(actualActiveDraft)
+          : null,
+        draftUrlMatchesSavedDraft:
+          actualDraftId !== null && actualDraftId === savedDraftId,
+        historyImportIdCleared:
+          !isRecord(window.history.state) ||
+          typeof window.history.state['__bookmarkerDraftImportId'] !== 'string',
+        sharePayloadCleared: !currentUrl.searchParams.has('share'),
+        tombstoneBeforeNewImport: normalizeReceipt(
+          tombstoneBeforeNewImport,
+          typeof discardedImportId === 'string' ? discardedImportId : null,
+          '<discarded-import-id>',
+        ),
+        tombstoneAfterNewImport: normalizeReceipt(
+          tombstoneAfterNewImport,
+          typeof discardedImportId === 'string' ? discardedImportId : null,
+          '<discarded-import-id>',
+        ),
+        urlKeepsOtherQueryAndFragment:
+          currentUrl.searchParams.get('keep') === 'yes' &&
+          currentUrl.hash === '#article',
+        firstOpenErrorCode: firstOpen.isErr() ? firstOpen.error.code : null,
+      }
+    } finally {
+      replaceStateSpy.mockRestore()
+      await controller.dispose()
+    }
+
+    const expectedDraft: BookmarkDraft = {
+      version: 1,
+      id: '<draft-id>',
+      source: input,
+      article: {
+        url: input.url,
+        title: input.title ?? '',
+        text: input.sharedText ?? '',
+        source: 'shared',
+        partial: false,
+      },
+      commonComment: '',
+      destinations: [],
+      delivery: [],
+      updatedAt: '<updated-at>',
+    }
+    expect(captureOutput(actual)).toEqual({
+      cleanupAttempts: 3,
+      discardConfirmed: true,
+      discardedImportIdWasPresent: true,
+      newImportIdIsDistinct: true,
+      newImportReceipt: {
+        draftId: '<draft-id>',
+        importId: '<new-import-id>',
+      },
+      newOpen: {
+        errorCode: null,
+        draft: expectedDraft,
+      },
+      savedDrafts: [expectedDraft],
+      activeDraft: expectedDraft,
+      draftUrlMatchesSavedDraft: true,
+      historyImportIdCleared: true,
+      sharePayloadCleared: true,
+      tombstoneBeforeNewImport: {
+        draftId: null,
+        importId: '<discarded-import-id>',
+      },
+      tombstoneAfterNewImport: {
+        draftId: null,
+        importId: '<discarded-import-id>',
+      },
+      urlKeepsOtherQueryAndFragment: true,
+      firstOpenErrorCode: 'history-update-failed',
     })
   })
 
