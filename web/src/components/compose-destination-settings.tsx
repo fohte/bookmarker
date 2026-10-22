@@ -72,6 +72,7 @@ export function ComposeDestinationSettings({
   onRequestCopyCommonComment,
   onCancelCopyCommonComment,
   onCopyCommonComment,
+  openSelect,
 }: {
   destination: DestinationDraft
   commonComment: string
@@ -84,6 +85,7 @@ export function ComposeDestinationSettings({
   onRequestCopyCommonComment: (destination: DestinationId) => void
   onCancelCopyCommonComment: () => void
   onCopyCommonComment: (destination: DestinationId) => void
+  openSelect?: 'comment-mode' | 'visibility' | 'collection'
 }) {
   const destinationMetadata = metadata?.destinations[destination.destination]
   const selectionUnavailable = destinationMetadata?.configured === false
@@ -125,7 +127,10 @@ export function ComposeDestinationSettings({
               selected.
             </DialogDescription>
           </DialogHeader>
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
+          <div
+            className="min-h-0 flex-1 space-y-4 overflow-y-auto"
+            data-slot="destination-settings-scroll"
+          >
             {selectionUnavailable && (
               <p className="text-sm text-muted-foreground" role="status">
                 This destination is not connected. Its saved settings are kept.
@@ -144,6 +149,7 @@ export function ComposeDestinationSettings({
                 Comment
               </label>
               <Select
+                defaultOpen={openSelect === 'comment-mode'}
                 disabled={!canEdit}
                 onValueChange={(value) => {
                   if (value === 'common' || value === 'custom') {
@@ -261,6 +267,7 @@ export function ComposeDestinationSettings({
                     Visibility
                   </label>
                   <Select
+                    defaultOpen={openSelect === 'visibility'}
                     disabled={!canEdit}
                     onValueChange={(value) => {
                       if (
@@ -348,6 +355,7 @@ export function ComposeDestinationSettings({
                     Collection
                   </label>
                   <Select
+                    defaultOpen={openSelect === 'collection'}
                     disabled={!canEdit || raindropMetadata?.configured !== true}
                     onValueChange={(value) => {
                       const collectionId = Number(value)

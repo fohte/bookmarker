@@ -12,7 +12,7 @@ import {
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { userEvent } from 'vitest/browser'
+import { page, userEvent } from 'vitest/browser'
 
 import { createIndexedDbDraftStore } from '#features/drafts/draft-store'
 import { ComposeRoute } from '#routes/compose'
@@ -250,31 +250,13 @@ describe('ComposeRoute publishing in a browser', () => {
       const trigger = button('#hatena-comment-mode')
       await userEvent.click(trigger)
     })
-    await waitFor(() =>
-      [...document.querySelectorAll('[role="option"]')].some((option) => {
-        const bounds = option.getBoundingClientRect()
-        return (
-          option.textContent.trim() === 'Use individual comment' &&
-          bounds.width > 0 &&
-          bounds.height > 0
-        )
-      }),
-    )
-    const customOption = [...document.querySelectorAll('[role="option"]')].find(
-      (option) => {
-        const bounds = option.getBoundingClientRect()
-        return (
-          option.textContent.trim() === 'Use individual comment' &&
-          bounds.width > 0 &&
-          bounds.height > 0
-        )
-      },
-    )
-    if (!(customOption instanceof HTMLElement)) {
-      throw new Error('The individual comment option was not found.')
-    }
     await act(async () => {
-      await userEvent.click(customOption)
+      await page
+        .getByRole('option', {
+          exact: true,
+          name: 'Use individual comment',
+        })
+        .click()
       await userEvent.fill(
         textarea('#hatena-custom-comment'),
         'A separate individual comment 😀 ',

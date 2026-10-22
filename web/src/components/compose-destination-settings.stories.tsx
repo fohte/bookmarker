@@ -97,6 +97,11 @@ export const Hatena: Story = {
   name: 'Hatena settings keep an unfinished tag and privacy option editable.',
 }
 
+export const HatenaCommentModeOpen: Story = {
+  args: { openSelect: 'comment-mode' },
+  name: 'The comment selector is open in the settings dialog.',
+}
+
 export const Mastodon: Story = {
   args: { destination: mastodon, metadata: mastodonMetadata },
   name: 'Mastodon settings show visibility, content warning, and sensitivity.',

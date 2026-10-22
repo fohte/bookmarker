@@ -126,9 +126,16 @@ function settingsLayout() {
   if (lastSetting === undefined) {
     throw new Error('Mastodon settings were incomplete.')
   }
+  const scrollArea = dialog.querySelector<HTMLElement>(
+    '[data-slot="destination-settings-scroll"]',
+  )
+  if (scrollArea === null) {
+    throw new Error('Mastodon settings scroll area was not found.')
+  }
 
-  dialog.scrollTop = dialog.scrollHeight
+  scrollArea.scrollTop = scrollArea.scrollHeight
   const dialogRect = dialog.getBoundingClientRect()
+  const scrollAreaRect = scrollArea.getBoundingClientRect()
   const settingRect = lastSetting.getBoundingClientRect()
   const tolerance = 1
 
@@ -138,11 +145,11 @@ function settingsLayout() {
       dialogRect.right <= window.innerWidth + tolerance &&
       dialogRect.top >= -tolerance &&
       dialogRect.bottom <= window.innerHeight + tolerance,
-    lastSettingWithinDialog:
-      settingRect.left >= dialogRect.left - tolerance &&
-      settingRect.right <= dialogRect.right + tolerance &&
-      settingRect.top >= dialogRect.top - tolerance &&
-      settingRect.bottom <= dialogRect.bottom + tolerance,
+    lastSettingWithinScrollArea:
+      settingRect.left >= scrollAreaRect.left - tolerance &&
+      settingRect.right <= scrollAreaRect.right + tolerance &&
+      settingRect.top >= scrollAreaRect.top - tolerance &&
+      settingRect.bottom <= scrollAreaRect.bottom + tolerance,
     pageHasHorizontalOverflow:
       document.documentElement.scrollWidth >
       document.documentElement.clientWidth,
@@ -158,21 +165,9 @@ async function selectOption(
     throw new Error(`Select trigger ${triggerId} was not found.`)
   }
   await act(async () => userEvent.click(trigger))
-  await waitForVisibleOption(optionName)
-  const option = [...document.querySelectorAll('[role="option"]')].find(
-    (item) => {
-      const bounds = item.getBoundingClientRect()
-      return (
-        item.textContent.trim() === optionName &&
-        bounds.width > 0 &&
-        bounds.height > 0
-      )
-    },
+  await act(async () =>
+    page.getByRole('option', { exact: true, name: optionName }).click(),
   )
-  if (!(option instanceof HTMLElement)) {
-    throw new Error(`Select option ${optionName} was not found.`)
-  }
-  await act(async () => userEvent.click(option))
 }
 
 async function setInputValue(
@@ -180,26 +175,6 @@ async function setInputValue(
   value: string,
 ): Promise<void> {
   await act(async () => userEvent.fill(input, value))
-}
-
-async function waitForVisibleOption(name: string): Promise<void> {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    const option = [...document.querySelectorAll('[role="option"]')].find(
-      (item) => {
-        const bounds = item.getBoundingClientRect()
-        return (
-          item.textContent.trim() === name &&
-          bounds.width > 0 &&
-          bounds.height > 0
-        )
-      },
-    )
-    if (option !== undefined) return
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20))
-    })
-  }
-  throw new Error(`Select option ${name} did not become visible.`)
 }
 
 beforeEach(() => {
@@ -392,12 +367,12 @@ describe('ComposeDestinationCard in a browser', () => {
     expect(captureOutput(layouts)).toEqual([
       {
         dialogWithinViewport: true,
-        lastSettingWithinDialog: true,
+        lastSettingWithinScrollArea: true,
         pageHasHorizontalOverflow: false,
       },
       {
         dialogWithinViewport: true,
-        lastSettingWithinDialog: true,
+        lastSettingWithinScrollArea: true,
         pageHasHorizontalOverflow: false,
       },
     ])
@@ -716,29 +691,20 @@ describe('ComposeDestinationCard in a browser', () => {
       throw new Error('Raindrop collection selector was not found.')
     }
     await act(async () => userEvent.click(trigger))
-    await waitForVisibleOption('Fictional reading collection')
-
-    const visibleOptions = [
-      ...document.querySelectorAll('[role="option"]'),
-    ].filter((item) => {
-      const bounds = item.getBoundingClientRect()
-      return bounds.width > 0 && bounds.height > 0
+    const unknownOption = page.getByRole('option', {
+      exact: true,
+      name: 'Saved collection ID 918 (not in the available list)',
     })
-    const unknownOption = visibleOptions.find((item) =>
-      item.textContent.includes('Saved collection ID 918'),
-    )
-    const realCollection = visibleOptions.find(
-      (item) => item.textContent.trim() === 'Fictional reading collection',
-    )
-    if (!(unknownOption instanceof HTMLElement)) {
-      throw new Error('The saved Raindrop collection option was not found.')
-    }
     const unknownOptionDisabled =
-      unknownOption.getAttribute('aria-disabled') === 'true'
-    if (!(realCollection instanceof HTMLElement)) {
-      throw new Error('The real Raindrop collection was not found.')
-    }
-    await act(async () => userEvent.click(realCollection))
+      unknownOption.element().getAttribute('aria-disabled') === 'true'
+    await act(async () =>
+      page
+        .getByRole('option', {
+          exact: true,
+          name: 'Fictional reading collection',
+        })
+        .click(),
+    )
 
     expect(
       captureOutput({
