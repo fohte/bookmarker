@@ -58,6 +58,36 @@ let mounted: { container: HTMLDivElement; root: Root } | null = null
 
 const captureOutput = <T,>(value: T): T => value
 
+type SelectOptionInput = {
+  settingsDialogName: string
+  comboboxName: string
+  optionName: string
+}
+
+async function selectOption({
+  settingsDialogName,
+  comboboxName,
+  optionName,
+}: SelectOptionInput): Promise<void> {
+  const dialog = page.getByRole('dialog', {
+    exact: true,
+    name: settingsDialogName,
+  })
+  await expect.element(dialog).toBeVisible()
+
+  const combobox = page.getByRole('combobox', {
+    exact: true,
+    name: comboboxName,
+  })
+  await expect.element(combobox).toBeVisible()
+  await act(async () => combobox.click())
+  await expect.element(combobox).toHaveAttribute('aria-expanded', 'true')
+
+  const option = page.getByRole('option', { exact: true, name: optionName })
+  await expect.element(option).toBeVisible()
+  await act(async () => option.click())
+}
+
 function response(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
@@ -265,16 +295,13 @@ describe('ComposeRoute publishing in a browser', () => {
       await userEvent.click(
         button('button[aria-label="Open Hatena Bookmark settings"]'),
       )
-      const trigger = button('#hatena-comment-mode')
-      await userEvent.click(trigger)
+    })
+    await selectOption({
+      settingsDialogName: 'Hatena Bookmark settings',
+      comboboxName: 'Hatena Bookmark comment mode',
+      optionName: 'Use individual comment',
     })
     await act(async () => {
-      await page
-        .getByRole('option', {
-          exact: true,
-          name: 'Use individual comment',
-        })
-        .click()
       await userEvent.fill(
         textarea('#hatena-custom-comment'),
         'A separate individual comment 😀 ',

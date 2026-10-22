@@ -35,6 +35,36 @@ function captureOutput<T>(value: T): T {
   return value
 }
 
+type SelectOptionInput = {
+  settingsDialogName: string
+  comboboxName: string
+  optionName: string
+}
+
+async function selectOption({
+  settingsDialogName,
+  comboboxName,
+  optionName,
+}: SelectOptionInput): Promise<void> {
+  const dialog = page.getByRole('dialog', {
+    exact: true,
+    name: settingsDialogName,
+  })
+  await expect.element(dialog).toBeVisible()
+
+  const combobox = page.getByRole('combobox', {
+    exact: true,
+    name: comboboxName,
+  })
+  await expect.element(combobox).toBeVisible()
+  await act(async () => combobox.click())
+  await expect.element(combobox).toHaveAttribute('aria-expanded', 'true')
+
+  const option = page.getByRole('option', { exact: true, name: optionName })
+  await expect.element(option).toBeVisible()
+  await act(async () => option.click())
+}
+
 function mount(component: ReactNode): HTMLDivElement {
   const container = document.createElement('div')
   document.body.append(container)
@@ -154,26 +184,6 @@ function settingsLayout() {
       document.documentElement.scrollWidth >
       document.documentElement.clientWidth,
   }
-}
-
-async function selectOption(
-  triggerId: string,
-  optionName: string,
-): Promise<void> {
-  const trigger = document.getElementById(triggerId)
-  if (!(trigger instanceof HTMLButtonElement)) {
-    throw new Error(`Select trigger ${triggerId} was not found.`)
-  }
-  const triggerLabel = trigger.getAttribute('aria-label')
-  if (triggerLabel === null) {
-    throw new Error(`Select trigger ${triggerId} has no accessible name.`)
-  }
-  await act(async () =>
-    page.getByRole('combobox', { exact: true, name: triggerLabel }).click(),
-  )
-  await act(async () =>
-    page.getByRole('option', { exact: true, name: optionName }).click(),
-  )
 }
 
 async function setInputValue(
@@ -558,11 +568,19 @@ describe('ComposeDestinationCard in a browser', () => {
     await act(async () =>
       userEvent.click(buttonWithAriaLabel('Open Hatena Bookmark settings')),
     )
-    await selectOption('hatena-comment-mode', 'Use common comment')
+    await selectOption({
+      settingsDialogName: 'Hatena Bookmark settings',
+      comboboxName: 'Hatena Bookmark comment mode',
+      optionName: 'Use common comment',
+    })
     act(() => {
       buttonNamed('Change common comment').click()
     })
-    await selectOption('hatena-comment-mode', 'Use individual comment')
+    await selectOption({
+      settingsDialogName: 'Hatena Bookmark settings',
+      comboboxName: 'Hatena Bookmark comment mode',
+      optionName: 'Use individual comment',
+    })
     const customComment = document.querySelector<HTMLTextAreaElement>(
       '#hatena-custom-comment',
     )
