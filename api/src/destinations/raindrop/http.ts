@@ -9,51 +9,62 @@ const apiOrigin = 'https://api.raindrop.io'
 const timeoutMilliseconds = 10_000
 const maximumResponseBytes = 1_000_000
 
-const failed = (
+export const raindropFailed = (
   code: PublishAdapterError['code'],
-  retryable: boolean,
+  retryable = false,
 ): PublishAdapterError => ({
   code,
   outcome: 'failed',
   retryable,
 })
 
-const unknown = (code: PublishAdapterError['code']): PublishAdapterError => ({
+export const raindropUnknown = (
+  code: PublishAdapterError['code'],
+): PublishAdapterError => ({
   code,
   outcome: 'unknown',
   retryable: false,
 })
 
-const networkFailure = (mode: RequestMode): PublishAdapterError =>
-  mode === 'write' ? unknown('unavailable') : failed('unavailable', true)
-
-const bodyReadFailure = (mode: RequestMode): PublishAdapterError =>
-  mode === 'write' ? unknown('unavailable') : failed('unavailable', true)
-
-const invalidResponse = (mode: RequestMode): PublishAdapterError =>
+const unavailableFailure = (mode: RequestMode): PublishAdapterError =>
   mode === 'write'
-    ? unknown('invalid_response')
-    : failed('invalid_response', false)
+    ? raindropUnknown('unavailable')
+    : raindropFailed('unavailable', true)
+
+export const raindropInvalidResponse = (
+  mode: RequestMode,
+): PublishAdapterError =>
+  mode === 'write'
+    ? raindropUnknown('invalid_response')
+    : raindropFailed('invalid_response')
+
+const cancelAndFail = (
+  cancel: () => Promise<unknown> | undefined,
+  error: PublishAdapterError,
+): ResultAsync<never, PublishAdapterError> =>
+  ResultAsync.fromPromise(Promise.resolve().then(cancel), () => error).andThen(
+    () => errAsync(error),
+  )
 
 const statusFailure = (
   status: number,
   mode: RequestMode,
 ): PublishAdapterError => {
   if (status === 429) {
-    return failed('rate_limited', true)
+    return raindropFailed('rate_limited', true)
   }
 
   if (status === 401 || status === 403) {
-    return failed('unauthorized', false)
+    return raindropFailed('unauthorized')
   }
 
   if (status === 408 || status >= 500) {
     return mode === 'write'
-      ? unknown('unavailable')
-      : failed('unavailable', true)
+      ? raindropUnknown('unavailable')
+      : raindropFailed('unavailable', true)
   }
 
-  return failed('rejected', false)
+  return raindropFailed('rejected')
 }
 
 const discardResponse = (
@@ -64,12 +75,7 @@ const discardResponse = (
     return errAsync(error)
   }
 
-  return ResultAsync.fromPromise(
-    Promise.resolve().then(() => response.body?.cancel()),
-    () => error,
-  )
-    .mapErr(() => error)
-    .andThen(() => errAsync(error))
+  return cancelAndFail(() => response.body?.cancel(), error)
 }
 
 const readResponseBody = (
@@ -82,7 +88,7 @@ const readResponseBody = (
 
   const readerResult = ResultAsync.fromPromise(
     Promise.resolve().then(() => response.body?.getReader()),
-    () => bodyReadFailure(mode),
+    () => unavailableFailure(mode),
   )
 
   return readerResult.andThen((reader) => {
@@ -96,7 +102,7 @@ const readResponseBody = (
     ): ResultAsync<string, PublishAdapterError> =>
       ResultAsync.fromPromise(
         Promise.resolve().then(() => reader.read()),
-        () => bodyReadFailure(mode),
+        () => unavailableFailure(mode),
       ).andThen(({ done, value }) => {
         if (done) {
           const bytes = new Uint8Array(totalBytes)
@@ -110,19 +116,14 @@ const readResponseBody = (
 
         const rawChunk: unknown = value
         if (!(rawChunk instanceof Uint8Array)) {
-          return errAsync(invalidResponse(mode))
+          return errAsync(raindropInvalidResponse(mode))
         }
 
         const nextTotalBytes = totalBytes + rawChunk.byteLength
 
         if (nextTotalBytes > maximumResponseBytes) {
-          const error = invalidResponse(mode)
-          return ResultAsync.fromPromise(
-            Promise.resolve().then(() => reader.cancel()),
-            () => error,
-          )
-            .mapErr(() => error)
-            .andThen(() => errAsync(error))
+          const error = raindropInvalidResponse(mode)
+          return cancelAndFail(() => reader.cancel(), error)
         }
 
         chunks.push(rawChunk)
@@ -158,7 +159,7 @@ export const requestRaindropJson = (
 
   return ResultAsync.fromPromise(
     Promise.resolve().then(() => fetch(apiOrigin + path, init)),
-    () => networkFailure(mode),
+    () => unavailableFailure(mode),
   ).andThen((response) => {
     if (!response.ok) {
       return discardResponse(response, statusFailure(response.status, mode))
@@ -167,7 +168,7 @@ export const requestRaindropJson = (
     return readResponseBody(response, mode).andThen((text) =>
       ResultAsync.fromPromise(
         Promise.resolve().then(() => JSON.parse(text) as unknown),
-        () => invalidResponse(mode),
+        () => raindropInvalidResponse(mode),
       ),
     )
   })

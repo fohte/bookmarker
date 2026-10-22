@@ -8,7 +8,12 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { z } from 'zod'
 
 import { createDisabledAdapter } from '#destinations/disabled'
-import { requestRaindropJson } from '#destinations/raindrop/http'
+import {
+  raindropFailed,
+  raindropInvalidResponse,
+  raindropUnknown,
+  requestRaindropJson,
+} from '#destinations/raindrop/http'
 import type {
   DestinationAdapter,
   MetadataAdapterError,
@@ -18,6 +23,7 @@ import type {
 type RaindropCollection = NonNullable<
   DestinationMetadata['destinations']['raindrop']['collections']
 >[number]
+type RaindropTarget = Extract<PublishTarget, { destination: 'raindrop' }>
 
 const ExistsResponseSchema = z
   .object({
@@ -70,35 +76,13 @@ const CollectionResponseSchema = z
   })
   .loose()
 
-const readFailure = (
-  code: PublishAdapterError['code'],
-  retryable = false,
-): PublishAdapterError => ({
-  code,
-  outcome: 'failed',
-  retryable,
-})
-
-const writeUnknown = (
-  code: PublishAdapterError['code'],
-): PublishAdapterError => ({
-  code,
-  outcome: 'unknown',
-  retryable: false,
-})
-
-const invalidResponseFor = (mode: 'read' | 'write'): PublishAdapterError =>
-  mode === 'write'
-    ? writeUnknown('invalid_response')
-    : readFailure('invalid_response')
-
 const parseExistsResponse = (
   payload: unknown,
 ): ResultAsync<number[], PublishAdapterError> => {
   const parsed = ExistsResponseSchema.safeParse(payload)
   return parsed.success
     ? okAsync(parsed.data.ids)
-    : errAsync(readFailure('invalid_response'))
+    : errAsync(raindropFailed('invalid_response'))
 }
 
 const parseSingleResponse = (
@@ -107,13 +91,13 @@ const parseSingleResponse = (
 ): ResultAsync<z.infer<typeof RaindropItemSchema>, PublishAdapterError> => {
   const resultEnvelope = ResultResponseSchema.safeParse(payload)
   if (resultEnvelope.success && !resultEnvelope.data.result) {
-    return errAsync(readFailure('rejected'))
+    return errAsync(raindropFailed('rejected'))
   }
 
   const parsed = SingleResponseSchema.safeParse(payload)
   return parsed.success
     ? okAsync(parsed.data.item)
-    : errAsync(invalidResponseFor(mode))
+    : errAsync(raindropInvalidResponse(mode))
 }
 
 const parseCollectionItems = (
@@ -121,7 +105,7 @@ const parseCollectionItems = (
 ): ResultAsync<RaindropCollection[], PublishAdapterError> => {
   const parsed = CollectionResponseSchema.safeParse(payload)
   if (!parsed.success) {
-    return errAsync(readFailure('invalid_response'))
+    return errAsync(raindropFailed('invalid_response'))
   }
 
   return okAsync(
@@ -153,31 +137,27 @@ const successfulDelivery = (target: PublishTarget): DeliveryResult => ({
   retryable: false,
 })
 
-const createPayload = (
+const sharedPayloadFields = (
   article: PublishArticle,
-  target: Extract<PublishTarget, { destination: 'raindrop' }>,
+  target: RaindropTarget,
 ) => ({
-  link: article.url,
   ...(article.title === undefined ? {} : { title: article.title }),
   note: target.comment,
   tags: target.options.tags,
   collection: { $id: target.options.collectionId },
 })
 
-const updatePayload = (
-  article: PublishArticle,
-  target: Extract<PublishTarget, { destination: 'raindrop' }>,
-) => ({
-  ...(article.title === undefined ? {} : { title: article.title }),
-  note: target.comment,
-  tags: target.options.tags,
-  collection: { $id: target.options.collectionId },
+const createPayload = (article: PublishArticle, target: RaindropTarget) => ({
+  link: article.url,
+  ...sharedPayloadFields(article, target),
 })
+
+const updatePayload = sharedPayloadFields
 
 const publishNewRaindrop = (
   token: string,
   article: PublishArticle,
-  target: Extract<PublishTarget, { destination: 'raindrop' }>,
+  target: RaindropTarget,
 ): ResultAsync<DeliveryResult, PublishAdapterError> =>
   requestRaindropJson(
     token,
@@ -190,13 +170,13 @@ const publishNewRaindrop = (
     .andThen((item) =>
       item.link === article.url
         ? okAsync(successfulDelivery(target))
-        : errAsync(writeUnknown('invalid_response')),
+        : errAsync(raindropUnknown('invalid_response')),
     )
 
 const updateExistingRaindrop = (
   token: string,
   article: PublishArticle,
-  target: Extract<PublishTarget, { destination: 'raindrop' }>,
+  target: RaindropTarget,
   raindropId: number,
 ): ResultAsync<DeliveryResult, PublishAdapterError> =>
   requestRaindropJson(
@@ -208,11 +188,11 @@ const updateExistingRaindrop = (
     .andThen((payload) => parseSingleResponse(payload, 'read'))
     .andThen((item) => {
       if (item._id !== raindropId) {
-        return errAsync(readFailure('invalid_response'))
+        return errAsync(raindropFailed('invalid_response'))
       }
 
       if (item.link !== article.url) {
-        return errAsync(readFailure('rejected'))
+        return errAsync(raindropFailed('rejected'))
       }
 
       return requestRaindropJson(
@@ -226,14 +206,14 @@ const updateExistingRaindrop = (
         .andThen((updatedItem) =>
           updatedItem._id === raindropId && updatedItem.link === article.url
             ? okAsync(successfulDelivery(target))
-            : errAsync(writeUnknown('invalid_response')),
+            : errAsync(raindropUnknown('invalid_response')),
         )
     })
 
 const findAndPublishRaindrop = (
   token: string,
   article: PublishArticle,
-  target: Extract<PublishTarget, { destination: 'raindrop' }>,
+  target: RaindropTarget,
 ): ResultAsync<DeliveryResult, PublishAdapterError> =>
   requestRaindropJson(token, '/rest/v1/import/url/exists', 'POST', 'read', {
     urls: [article.url],
@@ -241,7 +221,7 @@ const findAndPublishRaindrop = (
     .andThen(parseExistsResponse)
     .andThen((ids) => {
       if (ids.length > 1) {
-        return errAsync(readFailure('rejected'))
+        return errAsync(raindropFailed('rejected'))
       }
 
       const raindropId = ids.at(0)

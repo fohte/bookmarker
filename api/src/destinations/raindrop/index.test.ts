@@ -71,6 +71,49 @@ const summarizeCalls = (calls: RecordedCall[]) =>
     }
   })
 
+const expectedCall = (path: string, method: string, body?: unknown) => ({
+  url: apiUrl + path,
+  method,
+  authorization: 'Bearer ' + fictionalToken,
+  contentType: body === undefined ? null : 'application/json',
+  body: body === undefined ? null : JSON.stringify(body),
+  redirect: 'error',
+  hasTimeout: true,
+})
+
+const existsCall = (url = article.url) =>
+  expectedCall('/rest/v1/import/url/exists', 'POST', { urls: [url] })
+
+const createCall = (articleToPublish: PublishArticle = article) =>
+  expectedCall('/rest/v1/raindrop', 'POST', {
+    link: articleToPublish.url,
+    ...(articleToPublish.title === undefined
+      ? {}
+      : { title: articleToPublish.title }),
+    note: target.comment,
+    tags: target.options.tags,
+    collection: { $id: target.options.collectionId },
+  })
+
+const getCall = (id: number) =>
+  expectedCall('/rest/v1/raindrop/' + String(id), 'GET')
+
+const updateCall = (id: number, articleToPublish: PublishArticle = article) =>
+  expectedCall('/rest/v1/raindrop/' + String(id), 'PUT', {
+    ...(articleToPublish.title === undefined
+      ? {}
+      : { title: articleToPublish.title }),
+    note: target.comment,
+    tags: target.options.tags,
+    collection: { $id: target.options.collectionId },
+  })
+
+const collectionsCall = (children = false) =>
+  expectedCall(
+    children ? '/rest/v1/collections/childrens' : '/rest/v1/collections',
+    'GET',
+  )
+
 const publishResult = async (
   adapter: ReturnType<typeof createRaindropAdapter>,
 ) =>
@@ -94,6 +137,11 @@ const metadataSnapshot = <T>(
   calls: summarizeCalls(calls),
 })
 
+const timeoutSnapshot = (timeoutDurations: number[], requestCount: number) => ({
+  timeoutDurations,
+  requestCount,
+})
+
 const disabledSnapshot = <M, P>(
   adapter: ReturnType<typeof createRaindropAdapter>,
   metadata: M,
@@ -107,6 +155,7 @@ const disabledSnapshot = <M, P>(
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -158,32 +207,28 @@ describe('createRaindropAdapter', () => {
           retryable: false,
         },
       },
-      calls: [
-        {
-          url: apiUrl + '/rest/v1/import/url/exists',
-          method: 'POST',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: 'application/json',
-          body: JSON.stringify({ urls: [article.url] }),
-          redirect: 'error',
-          hasTimeout: true,
-        },
-        {
-          url: apiUrl + '/rest/v1/raindrop',
-          method: 'POST',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            link: article.url,
-            title: article.title,
-            note: target.comment,
-            tags: target.options.tags,
-            collection: { $id: target.options.collectionId },
-          }),
-          redirect: 'error',
-          hasTimeout: true,
-        },
-      ],
+      calls: [existsCall(), createCall()],
+    })
+  })
+
+  it('sets a ten-second timeout for every API request', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    const calls = installFetch(
+      jsonResponse({ result: false, ids: [] }),
+      jsonResponse({ result: true, item: { _id: 101, link: article.url } }),
+    )
+    const adapter = createRaindropAdapter({
+      RAINDROP_ACCESS_TOKEN: fictionalToken,
+    })
+    await publishResult(adapter)
+
+    const actual = timeoutSnapshot(
+      timeout.mock.calls.map(([duration]) => duration),
+      calls.length,
+    )
+    expect(actual).toEqual({
+      timeoutDurations: [10_000, 10_000],
+      requestCount: 2,
     })
   })
 
@@ -204,7 +249,7 @@ describe('createRaindropAdapter', () => {
     })
     const result = await adapter
       .publish({
-        article: { url: article.url },
+        article,
         target,
       })
       .match(
@@ -222,39 +267,7 @@ describe('createRaindropAdapter', () => {
           retryable: false,
         },
       },
-      calls: [
-        {
-          url: apiUrl + '/rest/v1/import/url/exists',
-          method: 'POST',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: 'application/json',
-          body: JSON.stringify({ urls: [article.url] }),
-          redirect: 'error',
-          hasTimeout: true,
-        },
-        {
-          url: apiUrl + '/rest/v1/raindrop/101',
-          method: 'GET',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: null,
-          body: null,
-          redirect: 'error',
-          hasTimeout: true,
-        },
-        {
-          url: apiUrl + '/rest/v1/raindrop/101',
-          method: 'PUT',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            note: target.comment,
-            tags: target.options.tags,
-            collection: { $id: target.options.collectionId },
-          }),
-          redirect: 'error',
-          hasTimeout: true,
-        },
-      ],
+      calls: [existsCall(), getCall(101), updateCall(101)],
     })
   })
 
@@ -274,17 +287,7 @@ describe('createRaindropAdapter', () => {
           retryable: false,
         },
       },
-      calls: [
-        {
-          url: apiUrl + '/rest/v1/import/url/exists',
-          method: 'POST',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: 'application/json',
-          body: JSON.stringify({ urls: [article.url] }),
-          redirect: 'error',
-          hasTimeout: true,
-        },
-      ],
+      calls: [existsCall()],
     })
   })
 
@@ -310,26 +313,7 @@ describe('createRaindropAdapter', () => {
           retryable: false,
         },
       },
-      calls: [
-        {
-          url: apiUrl + '/rest/v1/import/url/exists',
-          method: 'POST',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: 'application/json',
-          body: JSON.stringify({ urls: [article.url] }),
-          redirect: 'error',
-          hasTimeout: true,
-        },
-        {
-          url: apiUrl + '/rest/v1/raindrop/101',
-          method: 'GET',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: null,
-          body: null,
-          redirect: 'error',
-          hasTimeout: true,
-        },
-      ],
+      calls: [existsCall(), getCall(101)],
     })
   })
 
@@ -349,17 +333,7 @@ describe('createRaindropAdapter', () => {
           retryable: true,
         },
       },
-      calls: [
-        {
-          url: apiUrl + '/rest/v1/import/url/exists',
-          method: 'POST',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: 'application/json',
-          body: JSON.stringify({ urls: [article.url] }),
-          redirect: 'error',
-          hasTimeout: true,
-        },
-      ],
+      calls: [existsCall()],
     })
   })
 
@@ -382,32 +356,7 @@ describe('createRaindropAdapter', () => {
           retryable: true,
         },
       },
-      calls: [
-        {
-          url: apiUrl + '/rest/v1/import/url/exists',
-          method: 'POST',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: 'application/json',
-          body: JSON.stringify({ urls: [article.url] }),
-          redirect: 'error',
-          hasTimeout: true,
-        },
-        {
-          url: apiUrl + '/rest/v1/raindrop',
-          method: 'POST',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            link: article.url,
-            title: article.title,
-            note: target.comment,
-            tags: target.options.tags,
-            collection: { $id: target.options.collectionId },
-          }),
-          redirect: 'error',
-          hasTimeout: true,
-        },
-      ],
+      calls: [existsCall(), createCall()],
     })
   })
 
@@ -430,32 +379,7 @@ describe('createRaindropAdapter', () => {
           retryable: false,
         },
       },
-      calls: [
-        {
-          url: apiUrl + '/rest/v1/import/url/exists',
-          method: 'POST',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: 'application/json',
-          body: JSON.stringify({ urls: [article.url] }),
-          redirect: 'error',
-          hasTimeout: true,
-        },
-        {
-          url: apiUrl + '/rest/v1/raindrop',
-          method: 'POST',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            link: article.url,
-            title: article.title,
-            note: target.comment,
-            tags: target.options.tags,
-            collection: { $id: target.options.collectionId },
-          }),
-          redirect: 'error',
-          hasTimeout: true,
-        },
-      ],
+      calls: [existsCall(), createCall()],
     })
   })
 
@@ -478,32 +402,7 @@ describe('createRaindropAdapter', () => {
           retryable: false,
         },
       },
-      calls: [
-        {
-          url: apiUrl + '/rest/v1/import/url/exists',
-          method: 'POST',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: 'application/json',
-          body: JSON.stringify({ urls: [article.url] }),
-          redirect: 'error',
-          hasTimeout: true,
-        },
-        {
-          url: apiUrl + '/rest/v1/raindrop',
-          method: 'POST',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            link: article.url,
-            title: article.title,
-            note: target.comment,
-            tags: target.options.tags,
-            collection: { $id: target.options.collectionId },
-          }),
-          redirect: 'error',
-          hasTimeout: true,
-        },
-      ],
+      calls: [existsCall(), createCall()],
     })
   })
 
@@ -526,32 +425,7 @@ describe('createRaindropAdapter', () => {
           retryable: false,
         },
       },
-      calls: [
-        {
-          url: apiUrl + '/rest/v1/import/url/exists',
-          method: 'POST',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: 'application/json',
-          body: JSON.stringify({ urls: [article.url] }),
-          redirect: 'error',
-          hasTimeout: true,
-        },
-        {
-          url: apiUrl + '/rest/v1/raindrop',
-          method: 'POST',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            link: article.url,
-            title: article.title,
-            note: target.comment,
-            tags: target.options.tags,
-            collection: { $id: target.options.collectionId },
-          }),
-          redirect: 'error',
-          hasTimeout: true,
-        },
-      ],
+      calls: [existsCall(), createCall()],
     })
   })
 
@@ -599,26 +473,7 @@ describe('createRaindropAdapter', () => {
           ],
         },
       },
-      calls: [
-        {
-          url: apiUrl + '/rest/v1/collections',
-          method: 'GET',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: null,
-          body: null,
-          redirect: 'error',
-          hasTimeout: true,
-        },
-        {
-          url: apiUrl + '/rest/v1/collections/childrens',
-          method: 'GET',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: null,
-          body: null,
-          redirect: 'error',
-          hasTimeout: true,
-        },
-      ],
+      calls: [collectionsCall(), collectionsCall(true)],
     })
   })
 
@@ -636,26 +491,7 @@ describe('createRaindropAdapter', () => {
     expect(actual).toEqual({
       configured: true,
       metadata: { error: { code: 'unauthorized' } },
-      calls: [
-        {
-          url: apiUrl + '/rest/v1/collections',
-          method: 'GET',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: null,
-          body: null,
-          redirect: 'error',
-          hasTimeout: true,
-        },
-        {
-          url: apiUrl + '/rest/v1/collections/childrens',
-          method: 'GET',
-          authorization: 'Bearer ' + fictionalToken,
-          contentType: null,
-          body: null,
-          redirect: 'error',
-          hasTimeout: true,
-        },
-      ],
+      calls: [collectionsCall(), collectionsCall(true)],
     })
   })
 })
