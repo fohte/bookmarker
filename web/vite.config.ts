@@ -15,6 +15,7 @@ export default defineConfig({
       'api > zod',
       'msw-storybook-addon/csf3',
       'neverthrow',
+      'react-dom/client',
     ],
   },
   server: {
