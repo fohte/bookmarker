@@ -1,5 +1,5 @@
 import type { Article, ShareInput, Summary, Verification } from 'api/contracts'
-import { errAsync, type Result, type ResultAsync } from 'neverthrow'
+import type { Result, ResultAsync } from 'neverthrow'
 import {
   type Dispatch,
   type SetStateAction,
@@ -12,6 +12,7 @@ import {
 import {
   type AnalysisClientError,
   extractArticle,
+  invalidInputAsync,
   summarizeArticle,
   verifyComment,
 } from '#features/analysis/client'
@@ -45,14 +46,6 @@ type StateSetter<T> = Dispatch<SetStateAction<StoredState<T> | null>>
 
 const idleState: AnalysisState<never> = { status: 'idle' }
 const staleState: AnalysisState<never> = { status: 'stale' }
-
-const invalidInputError: AnalysisClientError = {
-  kind: 'invalid-input',
-  message: 'The request does not match the article analysis contract.',
-}
-
-const errorAsync = <T>(): ResultAsync<T, AnalysisClientError> =>
-  errAsync<T, AnalysisClientError>(invalidInputError)
 
 const invalidate = (operation: Operation): boolean => {
   const wasRunning = operation.controller !== undefined
@@ -117,6 +110,29 @@ const runOperation = async <T>(
   return result
 }
 
+const useAnalysisOperation = <T>(key: string) => {
+  const [stored, setStored] = useState<StoredState<T> | null>(null)
+  const operation = useRef<Operation>({ generation: 0, controller: undefined })
+
+  useEffect(() => {
+    carryStateToKey(setStored, key)
+    return () => {
+      invalidate(operation.current)
+    }
+  }, [key])
+
+  const run = useCallback(
+    (execute: (signal: AbortSignal) => ResultAsync<T, AnalysisClientError>) =>
+      runOperation(operation.current, key, setStored, execute),
+    [key],
+  )
+  const cancel = useCallback(() => {
+    cancelOperation(operation.current, setStored)
+  }, [])
+
+  return { state: stateForKey(stored, key), run, cancel }
+}
+
 export const useArticleAnalysis = ({
   draftId,
   shareInput,
@@ -124,26 +140,6 @@ export const useArticleAnalysis = ({
   articleRevision,
   comment,
 }: ArticleAnalysisOptions) => {
-  const [extractionStored, setExtractionStored] =
-    useState<StoredState<Article> | null>(null)
-  const [summaryStored, setSummaryStored] =
-    useState<StoredState<Summary> | null>(null)
-  const [verificationStored, setVerificationStored] =
-    useState<StoredState<Verification> | null>(null)
-
-  const extractionOperation = useRef<Operation>({
-    generation: 0,
-    controller: undefined,
-  })
-  const summaryOperation = useRef<Operation>({
-    generation: 0,
-    controller: undefined,
-  })
-  const verificationOperation = useRef<Operation>({
-    generation: 0,
-    controller: undefined,
-  })
-
   const extractionKey = JSON.stringify([draftId, shareInput])
   const summaryKey = JSON.stringify([draftId, articleRevision, article])
   const verificationKey = JSON.stringify([
@@ -154,92 +150,56 @@ export const useArticleAnalysis = ({
     comment?.value ?? null,
   ])
 
-  useEffect(() => {
-    carryStateToKey(setExtractionStored, extractionKey)
-    return () => {
-      invalidate(extractionOperation.current)
-    }
-  }, [extractionKey])
-  useEffect(() => {
-    carryStateToKey(setSummaryStored, summaryKey)
-    return () => {
-      invalidate(summaryOperation.current)
-    }
-  }, [summaryKey])
-  useEffect(() => {
-    carryStateToKey(setVerificationStored, verificationKey)
-    return () => {
-      invalidate(verificationOperation.current)
-    }
-  }, [verificationKey])
+  const extraction = useAnalysisOperation<Article>(extractionKey)
+  const summary = useAnalysisOperation<Summary>(summaryKey)
+  const verification = useAnalysisOperation<Verification>(verificationKey)
 
   const extract = useCallback(
     () =>
-      runOperation(
-        extractionOperation.current,
-        extractionKey,
-        setExtractionStored,
-        (signal) =>
-          shareInput === null
-            ? errorAsync<Article>()
-            : extractArticle(shareInput, { signal }),
+      extraction.run((signal) =>
+        shareInput === null
+          ? invalidInputAsync<Article>()
+          : extractArticle(shareInput, { signal }),
       ),
-    [extractionKey, shareInput],
+    [extraction.run, shareInput],
   )
 
   const summarize = useCallback(
     () =>
-      runOperation(
-        summaryOperation.current,
-        summaryKey,
-        setSummaryStored,
-        (signal) =>
-          article === null
-            ? errorAsync<Summary>()
-            : summarizeArticle(article, { signal }),
+      summary.run((signal) =>
+        article === null
+          ? invalidInputAsync<Summary>()
+          : summarizeArticle(article, { signal }),
       ),
-    [article, summaryKey],
+    [article, summary.run],
   )
 
   const verify = useCallback(
     () =>
-      runOperation(
-        verificationOperation.current,
-        verificationKey,
-        setVerificationStored,
-        (signal) =>
-          article === null || comment === null
-            ? errorAsync<Verification>()
-            : verifyComment(article, comment.value, { signal }),
+      verification.run((signal) =>
+        article === null || comment === null
+          ? invalidInputAsync<Verification>()
+          : verifyComment(article, comment.value, { signal }),
       ),
-    [article, comment, verificationKey],
+    [article, comment, verification.run],
   )
 
-  const cancelExtraction = useCallback(() => {
-    cancelOperation(extractionOperation.current, setExtractionStored)
-  }, [])
-  const cancelSummary = useCallback(() => {
-    cancelOperation(summaryOperation.current, setSummaryStored)
-  }, [])
-  const cancelVerification = useCallback(() => {
-    cancelOperation(verificationOperation.current, setVerificationStored)
-  }, [])
   const cancelAll = useCallback(() => {
-    cancelExtraction()
-    cancelSummary()
-    cancelVerification()
-  }, [cancelExtraction, cancelSummary, cancelVerification])
+    extraction.cancel()
+    summary.cancel()
+    verification.cancel()
+  }, [extraction.cancel, summary.cancel, verification.cancel])
 
   return {
-    extraction: stateForKey(extractionStored, extractionKey),
-    summary: stateForKey(summaryStored, summaryKey),
-    verification: stateForKey(verificationStored, verificationKey),
+    extraction: extraction.state,
+    summary: summary.state,
+    verification: verification.state,
     extract,
     summarize,
     verify,
-    cancelExtraction,
-    cancelSummary,
-    cancelVerification,
+    cancelExtraction: extraction.cancel,
+    cancelSummary: summary.cancel,
+    cancelVerification: verification.cancel,
     cancelAll,
   }
 }

@@ -54,6 +54,9 @@ const errorAsync = <T>(
 ): ResultAsync<T, AnalysisClientError> =>
   errAsync<T, AnalysisClientError>(error)
 
+export const invalidInputAsync = <T>(): ResultAsync<T, AnalysisClientError> =>
+  errorAsync(invalidInputError())
+
 const isAbortError = (error: unknown): boolean =>
   typeof error === 'object' &&
   error !== null &&
@@ -113,15 +116,19 @@ const errorFromResponse = <T>(
   const body = Promise.resolve()
     .then(() => response.json() as Promise<unknown>)
     .then(
-      (value) => ({ value }),
-      () => ({ value: undefined }),
+      (value) => ({ success: true as const, value }),
+      (error: unknown) => ({ success: false as const, error }),
     )
 
-  return ResultAsync.fromPromise(body, () =>
-    httpError(response, undefined),
-  ).andThen(({ value }) =>
+  return ResultAsync.fromSafePromise(body).andThen((parsedBody) =>
     errorAsync<T>(
-      signal?.aborted === true ? cancelledError() : httpError(response, value),
+      signal?.aborted === true ||
+        (!parsedBody.success && isAbortError(parsedBody.error))
+        ? cancelledError()
+        : httpError(
+            response,
+            parsedBody.success ? parsedBody.value : undefined,
+          ),
     ),
   )
 }
@@ -164,7 +171,10 @@ const postJson = <T>(
 
     return ResultAsync.fromPromise(
       Promise.resolve().then(() => response.json() as Promise<unknown>),
-      invalidResponseError,
+      (error) =>
+        signal?.aborted === true || isAbortError(error)
+          ? cancelledError()
+          : invalidResponseError(),
     ).andThen((value) => {
       if (signal?.aborted === true) return errorAsync<T>(cancelledError())
 

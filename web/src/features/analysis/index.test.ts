@@ -65,6 +65,17 @@ const installFetch = (
   return fetchMock
 }
 
+const deferred = <T>() => {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+
+  return { promise, resolve, reject }
+}
+
 const describeRequest = ([input, init]: Parameters<typeof fetch>) => ({
   url:
     typeof input === 'string'
@@ -198,6 +209,100 @@ describe('article analysis client', () => {
         },
       },
     ])
+  })
+
+  it('maps network failures to a value', async () => {
+    const fetchMock = installFetch(() =>
+      Promise.reject(new Error('Fictional network failure.')),
+    )
+    const result = await extractArticle(shareInput)
+
+    expect(
+      observe({
+        result: observeResult(result),
+        requests: fetchMock.mock.calls.map(describeRequest),
+      }),
+    ).toEqual({
+      result: {
+        error: {
+          kind: 'network',
+          message: 'The request could not reach the server.',
+        },
+      },
+      requests: [
+        {
+          url: '/api/articles/extract',
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            accept: 'application/json',
+            'content-type': 'application/json',
+          },
+          body: shareInput,
+        },
+      ],
+    })
+  })
+
+  it('maps an access challenge response to an authentication value', async () => {
+    installFetch(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'access_required',
+              message: 'Fictional access challenge.',
+            },
+          }),
+          {
+            status: 403,
+            headers: {
+              'content-type': 'application/json',
+              'www-authenticate':
+                'Bearer realm="https://fictional.example.invalid/.well-known/cloudflare-access-protected-resource/api"',
+            },
+          },
+        ),
+      ),
+    )
+
+    const result = await extractArticle(shareInput)
+
+    expect(observeResult(result)).toEqual({
+      error: {
+        kind: 'authentication-required',
+        message: 'Authentication is required to use article analysis.',
+      },
+    })
+  })
+
+  it('maps an abort while reading a successful response body to cancelled', async () => {
+    const body = deferred<unknown>()
+    let markBodyReadStarted!: () => void
+    const bodyReadStarted = new Promise<void>((resolve) => {
+      markBodyReadStarted = resolve
+    })
+    const response = new Response()
+    vi.spyOn(response, 'json').mockImplementation(() => {
+      markBodyReadStarted()
+      return body.promise
+    })
+    installFetch(() => Promise.resolve(response))
+
+    const controller = new AbortController()
+    const request = summarizeArticle(article, { signal: controller.signal })
+    await bodyReadStarted
+    controller.abort()
+    body.reject(new DOMException('Fictional body read abort.', 'AbortError'))
+
+    const result = await request
+
+    expect(observeResult(result)).toEqual({
+      error: {
+        kind: 'cancelled',
+        message: 'The request was cancelled.',
+      },
+    })
   })
 
   it('returns malformed success responses and cancelled requests as values', async () => {
