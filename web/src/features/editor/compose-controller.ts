@@ -1,4 +1,9 @@
-import { type BookmarkDraft, type ShareInput } from 'api/contracts'
+import {
+  type BookmarkDraft,
+  type DestinationDraft,
+  type DestinationId,
+  type ShareInput,
+} from 'api/contracts'
 import { err, ok, type Result } from 'neverthrow'
 
 import {
@@ -16,6 +21,11 @@ import {
   type DraftStore,
 } from '#features/drafts/draft-store'
 import {
+  copyCommonCommentDraft,
+  updateDestinationDraft,
+} from '#features/editor/compose-destination'
+import {
+  clearDraftVerification,
   recoverPendingDeliveries,
   updateDraftArticle,
 } from '#features/editor/compose-draft'
@@ -134,7 +144,17 @@ export class ComposeController {
   }
 
   updateCommonComment(commonComment: string): void {
-    this.#updateDraft((draft) => ({ ...draft, commonComment }))
+    this.#updateDraft((draft) =>
+      clearDraftVerification({ ...draft, commonComment }),
+    )
+  }
+
+  updateDestination(destination: DestinationDraft): void {
+    this.#updateDraft((draft) => updateDestinationDraft(draft, destination))
+  }
+
+  copyCommonComment(destinationId: DestinationId): void {
+    this.#updateDraft((draft) => copyCommonCommentDraft(draft, destinationId))
   }
 
   async selectDraft(draftId: string): Promise<void> {

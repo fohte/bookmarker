@@ -1,4 +1,4 @@
-import type { BookmarkDraft, ShareInput } from 'api/contracts'
+import type { BookmarkDraft, DestinationDraft, ShareInput } from 'api/contracts'
 import { errAsync, type Result, ResultAsync } from 'neverthrow'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -58,6 +58,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function captureOutput<T>(value: T): T {
   return value
+}
+
+function omitAnalysis(draft: BookmarkDraft): BookmarkDraft {
+  const updated = { ...draft }
+  delete updated.analysis
+  return updated
 }
 
 function failHistoryCleanups(
@@ -298,7 +304,7 @@ describe('ComposeController in a browser', () => {
     const actual =
       restored === null ? null : { ...restored, updatedAt: '<saved timestamp>' }
     const expected = {
-      ...initialDraft,
+      ...omitAnalysis(initialDraft),
       article: {
         url: 'https://example.test/article',
         title: 'Edited title',
@@ -311,6 +317,339 @@ describe('ComposeController in a browser', () => {
     }
 
     expect(captureOutput(actual)).toEqual(expected)
+  })
+
+  it('clears saved analysis when a title change is restored after reload', async () => {
+    const store = createIndexedDbDraftStore()
+    const initialDraft = draft()
+    valueOrThrow(await store.addDraft(initialDraft))
+
+    const editing = new ComposeController(store)
+    await editing.start(initialDraft.id)
+    editing.updateTitle('Updated article title')
+    await editing.dispose()
+
+    const restoring = new ComposeController(store)
+    await restoring.start(initialDraft.id)
+    const restored = restoring.state.activeDraft
+    await restoring.dispose()
+
+    const actual =
+      restored === null ? null : { ...restored, updatedAt: '<saved timestamp>' }
+    const expected = {
+      ...omitAnalysis(initialDraft),
+      article: {
+        url: 'https://example.test/article',
+        title: 'Updated article title',
+        text: 'Original article text',
+        source: 'manual',
+        partial: true,
+      },
+      updatedAt: '<saved timestamp>',
+    }
+
+    expect(captureOutput(actual)).toEqual(expected)
+  })
+
+  it('restores every destination setting and unfinished tag input', async () => {
+    const store = createIndexedDbDraftStore()
+    const initialDraft = draft()
+    valueOrThrow(await store.addDraft(initialDraft))
+
+    const editing = new ComposeController(store)
+    await editing.start(initialDraft.id)
+    editing.updateCommonComment('Copied shared note')
+    editing.updateDestination({
+      destination: 'hatena',
+      selected: false,
+      commentMode: 'common',
+      customComment: 'A separate destination comment',
+      options: { tags: ['sample', 'unfinished tag'], private: true },
+    })
+    editing.updateCommonComment('Latest shared note')
+    const xCommon: DestinationDraft = {
+      destination: 'x',
+      selected: false,
+      commentMode: 'common',
+      customComment: 'Copied shared note',
+    }
+    editing.updateDestination(xCommon)
+    editing.updateDestination({ ...xCommon, commentMode: 'custom' })
+    editing.updateDestination({
+      destination: 'mastodon',
+      selected: true,
+      commentMode: 'custom',
+      customComment: '',
+      options: {
+        visibility: 'direct',
+        spoilerText: 'A warning still being typed',
+        sensitive: true,
+      },
+    })
+    const raindrop: DestinationDraft = {
+      destination: 'raindrop',
+      selected: true,
+      commentMode: 'common',
+      customComment: 'An inactive individual comment',
+      options: { collectionId: 711, tags: ['reading', 'in-progress'] },
+    }
+    editing.updateDestination({ ...raindrop, selected: false })
+    editing.updateDestination(raindrop)
+    editing.updateDestination({ ...raindrop, selected: false })
+    await editing.dispose()
+
+    const restoring = new ComposeController(store)
+    await restoring.start(initialDraft.id)
+    const restored = restoring.state.activeDraft
+    await restoring.dispose()
+
+    const actual =
+      restored === null ? null : { ...restored, updatedAt: '<saved timestamp>' }
+    const expected = {
+      ...initialDraft,
+      commonComment: 'Latest shared note',
+      analysis: { summary: { summary: 'A short summary', partial: false } },
+      destinations: [
+        {
+          destination: 'hatena',
+          selected: false,
+          commentMode: 'common',
+          customComment: 'A separate destination comment',
+          options: { tags: ['sample', 'unfinished tag'], private: true },
+        },
+        {
+          destination: 'x',
+          selected: false,
+          commentMode: 'custom',
+          customComment: 'Copied shared note',
+        },
+        {
+          destination: 'mastodon',
+          selected: true,
+          commentMode: 'custom',
+          customComment: '',
+          options: {
+            visibility: 'direct',
+            spoilerText: 'A warning still being typed',
+            sensitive: true,
+          },
+        },
+        {
+          destination: 'raindrop',
+          selected: false,
+          commentMode: 'common',
+          customComment: 'An inactive individual comment',
+          options: { collectionId: 711, tags: ['reading', 'in-progress'] },
+        },
+      ],
+      updatedAt: '<saved timestamp>',
+    }
+
+    expect(captureOutput(actual)).toEqual(expected)
+  })
+
+  it('copies and restores a destination comment while preserving common verification', async () => {
+    const store = createIndexedDbDraftStore()
+    const sourceDraft = draft()
+    const initialDraft: BookmarkDraft = {
+      ...sourceDraft,
+      destinations: sourceDraft.destinations.map((destination) =>
+        destination.destination === 'x'
+          ? {
+              ...destination,
+              commentMode: 'custom',
+              customComment: 'An older individual note.',
+            }
+          : destination,
+      ),
+    }
+    valueOrThrow(await store.addDraft(initialDraft))
+
+    const editing = new ComposeController(store)
+    await editing.start(initialDraft.id)
+    editing.copyCommonComment('x')
+    await editing.dispose()
+
+    const restoring = new ComposeController(store)
+    await restoring.start(initialDraft.id)
+    const restored = restoring.state.activeDraft
+    const actual =
+      restored === null
+        ? null
+        : {
+            destination:
+              restored.destinations.find((item) => item.destination === 'x') ??
+              null,
+            analysis: restored.analysis ?? null,
+          }
+    await restoring.dispose()
+
+    const expected = {
+      destination: {
+        destination: 'x',
+        selected: false,
+        commentMode: 'custom',
+        customComment: 'Original comment',
+      },
+      analysis: initialDraft.analysis ?? null,
+    }
+
+    expect(captureOutput(actual)).toEqual(expected)
+  })
+
+  it('preserves common verification after editing a custom destination comment', async () => {
+    const store = createIndexedDbDraftStore()
+    const initialDraft = draft()
+    valueOrThrow(await store.addDraft(initialDraft))
+
+    const editing = new ComposeController(store)
+    await editing.start(initialDraft.id)
+    const hatena = initialDraft.destinations.find(
+      (destination) => destination.destination === 'hatena',
+    )
+    if (hatena === undefined) {
+      throw new Error('The test draft is missing its Hatena destination.')
+    }
+    const updatedDestination: DestinationDraft = {
+      ...hatena,
+      customComment: 'A revised individual note.',
+    }
+    editing.updateDestination(updatedDestination)
+    await editing.dispose()
+
+    const restoring = new ComposeController(store)
+    await restoring.start(initialDraft.id)
+    const restored = restoring.state.activeDraft
+    const actual =
+      restored === null
+        ? null
+        : {
+            destination:
+              restored.destinations.find(
+                (destination) => destination.destination === 'hatena',
+              ) ?? null,
+            analysis: restored.analysis ?? null,
+          }
+    await restoring.dispose()
+
+    const expected = {
+      destination: updatedDestination,
+      analysis: initialDraft.analysis ?? null,
+    }
+
+    expect(captureOutput(actual)).toEqual(expected)
+  })
+
+  it('preserves verification when only destination settings change', async () => {
+    const store = createIndexedDbDraftStore()
+    const initialDraft = draft()
+    valueOrThrow(await store.addDraft(initialDraft))
+
+    const controller = new ComposeController(store)
+    await controller.start(initialDraft.id)
+    const hatena = initialDraft.destinations.find(
+      (destination) => destination.destination === 'hatena',
+    )
+    if (hatena === undefined) {
+      throw new Error('The test draft is missing its Hatena destination.')
+    }
+    const updatedDestination: DestinationDraft = {
+      ...hatena,
+      selected: false,
+      options: { ...hatena.options, tags: ['sample', 'unfinished tag'] },
+    }
+    controller.updateDestination(updatedDestination)
+    const activeDraft = controller.state.activeDraft
+    const actual =
+      activeDraft === null
+        ? null
+        : {
+            destination:
+              activeDraft.destinations.find(
+                (destination) => destination.destination === 'hatena',
+              ) ?? null,
+            analysis: activeDraft.analysis ?? null,
+          }
+    await controller.dispose()
+
+    const expected = {
+      destination: updatedDestination,
+      analysis: initialDraft.analysis ?? null,
+    }
+
+    expect(captureOutput(actual)).toEqual(expected)
+  })
+
+  it('keeps destination input available after a failed save until retry succeeds', async () => {
+    const baseStore = createIndexedDbDraftStore()
+    const initialDraft = draft()
+    const otherDraft = draft(secondDraftId)
+    valueOrThrow(await baseStore.addDraft(initialDraft))
+    valueOrThrow(await baseStore.addDraft(otherDraft))
+
+    let failNextSave = true
+    const writeFailure = new DraftError(
+      'storage-failed',
+      'The draft could not be saved on this device. Your input is still available to retry.',
+    )
+    const store: DraftStore = {
+      ...baseStore,
+      saveDraft: (snapshot) => {
+        if (failNextSave) {
+          failNextSave = false
+          return errAsync(writeFailure)
+        }
+        return baseStore.saveDraft(snapshot)
+      },
+    }
+
+    const controller = new ComposeController(store)
+    await controller.start(initialDraft.id)
+    const updatedDestination: DestinationDraft = {
+      destination: 'raindrop',
+      selected: true,
+      commentMode: 'custom',
+      customComment: 'An unfinished individual note',
+      options: { collectionId: 912, tags: ['in-progress'] },
+    }
+    controller.updateDestination(updatedDestination)
+    await controller.selectDraft(otherDraft.id)
+    const afterFailedSwitch = {
+      activeId: controller.state.activeDraft?.id ?? null,
+      destination:
+        controller.state.activeDraft?.destinations.find(
+          (item) => item.destination === 'raindrop',
+        ) ?? null,
+      saveState: controller.state.saveState,
+      errorMessage: controller.state.errorMessage,
+    }
+
+    await controller.retrySave()
+    await controller.selectDraft(otherDraft.id)
+    const persisted = valueOrThrow(await baseStore.getDraft(initialDraft.id))
+    const afterRetry = {
+      activeId: controller.state.activeDraft?.id ?? null,
+      destination:
+        persisted?.destinations.find(
+          (item) => item.destination === 'raindrop',
+        ) ?? null,
+      lockState: controller.state.lockState,
+    }
+    await controller.dispose()
+
+    expect(captureOutput({ afterFailedSwitch, afterRetry })).toEqual({
+      afterFailedSwitch: {
+        activeId: initialDraft.id,
+        destination: updatedDestination,
+        saveState: 'failed',
+        errorMessage: writeFailure.message,
+      },
+      afterRetry: {
+        activeId: otherDraft.id,
+        destination: updatedDestination,
+        lockState: 'owned',
+      },
+    })
   })
 
   it('keeps failed input active until the latest snapshot is retried', async () => {

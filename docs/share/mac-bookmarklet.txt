@@ -1,0 +1,1 @@
+javascript:(()=>{const composeUrl=new URL('https://bookmark-app.example.invalid/compose');composeUrl.searchParams.set('url',window.location.href);const editorUrl=composeUrl.toString();if(window.open(editorUrl,'_blank')===null)window.prompt('Copy this URL to open Bookmarker',editorUrl)})()
