@@ -42,10 +42,20 @@ const meta = {
   component: ComposeAnalysisPanel,
   args: {
     article,
+    canEdit: true,
+    extractionState: 'not-requested',
     summary: null,
     verification: null,
     summaryState: 'unavailable',
     verificationState: 'unavailable',
+    verificationTargets: [{ id: 'common', label: 'Common comment' }],
+    selectedVerificationTargetId: 'common',
+    isCustomComment: false,
+    canVerifyComment: true,
+    onExtractArticle: () => undefined,
+    onSummarizeArticle: () => undefined,
+    onVerifyComment: () => undefined,
+    onVerificationTargetChange: () => undefined,
   },
 } satisfies Meta<typeof ComposeAnalysisPanel>
 
@@ -54,7 +64,7 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const Unavailable: Story = {
-  name: 'The editor explains that analysis is not connected yet.',
+  name: 'The editor explains that the analysis service is temporarily unavailable.',
 }
 
 export const Loading: Story = {
@@ -78,6 +88,30 @@ export const NotRequested: Story = {
 export const PartialIssues: Story = {
   args: { summary, verification },
   name: 'The editor shows a partial summary and all three comment issue types.',
+}
+
+export const ArticleTextUnavailable: Story = {
+  args: {
+    article: { ...article, text: '' },
+    extractionState: 'failed',
+    summaryState: 'not-requested',
+    verificationState: 'not-requested',
+  },
+  name: 'The editor offers article extraction after the previous request failed.',
+}
+
+export const CustomCommentUnverified: Story = {
+  args: {
+    verificationTargets: [
+      { id: 'common', label: 'Common comment' },
+      { id: 'destination:hatena', label: 'Hatena custom comment' },
+    ],
+    selectedVerificationTargetId: 'destination:hatena',
+    isCustomComment: true,
+    verification: null,
+    verificationState: 'not-requested',
+  },
+  name: 'The editor marks a custom comment as unchecked in this session.',
 }
 
 export const NoIssues: Story = {

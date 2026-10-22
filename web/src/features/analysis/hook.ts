@@ -44,6 +44,18 @@ type Operation = {
 
 type StateSetter<T> = Dispatch<SetStateAction<StoredState<T> | null>>
 
+type AnalysisOperations = {
+  extractArticle: typeof extractArticle
+  summarizeArticle: typeof summarizeArticle
+  verifyComment: typeof verifyComment
+}
+
+const defaultOperations: AnalysisOperations = {
+  extractArticle,
+  summarizeArticle,
+  verifyComment,
+}
+
 const idleState: AnalysisState<never> = { status: 'idle' }
 const staleState: AnalysisState<never> = { status: 'stale' }
 
@@ -133,13 +145,16 @@ const useAnalysisOperation = <T>(key: string) => {
   return { state: stateForKey(stored, key), run, cancel }
 }
 
-export const useArticleAnalysis = ({
-  draftId,
-  shareInput,
-  article,
-  articleRevision,
-  comment,
-}: ArticleAnalysisOptions) => {
+export const useArticleAnalysis = (
+  {
+    draftId,
+    shareInput,
+    article,
+    articleRevision,
+    comment,
+  }: ArticleAnalysisOptions,
+  operations: AnalysisOperations = defaultOperations,
+) => {
   const extractionKey = JSON.stringify([draftId, shareInput])
   const summaryKey = JSON.stringify([draftId, articleRevision, article])
   const verificationKey = JSON.stringify([
@@ -159,9 +174,9 @@ export const useArticleAnalysis = ({
       extraction.run((signal) =>
         shareInput === null
           ? invalidInputAsync<Article>()
-          : extractArticle(shareInput, { signal }),
+          : operations.extractArticle(shareInput, { signal }),
       ),
-    [extraction.run, shareInput],
+    [extraction.run, operations, shareInput],
   )
 
   const summarize = useCallback(
@@ -169,9 +184,9 @@ export const useArticleAnalysis = ({
       summary.run((signal) =>
         article === null
           ? invalidInputAsync<Summary>()
-          : summarizeArticle(article, { signal }),
+          : operations.summarizeArticle(article, { signal }),
       ),
-    [article, summary.run],
+    [article, operations, summary.run],
   )
 
   const verify = useCallback(
@@ -179,9 +194,9 @@ export const useArticleAnalysis = ({
       verification.run((signal) =>
         article === null || comment === null
           ? invalidInputAsync<Verification>()
-          : verifyComment(article, comment.value, { signal }),
+          : operations.verifyComment(article, comment.value, { signal }),
       ),
-    [article, comment, verification.run],
+    [article, comment, operations, verification.run],
   )
 
   const cancelAll = useCallback(() => {

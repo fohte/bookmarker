@@ -1,31 +1,44 @@
+import type { BookmarkDraft } from 'api/contracts'
 import { err } from 'neverthrow'
 import { act, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { ComposeScreenProps } from '#components/compose-screen'
 import { DraftError } from '#features/drafts/draft-error'
+import type { ComposeState } from '#features/editor/compose-controller'
+import { initialComposeState } from '#features/editor/compose-state'
 import { ComposeRoute } from '#routes/compose'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const controllerMocks = vi.hoisted(() => ({
+  screenProps: { current: null as ComposeScreenProps | null },
+  state: { current: null as ComposeState | null },
   openSource: vi.fn(),
   reportIntakeError: vi.fn(),
   noop: vi.fn(),
+  updateArticleText: vi.fn(),
+  saveAnalysisResult: vi.fn(() => true),
 }))
 
 vi.mock('#components/compose-screen', () => ({
-  ComposeScreen: () => null,
+  ComposeScreen: (props: ComposeScreenProps) => {
+    controllerMocks.screenProps.current = props
+    return null
+  },
 }))
 
 vi.mock('#features/editor/use-compose-controller', () => ({
   useComposeController: () => ({
-    state: {},
+    state: controllerMocks.state.current,
     openSource: controllerMocks.openSource,
     reportIntakeError: controllerMocks.reportIntakeError,
     updateTitle: controllerMocks.noop,
-    updateArticleText: controllerMocks.noop,
+    updateArticleText: controllerMocks.updateArticleText,
     updateCommonComment: controllerMocks.noop,
+    updateDestination: controllerMocks.noop,
+    saveAnalysisResult: controllerMocks.saveAnalysisResult,
     selectDraft: controllerMocks.noop,
     retryLock: controllerMocks.noop,
     retrySave: controllerMocks.noop,
@@ -48,6 +61,8 @@ const routeIntakeOutput = () => ({
   reportedErrors: controllerMocks.reportIntakeError.mock.calls,
 })
 
+const captureOutput = <T,>(value: T): T => value
+
 const mountComposeRoute = async () => {
   const container = document.createElement('div')
   mountedRoot = createRoot(container)
@@ -62,10 +77,33 @@ const mountComposeRoute = async () => {
   })
 }
 
+const manualDraft: BookmarkDraft = {
+  version: 1,
+  id: '00000000-0000-4000-8000-000000000121',
+  source: {
+    version: 1,
+    url: 'https://fictional.example.invalid/manual-note',
+    partial: true,
+  },
+  article: {
+    url: 'https://fictional.example.invalid/manual-note',
+    title: 'An invented manual note',
+    text: 'A short fictional passage.',
+    source: 'manual',
+    partial: true,
+  },
+  commonComment: '',
+  destinations: [],
+  delivery: [],
+  updatedAt: '2026-10-22T00:00:00.000Z',
+}
+
 describe('ComposeRoute share intake', () => {
   beforeEach(() => {
     window.history.replaceState(null, '', '/compose')
     vi.clearAllMocks()
+    controllerMocks.state.current = initialComposeState
+    controllerMocks.screenProps.current = null
     controllerMocks.openSource.mockResolvedValue(
       err(
         new DraftError(
@@ -167,6 +205,40 @@ describe('ComposeRoute share intake', () => {
         ],
       ],
       reportedErrors: [['The shared draft could not be saved.']],
+    })
+  })
+
+  it('reports oversized manual text without sending it to the controller', async () => {
+    controllerMocks.state.current = {
+      ...initialComposeState,
+      drafts: [manualDraft],
+      activeDraft: manualDraft,
+      isLoading: false,
+      canEdit: true,
+      lockState: 'owned',
+    }
+    await mountComposeRoute()
+
+    const props = controllerMocks.screenProps.current
+    if (props === null) {
+      throw new Error('ComposeRoute did not render the compose screen.')
+    }
+    act(() => {
+      props.onArticleTextChange('x'.repeat(100_001))
+    })
+
+    const updatedProps = controllerMocks.screenProps.current
+    if (updatedProps === null) {
+      throw new Error('ComposeRoute did not render the compose screen.')
+    }
+    expect(
+      captureOutput({
+        error: updatedProps.articleTextError,
+        updateCalls: controllerMocks.updateArticleText.mock.calls,
+      }),
+    ).toEqual({
+      error: 'Article text must be 100,000 UTF-16 code units or fewer.',
+      updateCalls: [],
     })
   })
 })

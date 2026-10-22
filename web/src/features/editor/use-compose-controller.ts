@@ -11,6 +11,7 @@ import {
   controllerUnavailableError,
   type DraftError,
 } from '#features/drafts/draft-error'
+import type { ComposeAnalysisSaveCommand } from '#features/editor/compose-analysis-command'
 import { ComposeController } from '#features/editor/compose-controller'
 import { initialComposeState } from '#features/editor/compose-state'
 
@@ -69,6 +70,12 @@ export function useComposeController() {
     controllerRef.current?.updateCommonComment(comment)
   }, [])
 
+  const saveAnalysisResult = useCallback(
+    (command: ComposeAnalysisSaveCommand) =>
+      controllerRef.current?.saveAnalysisResult(command) ?? false,
+    [],
+  )
+
   const updateDestination = useCallback((destination: DestinationDraft) => {
     controllerRef.current?.updateDestination(destination)
   }, [])
@@ -116,6 +123,7 @@ export function useComposeController() {
     updateTitle,
     updateArticleText,
     updateCommonComment,
+    saveAnalysisResult,
     updateDestination,
     copyCommonComment,
     selectDraft,

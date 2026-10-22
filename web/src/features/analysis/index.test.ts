@@ -1,12 +1,13 @@
 import type { Article, ShareInput, Summary, Verification } from 'api/contracts'
 import type { Result } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
 import {
   type AnalysisClientError,
   extractArticle,
   summarizeArticle,
   verifyComment,
-} from 'web/features/analysis'
+} from '#features/analysis/index'
 
 const article: Article = {
   url: 'https://fictional.example.invalid/paper-lantern',

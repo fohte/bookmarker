@@ -9,7 +9,6 @@ import {
 } from '#features/editor/compose-history'
 
 export function cleanupBeforeDiscard(
-  draft: BookmarkDraft,
   failedImportCleanup: FailedImportCleanup | undefined,
   clearFailedImportCleanup: () => void,
 ): Result<

@@ -21,6 +21,11 @@ import {
   type DraftStore,
 } from '#features/drafts/draft-store'
 import {
+  applyAnalysisSaveCommand,
+  type ComposeAnalysisSaveCommand,
+  matchesAnalysisSaveCommand,
+} from '#features/editor/compose-analysis-command'
+import {
   copyCommonCommentDraft,
   updateDestinationDraft,
 } from '#features/editor/compose-destination'
@@ -149,6 +154,23 @@ export class ComposeController {
     )
   }
 
+  saveAnalysisResult(command: ComposeAnalysisSaveCommand): boolean {
+    const draft = this.#draft
+    if (
+      draft === null ||
+      this.#queue === null ||
+      this.#lease === null ||
+      !this.state.canEdit ||
+      this.state.isLoading ||
+      !matchesAnalysisSaveCommand(draft, command)
+    ) {
+      return false
+    }
+
+    this.#updateDraft((current) => applyAnalysisSaveCommand(current, command))
+    return true
+  }
+
   updateDestination(destination: DestinationDraft): void {
     this.#updateDraft((draft) => updateDestinationDraft(draft, destination))
   }
@@ -197,7 +219,6 @@ export class ComposeController {
     }
 
     const cleanup = cleanupBeforeDiscard(
-      draft,
       this.#failedImportCleanups.get(draft.id),
       () => {
         this.#failedImportCleanups.delete(draft.id)

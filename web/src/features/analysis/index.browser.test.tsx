@@ -3,12 +3,13 @@ import type { Result } from 'neverthrow'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import {
   type AnalysisClientError,
   type ArticleAnalysisOptions,
   createManualArticle,
   useArticleAnalysis,
-} from 'web/features/analysis'
+} from '#features/analysis/index'
 
 const article: Article = {
   url: 'https://fictional.example.invalid/paper-lantern',

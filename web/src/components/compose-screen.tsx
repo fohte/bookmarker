@@ -16,8 +16,8 @@ import type {
 } from 'api/contracts'
 
 import {
-  type AnalysisDisplayState,
   ComposeAnalysisPanel,
+  type ComposeAnalysisPanelProps,
 } from '#components/compose-analysis-panel'
 import { ComposeCommonCommentPanel } from '#components/compose-common-comment-panel'
 import { ComposeDeliveryPanel } from '#components/compose-delivery-panel'
@@ -33,10 +33,10 @@ export type ComposeScreenProps = {
   onSelectDraft: (id: string) => void
   onTitleChange: (value: string) => void
   onArticleTextChange: (value: string) => void
+  articleTextError: string | null
   onCommonCommentChange: (value: string) => void
   onDestinationChange: (destination: DestinationDraft) => void
-  analysisSummaryState: AnalysisDisplayState
-  analysisVerificationState: AnalysisDisplayState
+  analysis: Omit<ComposeAnalysisPanelProps, 'canEdit'>
   destinationMetadata?: DestinationMetadata
   copyConfirmationDestination: DestinationId | null
   onRequestCopyCommonComment: (destination: DestinationId) => void
@@ -57,10 +57,10 @@ export function ComposeScreen({
   onSelectDraft,
   onTitleChange,
   onArticleTextChange,
+  articleTextError,
   onCommonCommentChange,
   onDestinationChange,
-  analysisSummaryState,
-  analysisVerificationState,
+  analysis,
   destinationMetadata,
   copyConfirmationDestination,
   onRequestCopyCommonComment,
@@ -188,6 +188,7 @@ export function ComposeScreen({
             <ComposeDraftPanel
               activeDraft={activeDraft}
               canEdit={state.canEdit}
+              articleTextError={articleTextError}
               drafts={state.drafts}
               onArticleTextChange={onArticleTextChange}
               onRequestDiscard={onRequestDiscard}
@@ -195,11 +196,8 @@ export function ComposeScreen({
               onTitleChange={onTitleChange}
             />
             <ComposeAnalysisPanel
-              article={activeDraft?.article ?? null}
-              summary={activeDraft?.analysis?.summary ?? null}
-              summaryState={analysisSummaryState}
-              verification={activeDraft?.analysis?.verification ?? null}
-              verificationState={analysisVerificationState}
+              {...analysis}
+              canEdit={state.canEdit && !state.isLoading}
             />
             <ComposeDeliveryPanel delivery={activeDraft?.delivery ?? []} />
           </div>
