@@ -4,6 +4,7 @@ import type {
   DestinationId,
   DestinationMetadata,
 } from 'api/contracts'
+import { useState } from 'react'
 
 import { ComposeDestinationCard } from '#components/compose-destination-card'
 import {
@@ -16,6 +17,7 @@ export function ComposeDestinationsPanel({
   commonComment,
   canEdit,
   metadata,
+  defaultOpenDestination = null,
   copyConfirmationDestination,
   onDestinationChange,
   onRequestCopyCommonComment,
@@ -26,22 +28,30 @@ export function ComposeDestinationsPanel({
   commonComment: string
   canEdit: boolean
   metadata?: DestinationMetadata
+  defaultOpenDestination?: DestinationId | null
   copyConfirmationDestination: DestinationId | null
   onDestinationChange: (destination: DestinationDraft) => void
   onRequestCopyCommonComment: (destination: DestinationId) => void
   onCancelCopyCommonComment: () => void
   onCopyCommonComment: (destination: DestinationId) => void
 }) {
-  return (
-    <Panel padding="md" className="space-y-5 rounded-lg p-5 sm:p-6">
-      <div>
-        <h2 className="font-medium">Destinations</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Choose which services to prepare and edit their local settings.
-        </p>
-      </div>
+  const [openDestination, setOpenDestination] = useState<DestinationId | null>(
+    defaultOpenDestination,
+  )
+  const selectedCount = destinations.filter(
+    (destination) => destination.selected,
+  ).length
 
-      <div className="space-y-3">
+  return (
+    <Panel padding="md" className="space-y-3 p-3 sm:p-4">
+      <header className="flex items-center justify-between gap-3">
+        <h2 className="font-medium">Destinations</h2>
+        <p className="text-xs text-muted-foreground">
+          {selectedCount} selected
+        </p>
+      </header>
+
+      <div className="space-y-2">
         {destinationIds.map((destinationId) => (
           <ComposeDestinationCard
             key={destinationId}
@@ -49,17 +59,21 @@ export function ComposeDestinationsPanel({
             commonComment={commonComment}
             copyConfirmationOpen={copyConfirmationDestination === destinationId}
             destination={getDestinationDraft(destinations, destinationId)}
+            settingsOpen={openDestination === destinationId}
             {...(metadata === undefined ? {} : { metadata })}
             onCancelCopyCommonComment={onCancelCopyCommonComment}
             onCopyCommonComment={onCopyCommonComment}
             onDestinationChange={onDestinationChange}
             onRequestCopyCommonComment={onRequestCopyCommonComment}
+            onSettingsOpenChange={(open) => {
+              setOpenDestination(open ? destinationId : null)
+            }}
           />
         ))}
       </div>
 
-      <div className="border-t border-border pt-4">
-        <p className="text-sm text-muted-foreground" role="status">
+      <div className="border-t border-border pt-2">
+        <p className="text-xs text-muted-foreground" role="status">
           Each delivery uses a saved snapshot of the article and destination
           settings.
         </p>

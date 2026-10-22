@@ -73,6 +73,8 @@ const handlers: Omit<ComposeDestinationSettingsProps, 'destination'> = {
   commonComment: 'A shared note for the article.',
   canEdit: true,
   copyConfirmationOpen: false,
+  settingsOpen: true,
+  onSettingsOpenChange: () => undefined,
   onDestinationChange: () => undefined,
   onRequestCopyCommonComment: () => undefined,
   onCancelCopyCommonComment: () => undefined,

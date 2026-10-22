@@ -1,3 +1,5 @@
+import '#index.css'
+
 import {
   type Article,
   type BookmarkDraft,
@@ -242,19 +244,42 @@ describe('ComposeRoute publishing in a browser', () => {
       )
       await userEvent.click(input('input[aria-label="Select Hatena Bookmark"]'))
       await userEvent.click(input('input[aria-label="Select Mastodon"]'))
+      await userEvent.click(
+        button('button[aria-label="Open Hatena Bookmark settings"]'),
+      )
       const trigger = button('#hatena-comment-mode')
       await userEvent.click(trigger)
-      const customOption = [
-        ...document.querySelectorAll('[role="option"]'),
-      ].find((option) => option.textContent.trim() === 'Use individual comment')
-      if (!(customOption instanceof HTMLElement)) {
-        throw new Error('The individual comment option was not found.')
-      }
+    })
+    await waitFor(() =>
+      [...document.querySelectorAll('[role="option"]')].some((option) => {
+        const bounds = option.getBoundingClientRect()
+        return (
+          option.textContent.trim() === 'Use individual comment' &&
+          bounds.width > 0 &&
+          bounds.height > 0
+        )
+      }),
+    )
+    const customOption = [...document.querySelectorAll('[role="option"]')].find(
+      (option) => {
+        const bounds = option.getBoundingClientRect()
+        return (
+          option.textContent.trim() === 'Use individual comment' &&
+          bounds.width > 0 &&
+          bounds.height > 0
+        )
+      },
+    )
+    if (!(customOption instanceof HTMLElement)) {
+      throw new Error('The individual comment option was not found.')
+    }
+    await act(async () => {
       await userEvent.click(customOption)
       await userEvent.fill(
         textarea('#hatena-custom-comment'),
         'A separate individual comment 😀 ',
       )
+      await userEvent.click(button('[data-slot="dialog-close"]'))
     })
 
     await waitFor(() =>

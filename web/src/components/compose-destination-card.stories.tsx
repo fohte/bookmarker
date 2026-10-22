@@ -62,6 +62,8 @@ const handlers: Omit<ComposeDestinationCardProps, 'destination'> = {
   commonComment: 'A shared note for the article.',
   canEdit: true,
   copyConfirmationOpen: false,
+  settingsOpen: false,
+  onSettingsOpenChange: () => undefined,
   onDestinationChange: () => undefined,
   onRequestCopyCommonComment: () => undefined,
   onCancelCopyCommonComment: () => undefined,
@@ -131,10 +133,14 @@ export const X: Story = {
 
 export const Unconfigured: Story = {
   args: { destination: { ...hatena, selected: true }, metadata },
-  name: 'The disconnected Hatena destination can be deselected.',
+  name: 'The disconnected Hatena destination can be deselected while its settings stay accessible.',
 }
 
 export const ConfirmingCopy: Story = {
-  args: { destination: mastodon, copyConfirmationOpen: true },
+  args: {
+    destination: mastodon,
+    copyConfirmationOpen: true,
+    settingsOpen: false,
+  },
   name: 'The editor confirms before replacing a saved individual comment.',
 }
