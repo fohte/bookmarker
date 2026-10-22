@@ -364,14 +364,14 @@ export function ComposeDestinationCard({
           </DialogHeader>
           <DialogFooter>
             <Button onClick={onCancelCopyCommonComment} variant="outline">
-              Keep individual comment
+              Keep individual
             </Button>
             <Button
               onClick={() => {
                 onCopyCommonComment(destination.destination)
               }}
             >
-              Replace custom comment
+              Replace with common
             </Button>
           </DialogFooter>
         </DialogContent>

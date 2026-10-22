@@ -6,7 +6,7 @@ import type {
 import { act, createElement, type ReactNode, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { userEvent } from 'vitest/browser'
+import { page, userEvent } from 'vitest/browser'
 
 import { ComposeDestinationCard } from '#components/compose-destination-card'
 
@@ -60,6 +60,48 @@ function inputNamed(name: string): HTMLInputElement {
     throw new Error(`Input ${name} was not found.`)
   }
   return input
+}
+
+function confirmationLayout() {
+  const dialog = document.querySelector('[data-slot="dialog-content"]')
+  const description = document.querySelector('[data-slot="dialog-description"]')
+  const footer = document.querySelector('[data-slot="dialog-footer"]')
+  if (
+    !(dialog instanceof HTMLElement) ||
+    !(description instanceof HTMLElement) ||
+    !(footer instanceof HTMLElement)
+  ) {
+    throw new Error('Copy confirmation layout was not found.')
+  }
+
+  const within = (child: HTMLElement, parent: HTMLElement) => {
+    const childRect = child.getBoundingClientRect()
+    const parentRect = parent.getBoundingClientRect()
+    const tolerance = 1
+    return (
+      childRect.left >= parentRect.left - tolerance &&
+      childRect.right <= parentRect.right + tolerance &&
+      childRect.top >= parentRect.top - tolerance &&
+      childRect.bottom <= parentRect.bottom + tolerance
+    )
+  }
+  const dialogRect = dialog.getBoundingClientRect()
+  const buttons = [...footer.querySelectorAll<HTMLButtonElement>('button')]
+
+  return {
+    descriptionWithinDialog: within(description, dialog),
+    footerWithinDialog: within(footer, dialog),
+    buttonsWithinFooter: buttons.every((button) => within(button, footer)),
+    buttonCount: buttons.length,
+    dialogWithinViewport:
+      dialogRect.left >= -1 &&
+      dialogRect.right <= window.innerWidth + 1 &&
+      dialogRect.top >= -1 &&
+      dialogRect.bottom <= window.innerHeight + 1,
+    pageHasHorizontalOverflow:
+      document.documentElement.scrollWidth >
+      document.documentElement.clientWidth,
+  }
 }
 
 async function selectOption(
@@ -135,6 +177,12 @@ describe('ComposeDestinationCard in a browser', () => {
 
     mount(createElement(Harness))
     await act(async () => userEvent.click(buttonNamed('Copy common comment')))
+    const layouts: ReturnType<typeof confirmationLayout>[] = []
+    await page.viewport(1280, 900)
+    layouts.push(confirmationLayout())
+    await page.viewport(390, 844)
+    layouts.push(confirmationLayout())
+
     const afterRequest = {
       requestedDestinations: [...requestedDestinations],
       copiedDestinations: [...copiedDestinations],
@@ -143,15 +191,33 @@ describe('ComposeDestinationCard in a browser', () => {
     }
 
     act(() => {
-      buttonNamed('Replace custom comment').click()
+      buttonNamed('Replace with common').click()
     })
     const afterConfirm = {
       copiedDestinations: [...copiedDestinations],
       confirmationOpen: currentConfirmationOpen,
     }
 
-    const actual = { afterRequest, afterConfirm }
+    const actual = { layouts, afterRequest, afterConfirm }
     const expected = {
+      layouts: [
+        {
+          descriptionWithinDialog: true,
+          footerWithinDialog: true,
+          buttonsWithinFooter: true,
+          buttonCount: 2,
+          dialogWithinViewport: true,
+          pageHasHorizontalOverflow: false,
+        },
+        {
+          descriptionWithinDialog: true,
+          footerWithinDialog: true,
+          buttonsWithinFooter: true,
+          buttonCount: 2,
+          dialogWithinViewport: true,
+          pageHasHorizontalOverflow: false,
+        },
+      ],
       afterRequest: {
         requestedDestinations: ['hatena'],
         copiedDestinations: [],
