@@ -11,10 +11,8 @@ export type ImportNavigation = {
   sourceUrl: string
 }
 
-export type FailedImportCleanup = {
+export type FailedImportCleanup = ImportNavigation & {
   cleanupUrl: string
-  importId: string
-  sourceUrl: string
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -100,8 +98,7 @@ export function prepareImportNavigation(): Result<
 export function cleanupDraftNavigation(
   cleanupUrl: string,
   draftId: string | null,
-  importId: string | null,
-  sourceUrl: string | null = null,
+  importNavigation: ImportNavigation | null,
 ): Result<undefined, DraftError> {
   if (typeof window === 'undefined') {
     return err(
@@ -130,10 +127,11 @@ export function cleanupDraftNavigation(
   }
 
   if (
-    (importId !== null &&
+    (importNavigation !== null &&
       (!isRecord(window.history.state) ||
-        window.history.state[importStateKey] !== importId)) ||
-    (sourceUrl !== null && window.location.href !== sourceUrl)
+        window.history.state[importStateKey] !== importNavigation.importId)) ||
+    (importNavigation !== null &&
+      window.location.href !== importNavigation.sourceUrl)
   ) {
     return err(
       new DraftError(
@@ -148,7 +146,10 @@ export function cleanupDraftNavigation(
     parsedUrl.value.searchParams.set('draft', draftId)
   }
 
-  const nextState = withoutImportId(window.history.state, importId)
+  const nextState = withoutImportId(
+    window.history.state,
+    importNavigation?.importId ?? null,
+  )
   const url = `${parsedUrl.value.pathname}${parsedUrl.value.search}${parsedUrl.value.hash}`
   const result = Result.fromThrowable(
     () => {

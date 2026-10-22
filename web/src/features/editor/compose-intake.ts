@@ -15,6 +15,7 @@ import type { DraftStore } from '#features/drafts/draft-store'
 import { createNewDraft } from '#features/editor/compose-draft'
 import {
   cleanupDraftNavigation,
+  type FailedImportCleanup,
   type ImportNavigation,
   prepareImportNavigation,
 } from '#features/editor/compose-history'
@@ -30,14 +31,11 @@ type ComposeIntakePort = {
   showError: (error: DraftError) => void
   setState: (patch: Partial<ComposeState>) => void
   refreshDraftList: () => Promise<void>
-  setFailedImportCleanup: (
+  markFailedImportCleanup: (
     draftId: string,
-    cleanup: {
-      cleanupUrl: string
-      importId: string
-      sourceUrl: string
-    } | null,
+    cleanup: FailedImportCleanup,
   ) => void
+  clearFailedImportCleanup: (draftId: string) => void
 }
 
 export class ComposeIntake {
@@ -153,8 +151,7 @@ export class ComposeIntake {
         const cleaned = cleanupDraftNavigation(
           options.cleanupUrl,
           null,
-          importNavigation.importId,
-          importNavigation.sourceUrl,
+          importNavigation,
         )
         if (cleaned.isErr()) return err(cleaned.error)
 
@@ -172,15 +169,13 @@ export class ComposeIntake {
     const cleaned = cleanupDraftNavigation(
       options.cleanupUrl,
       activated.value.id,
-      importId,
-      importNavigation?.sourceUrl ?? null,
+      importNavigation,
     )
     if (cleaned.isErr()) {
       if (importNavigation !== null) {
-        this.port.setFailedImportCleanup(activated.value.id, {
+        this.port.markFailedImportCleanup(activated.value.id, {
           cleanupUrl: options.cleanupUrl,
-          importId: importNavigation.importId,
-          sourceUrl: importNavigation.sourceUrl,
+          ...importNavigation,
         })
       }
       this.port.showError(cleaned.error)
@@ -188,7 +183,7 @@ export class ComposeIntake {
     }
 
     if (importNavigation !== null) {
-      this.port.setFailedImportCleanup(activated.value.id, null)
+      this.port.clearFailedImportCleanup(activated.value.id)
     }
 
     this.port.setState({ intakeError: null, errorMessage: null })

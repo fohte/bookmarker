@@ -951,6 +951,53 @@ describe('ComposeController in a browser', () => {
     expect(captureOutput(actual)).toEqual(expected)
   })
 
+  it('restores the draft URL when deleting a draft fails', async () => {
+    const baseStore = createIndexedDbDraftStore()
+    const deleteError = new DraftError(
+      'storage-failed',
+      'The draft could not be discarded on this device.',
+    )
+    const store: DraftStore = {
+      ...baseStore,
+      deleteDraft: () => errAsync(deleteError),
+    }
+    const controller = new ComposeController(store)
+    await controller.start(null)
+    const opened = valueOrThrow(
+      await controller.openSource(
+        {
+          version: 1,
+          url: 'https://example.test/manual-article',
+          partial: true,
+        },
+        { cleanupUrl: '/compose', intake: 'manual' },
+      ),
+    )
+
+    controller.requestDiscard()
+    await controller.discardDraft()
+    const actual = {
+      activeDraftPreserved: controller.state.activeDraft?.id === opened.id,
+      canEdit: controller.state.canEdit,
+      discardDialogOpen: controller.state.discardOpen,
+      errorMessage: controller.state.errorMessage,
+      savedDraftPreserved:
+        valueOrThrow(await baseStore.getDraft(opened.id))?.id === opened.id,
+      urlHasDraftId:
+        new URL(window.location.href).searchParams.get('draft') === opened.id,
+    }
+    await controller.dispose()
+
+    expect(captureOutput(actual)).toEqual({
+      activeDraftPreserved: true,
+      canEdit: true,
+      discardDialogOpen: true,
+      errorMessage: 'The draft could not be discarded on this device.',
+      savedDraftPreserved: true,
+      urlHasDraftId: true,
+    })
+  })
+
   it('leaves an unknown draft version unchanged and unopened', async () => {
     const store = createIndexedDbDraftStore()
     const unknownDraft = {
