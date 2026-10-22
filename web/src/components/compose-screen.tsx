@@ -9,8 +9,9 @@ import {
 } from '@fohte/ui/dialog'
 import { Input } from '@fohte/ui/input'
 import { Panel } from '@fohte/ui/panel'
-import type { BookmarkDraft } from 'api/contracts'
 
+import { ComposeCommonCommentPanel } from '#components/compose-common-comment-panel'
+import { ComposeDraftPanel } from '#components/compose-draft-panel'
 import type { ComposeState } from '#features/editor/compose-controller'
 
 export type ComposeScreenProps = {
@@ -29,16 +30,6 @@ export type ComposeScreenProps = {
   onConfirmDiscard: () => void
 }
 
-function draftTitle(draft: BookmarkDraft): string {
-  const articleTitle = draft.article?.title
-  if (articleTitle !== undefined && articleTitle.length > 0) return articleTitle
-
-  const sourceTitle = draft.source.title
-  return sourceTitle !== undefined && sourceTitle.length > 0
-    ? sourceTitle
-    : draft.source.url
-}
-
 export function ComposeScreen({
   state,
   sourceUrl,
@@ -55,8 +46,6 @@ export function ComposeScreen({
   onConfirmDiscard,
 }: ComposeScreenProps) {
   const activeDraft = state.activeDraft
-  const title = activeDraft?.article?.title ?? ''
-  const articleText = activeDraft?.article?.text ?? ''
   const canCreate = state.lockState !== 'unsupported' && !state.isLoading
 
   return (
@@ -168,145 +157,22 @@ export function ComposeScreen({
         </Panel>
       ) : (
         <section className="grid gap-6 lg:grid-cols-2">
-          <Panel padding="md" className="space-y-5 rounded-lg p-5 sm:p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="font-medium">Draft editor</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {activeDraft === null
-                    ? 'Choose a draft or paste a URL above.'
-                    : 'Changes are saved as you type.'}
-                </p>
-              </div>
-              {activeDraft !== null && (
-                <Button
-                  disabled={!state.canEdit}
-                  onClick={onRequestDiscard}
-                  variant="destructive"
-                  size="sm"
-                >
-                  Discard
-                </Button>
-              )}
-            </div>
-
-            {state.drafts.length > 0 && (
-              <div className="space-y-1.5">
-                <label
-                  className="text-sm font-medium"
-                  htmlFor="draft-selection"
-                >
-                  Saved drafts
-                </label>
-                <select
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
-                  disabled={state.isLoading}
-                  id="draft-selection"
-                  onChange={(event) => {
-                    onSelectDraft(event.currentTarget.value)
-                  }}
-                  value={activeDraft?.id ?? ''}
-                >
-                  <option disabled value="">
-                    Select a draft
-                  </option>
-                  {state.drafts.map((draft) => (
-                    <option key={draft.id} value={draft.id}>
-                      {draftTitle(draft)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {activeDraft === null ? (
-              <div className="rounded-md border border-dashed border-border px-4 py-8 text-center">
-                <p className="font-medium">No draft is open</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {state.drafts.length === 0
-                    ? 'A pasted URL creates your first local draft.'
-                    : 'Select a saved draft or create another one.'}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Article URL
-                  </p>
-                  <p className="break-all text-sm">{activeDraft.source.url}</p>
-                </div>
-                <div className="space-y-1.5">
-                  <label
-                    className="text-sm font-medium"
-                    htmlFor="article-title"
-                  >
-                    Title
-                  </label>
-                  <Input
-                    disabled={!state.canEdit}
-                    id="article-title"
-                    onChange={(event) => {
-                      onTitleChange(event.currentTarget.value)
-                    }}
-                    value={title}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium" htmlFor="article-text">
-                    Manual article text
-                  </label>
-                  <textarea
-                    className="min-h-36 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={!state.canEdit}
-                    id="article-text"
-                    onChange={(event) => {
-                      onArticleTextChange(event.currentTarget.value)
-                    }}
-                    placeholder="Paste or write article text here."
-                    value={articleText}
-                  />
-                </div>
-              </div>
-            )}
-          </Panel>
-
-          <Panel padding="md" className="space-y-4 rounded-lg p-5 sm:p-6">
-            <div>
-              <h2 className="font-medium">Common comment</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                This comment is kept with the current draft.
-              </p>
-            </div>
-            {activeDraft === null ? (
-              <p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                Open a draft to write a comment.
-              </p>
-            ) : (
-              <>
-                <label className="sr-only" htmlFor="common-comment">
-                  Common comment
-                </label>
-                <textarea
-                  className="min-h-48 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={!state.canEdit}
-                  id="common-comment"
-                  onChange={(event) => {
-                    onCommonCommentChange(event.currentTarget.value)
-                  }}
-                  placeholder="Write a comment…"
-                  value={activeDraft.commonComment}
-                />
-              </>
-            )}
-            {state.saveState === 'failed' &&
-              activeDraft !== null &&
-              state.canEdit && (
-                <Button onClick={onRetrySave} variant="outline">
-                  Retry save
-                </Button>
-              )}
-          </Panel>
+          <ComposeDraftPanel
+            activeDraft={activeDraft}
+            canEdit={state.canEdit}
+            drafts={state.drafts}
+            onArticleTextChange={onArticleTextChange}
+            onRequestDiscard={onRequestDiscard}
+            onSelectDraft={onSelectDraft}
+            onTitleChange={onTitleChange}
+          />
+          <ComposeCommonCommentPanel
+            activeDraft={activeDraft}
+            canEdit={state.canEdit}
+            onCommentChange={onCommonCommentChange}
+            onRetrySave={onRetrySave}
+            saveState={state.saveState}
+          />
         </section>
       )}
 
