@@ -50,15 +50,29 @@ This creates or updates these `SecureString` parameters:
 | `HATENA_ACCESS_TOKEN`        | `/infra/bookmarker/hatena-access-token`        |
 | `HATENA_ACCESS_TOKEN_SECRET` | `/infra/bookmarker/hatena-access-token-secret` |
 
-The `bookmarker-hatena` ExternalSecret in the `bookmarker` namespace reads these four parameters and creates the `bookmarker-hatena` Kubernetes Secret. After adding or updating the parameters, request an immediate refresh and wait for the ExternalSecret to become ready:
+The `bookmarker-hatena` ExternalSecret in the `bookmarker` namespace reads these four parameters and creates the `bookmarker-hatena` Kubernetes Secret. ESO's `.status.refreshTime` records when it fetched the parameters and updated the target Secret, so compare it before and after requesting an immediate refresh ([ESO FAQ](https://external-secrets.io/latest/introduction/faq/)):
 
 ```sh
+previous_refresh="$(kubectl -n bookmarker get externalsecret bookmarker-hatena -o jsonpath='{.status.refreshTime}')"
 kubectl -n bookmarker annotate externalsecret bookmarker-hatena force-sync="$(date +%s)" --overwrite
+waited=0
+while [ "$waited" -lt 120 ]; do
+  current_refresh="$(kubectl -n bookmarker get externalsecret bookmarker-hatena -o jsonpath='{.status.refreshTime}')"
+  if [ -n "$current_refresh" ] && [ "$current_refresh" != "$previous_refresh" ]; then
+    break
+  fi
+  sleep 2
+  waited=$((waited + 2))
+done
+if [ -z "$current_refresh" ] || [ "$current_refresh" = "$previous_refresh" ]; then
+  printf '%s\n' 'Timed out waiting for the Hatena ExternalSecret refresh' >&2
+  exit 1
+fi
 kubectl -n bookmarker wait externalsecret/bookmarker-hatena --for=condition=Ready --timeout=120s
 kubectl -n bookmarker get externalsecret bookmarker-hatena
 ```
 
-Confirm that `READY` is `True`. The status commands do not show secret values. Once it is ready, restart the API deployment so its environment picks up the synchronized values:
+Confirm that `READY` is `True`. The status commands do not show secret values. Once the refresh is complete, restart the API deployment so its environment picks up the synchronized values:
 
 ```sh
 kubectl -n bookmarker rollout restart deployment/bookmarker-api
