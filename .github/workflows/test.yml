@@ -74,7 +74,7 @@ jobs:
         env:
           # pinact's min-age check calls the GitHub API; without a token it hits
           # the 60 req/h unauthenticated limit shared per IP and fails on CI.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.octo-sts.outputs.token }}
         run: lefthook run pre-commit --all-files
 
       # Formatters configured with `stage_fixed: true` run `git add` after formatting,
@@ -233,18 +233,28 @@ jobs:
         working-directory: ${{ matrix.package }}
         run: pnpm run test
 
-  # Fixed name for branch protection: matrix leg names are dynamic, and knip
-  # has no `needs`, so this gate (skip == success) stands in for both.
+  # Branch protection requires a fixed check name because package test names are a matrix.
   unit-test:
     runs-on: ubuntu-slim
     timeout-minutes: 30
     needs:
+      - test
       - setup
       - unit-test-run
       - knip
-    if: failure()
+    if: ${{ always() }}
     steps:
-      - run: exit 1
+      - name: Verify required checks succeeded
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+          SETUP_RESULT: ${{ needs.setup.result }}
+          UNIT_TEST_RESULT: ${{ needs.unit-test-run.result }}
+          KNIP_RESULT: ${{ needs.knip.result }}
+        run: |
+          test "$TEST_RESULT" = success
+          test "$SETUP_RESULT" = success
+          test "$UNIT_TEST_RESULT" = success || test "$UNIT_TEST_RESULT" = skipped
+          test "$KNIP_RESULT" = success
 
   knip:
     runs-on: ubuntu-latest
