@@ -26,8 +26,9 @@ Create two separate shortcuts so a URL can still be shared if JavaScript access 
 2. Add `Run JavaScript on Web Page` and paste the contents of [`safari-shortcut.txt`](./safari-shortcut.txt) into the action.
 3. Replace `bookmark-app.example.invalid` in the script with the deployed Bookmarker host.
 4. Read `clipboardText`, `editorUrl`, and `requiresPaste` from the returned dictionary.
-5. If `requiresPaste` is true, show an alert that the article text is on the clipboard and must be pasted manually.
-6. Add `Copy to Clipboard` for `clipboardText`, then `Open URLs` for `editorUrl`, in that order.
+5. Add `Copy to Clipboard` for `clipboardText`.
+6. If `requiresPaste` is true, show an alert that the complete article text is on the clipboard and must be pasted manually.
+7. Add `Open URLs` for `editorUrl` after the copy action and optional alert.
 
 Run the Safari article shortcut from Safari after signing in to the article site. The first run may ask for permission to access the webpage; review the script before allowing it. Enable `Settings > Shortcuts > Advanced > Allow Running Scripts` if the setting is off. Apple notes that a JavaScript timeout prevents the shortcut from completing, so this shortcut returns the result immediately and does not fetch more page content.
 
@@ -47,13 +48,6 @@ Safari may deny the Safari article shortcut because of its webpage permission, s
 
 The fragment is not sent in the initial HTTP request, but browser history, extensions, or later redirects can still expose or lose it. Do not use it as a reliable transport for secrets. If authentication is needed, authenticate first and use URL-only plus manual paste for text you do not want in a URL.
 
-## iOS device checklist
-
-The shortcuts have not been verified on an iOS device. Complete these checks on the device before relying on them:
-
-- [ ] Confirm the URL-only shortcut appears in Safari's Share Sheet and opens a draft with the shared URL.
-- [ ] Confirm the Safari article shortcut requests webpage access, runs after enabling `Allow Running Scripts`, and copies text before opening the compose URL.
-- [ ] Share a short article and confirm its text reaches the editor. Share a long article and confirm the alert appears and the clipboard still contains the complete text for manual paste.
-- [ ] Confirm the app is signed in before using a text fragment. If authentication redirects and loses the fragment, use the URL-only shortcut and paste the text manually.
+The shortcuts have not been verified on an iOS device. Before relying on them, run both from Safari's Share Sheet: confirm the URL-only shortcut opens the shared article, allow webpage access for the Safari shortcut, and check that a short article reaches the editor. For an oversized article, confirm the alert appears and the clipboard still contains the complete text. Authentication redirects may drop or carry the fragment; use URL-only plus manual paste for text that should not appear in a URL. A site's Content Security Policy may block bookmarklets, and the browser Clipboard API is not required or assumed to succeed.
 
 See Apple's guides for [Shortcut input types](https://support.apple.com/en-gb/guide/shortcuts/apd7644168e1/ios), [list actions](https://support.apple.com/en-gb/guide/shortcuts/apd4dcacc115/ios), [limiting shortcut input](https://support.apple.com/en-gb/guide/shortcuts/apd8195f96d6/ios), [running JavaScript on a webpage](https://support.apple.com/en-gb/guide/shortcuts/apdb71a01d93/ios), [Shortcuts privacy settings](https://support.apple.com/en-euro/guide/shortcuts/apdfeb05586f/ios), and [sharing a shortcut](https://support.apple.com/en-by/guide/shortcuts/apdf01f8c054/ios), plus the [URI fragment reference](https://developer.mozilla.org/en-US/docs/Web/URI/Reference/Fragment).
