@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 
+import { createDestinationRegistry } from '#destinations/registry'
 import {
   type AccessEnvironment,
   type AccessKeyResolver,
@@ -10,6 +11,8 @@ import {
 import { createCsrfMiddleware } from '#middleware/csrf'
 import { respondWithApiError } from '#middleware/error-response'
 import { createAnalysisRoute } from '#routes/analysis'
+import { registerDestinationsRoute } from '#routes/destinations'
+import { registerPublishRoute } from '#routes/publish'
 
 type CreateAppOptions = {
   env?: AccessEnvironment
@@ -49,6 +52,10 @@ export const createApp = ({
   app.get('/health', (context) => context.json({ status: 'ok' }))
   app.on('HEAD', '/health', (context) => context.body(null))
   app.route('/api/analysis', createAnalysisRoute({ env: () => env }))
+
+  const destinationRegistry = createDestinationRegistry()
+  registerDestinationsRoute(app, destinationRegistry)
+  registerPublishRoute(app, destinationRegistry)
 
   return app
 }
