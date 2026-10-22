@@ -519,6 +519,41 @@ describe('POST /api/analysis/summary', () => {
     })
   })
 
+  it('rejects an empty choices chunk without usage after the stop finish reason', async () => {
+    const fetchImpl: typeof fetch = () =>
+      Promise.resolve(
+        responseFromEvents([
+          dataEvent({
+            choices: [
+              {
+                index: 0,
+                delta: {
+                  content: '{"status":"ok","summary":"架空の記事です。"}',
+                },
+              },
+            ],
+          }),
+          dataEvent({
+            choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+          }),
+          dataEvent({ choices: [] }),
+          'data: [DONE]\n\n',
+        ]),
+      )
+    const app = createTestApp(fetchImpl)
+    const result = await post(app, '/api/analysis/summary', { article })
+
+    expect(result).toEqual({
+      status: 502,
+      body: {
+        error: {
+          code: 'INVALID_ANALYSIS_RESPONSE',
+          message: 'The analysis service returned an invalid response.',
+        },
+      },
+    })
+  })
+
   it('returns a timeout error when the completion stream exceeds its deadline', async () => {
     const fetchImpl: typeof fetch = (_input, init) =>
       Promise.resolve(
