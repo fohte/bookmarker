@@ -1,11 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import type { BookmarkDraft } from 'api/contracts'
 
-import type { ComposeState } from '#features/editor/compose-controller'
 import {
   ComposeScreen,
   type ComposeScreenProps,
-} from '#features/editor/compose-screen'
+} from '#components/compose-screen'
+import type { ComposeState } from '#features/editor/compose-controller'
 
 const exampleDraft: BookmarkDraft = {
   version: 1,

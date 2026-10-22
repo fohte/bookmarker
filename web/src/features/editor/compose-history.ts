@@ -36,6 +36,12 @@ function withoutImportId(state: unknown, importId: string | null): unknown {
   )
 }
 
+export function currentUrlWithoutDraft(): string {
+  const url = new URL(window.location.href)
+  url.searchParams.delete('draft')
+  return `${url.pathname}${url.search}${url.hash}`
+}
+
 export function prepareImportNavigation(): Result<string, DraftError> {
   if (
     typeof window === 'undefined' ||

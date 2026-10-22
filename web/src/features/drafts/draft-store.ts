@@ -127,7 +127,7 @@ function transactionResult<T>(
   )
 }
 
-function parseDraft(value: unknown) {
+function parseDraft(value: unknown): Result<BookmarkDraft, DraftError> {
   const parsed = BookmarkDraftSchema.safeParse(value)
   if (!parsed.success) {
     return err(
@@ -150,12 +150,6 @@ function isImportReceipt(value: unknown): value is ImportReceipt {
     'draftId' in value &&
     typeof value.draftId === 'string'
   )
-}
-
-function validateDraft(
-  draft: BookmarkDraft,
-): Result<BookmarkDraft, DraftError> {
-  return parseDraft(draft)
 }
 
 export function createIndexedDbDraftStore(): DraftStore {
@@ -211,7 +205,7 @@ export function createIndexedDbDraftStore(): DraftStore {
     },
 
     addDraft(draft) {
-      const validated = validateDraft(draft)
+      const validated = parseDraft(draft)
       if (validated.isErr()) {
         return errAsync(validated.error)
       }
@@ -229,7 +223,7 @@ export function createIndexedDbDraftStore(): DraftStore {
     },
 
     saveDraft(draft) {
-      const validated = validateDraft(draft)
+      const validated = parseDraft(draft)
       if (validated.isErr()) {
         return errAsync(validated.error)
       }
@@ -247,7 +241,7 @@ export function createIndexedDbDraftStore(): DraftStore {
     },
 
     commitImport(importId, draft) {
-      const validated = validateDraft(draft)
+      const validated = parseDraft(draft)
       if (validated.isErr()) {
         return errAsync(validated.error)
       }

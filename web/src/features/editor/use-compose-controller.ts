@@ -2,7 +2,10 @@ import type { BookmarkDraft, ShareInput } from 'api/contracts'
 import { err } from 'neverthrow'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { DraftError } from '#features/drafts/draft-error'
+import {
+  controllerUnavailableError,
+  type DraftError,
+} from '#features/drafts/draft-error'
 import { ComposeController } from '#features/editor/compose-controller'
 import { initialComposeState } from '#features/editor/compose-state'
 
@@ -38,12 +41,7 @@ export function useComposeController() {
       const controller = controllerRef.current
       return controller === null
         ? Promise.resolve(
-            err<BookmarkDraft, DraftError>(
-              new DraftError(
-                'controller-unavailable',
-                'The editor is not ready yet.',
-              ),
-            ),
+            err<BookmarkDraft, DraftError>(controllerUnavailableError()),
           )
         : controller.openSource(input, options)
     },

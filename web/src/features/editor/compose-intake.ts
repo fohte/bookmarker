@@ -5,7 +5,11 @@ import {
 } from 'api/contracts'
 import { err, ok, type Result } from 'neverthrow'
 
-import { DraftError } from '#features/drafts/draft-error'
+import {
+  controllerUnavailableError,
+  DraftError,
+  lockUnavailableError,
+} from '#features/drafts/draft-error'
 import { hasDraftLockSupport } from '#features/drafts/draft-lock'
 import type { DraftStore } from '#features/drafts/draft-store'
 import { createNewDraft } from '#features/editor/compose-draft'
@@ -41,22 +45,12 @@ export class ComposeIntake {
   ): Promise<Result<BookmarkDraft, DraftError>> {
     if (this.port.isDisposed()) {
       return Promise.resolve(
-        err<BookmarkDraft, DraftError>(
-          new DraftError(
-            'controller-unavailable',
-            'The editor is not ready yet.',
-          ),
-        ),
+        err<BookmarkDraft, DraftError>(controllerUnavailableError()),
       )
     }
     if (!hasDraftLockSupport()) {
       return Promise.resolve(
-        err<BookmarkDraft, DraftError>(
-          new DraftError(
-            'lock-unavailable',
-            'This browser cannot safely edit local drafts.',
-          ),
-        ),
+        err<BookmarkDraft, DraftError>(lockUnavailableError()),
       )
     }
 
@@ -88,14 +82,16 @@ export class ComposeIntake {
       parsedInput.data,
       options,
       importId,
-    ).catch(() =>
-      err<BookmarkDraft, DraftError>(
+    ).catch((cause: unknown) => {
+      console.error('Unexpected local draft intake failure', cause)
+      return err<BookmarkDraft, DraftError>(
         new DraftError(
           'save-failed',
           'The draft could not be opened. Your current input was kept.',
+          { cause },
         ),
-      ),
-    )
+      )
+    })
     if (importId === null) return operation
 
     const trackedOperation = operation.finally(() =>
@@ -117,12 +113,7 @@ export class ComposeIntake {
       return err(currentFlush.error)
     }
     if (this.port.isDisposed()) {
-      return err(
-        new DraftError(
-          'controller-unavailable',
-          'The editor is not ready yet.',
-        ),
-      )
+      return err(controllerUnavailableError())
     }
     if (options.intake === 'share' && importId === null) {
       this.port.resumeCurrentDraft()

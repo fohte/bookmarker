@@ -1,7 +1,10 @@
 import { type BookmarkDraft, type ShareInput } from 'api/contracts'
 import { err, ok, type Result } from 'neverthrow'
 
-import { DraftError } from '#features/drafts/draft-error'
+import {
+  controllerUnavailableError,
+  DraftError,
+} from '#features/drafts/draft-error'
 import {
   acquireDraftLock,
   type DraftLockLease,
@@ -16,7 +19,10 @@ import {
   recoverPendingDeliveries,
   updateDraftArticle,
 } from '#features/editor/compose-draft'
-import { cleanupDraftNavigation } from '#features/editor/compose-history'
+import {
+  cleanupDraftNavigation,
+  currentUrlWithoutDraft,
+} from '#features/editor/compose-history'
 import { ComposeIntake } from '#features/editor/compose-intake'
 import { loadComposeDraftList } from '#features/editor/compose-list'
 import {
@@ -36,6 +42,7 @@ export class ComposeController {
   #lease: DraftLockLease | null = null
   #queue: DraftSaveQueue | null = null
   #intake: ComposeIntake
+  #activationPromise: Promise<Result<BookmarkDraft, DraftError>> | null = null
   #disposed = false
   #disposePromise: Promise<void> | null = null
 
@@ -51,7 +58,7 @@ export class ComposeController {
         this.#resumeCurrentDraft()
       },
       flushCurrentDraft: () => this.#flushCurrentDraft(),
-      isDisposed: () => this.#hasBeenDisposed(),
+      isDisposed: () => this.#isDisposed(),
       activateDraft: (draftId) => this.#activateDraft(draftId),
       showError: (error) => {
         this.#showError(error)
@@ -76,7 +83,7 @@ export class ComposeController {
       ? 'available'
       : 'unsupported'
     const listing = await this.store.listDrafts()
-    if (this.#disposed) return
+    if (this.#isDisposed()) return
 
     if (listing.isErr()) {
       this.#setState({
@@ -171,13 +178,7 @@ export class ComposeController {
       return
     }
 
-    const url = new URL(window.location.href)
-    url.searchParams.delete('draft')
-    const cleaned = cleanupDraftNavigation(
-      `${url.pathname}${url.search}${url.hash}`,
-      null,
-      null,
-    )
+    const cleaned = cleanupDraftNavigation(currentUrlWithoutDraft(), null, null)
     if (cleaned.isErr()) this.#showError(cleaned.error)
 
     this.#draft = null
@@ -250,14 +251,30 @@ export class ComposeController {
   async #activateDraft(
     draftId: string,
   ): Promise<Result<BookmarkDraft, DraftError>> {
-    if (this.#hasBeenDisposed()) {
-      return err(
-        new DraftError(
-          'controller-unavailable',
-          'The editor is not ready yet.',
-        ),
-      )
+    const activeActivation = this.#activationPromise
+    if (activeActivation !== null) {
+      return activeActivation.then(() => this.#activateDraft(draftId))
     }
+
+    const activation = this.#activateDraftNow(draftId)
+    this.#activationPromise = activation
+    void activation.then(
+      () => {
+        if (this.#activationPromise === activation)
+          this.#activationPromise = null
+      },
+      () => {
+        if (this.#activationPromise === activation)
+          this.#activationPromise = null
+      },
+    )
+    return activation
+  }
+
+  async #activateDraftNow(
+    draftId: string,
+  ): Promise<Result<BookmarkDraft, DraftError>> {
+    if (this.#isDisposed()) return err(controllerUnavailableError())
     if (this.#draft?.id === draftId && this.#lease !== null) {
       return ok(this.#draft)
     }
@@ -271,14 +288,7 @@ export class ComposeController {
       this.#resumeCurrentDraft()
       return err(flushed.error)
     }
-    if (this.#hasBeenDisposed()) {
-      return err(
-        new DraftError(
-          'controller-unavailable',
-          'The editor is not ready yet.',
-        ),
-      )
-    }
+    if (this.#isDisposed()) return err(controllerUnavailableError())
 
     const lockResult = await acquireDraftLock(draftId)
     const nextLease = lockResult.isOk() ? lockResult.value : null
@@ -288,25 +298,15 @@ export class ComposeController {
         ? 'locked'
         : 'owned'
 
-    if (this.#hasBeenDisposed()) {
+    if (this.#isDisposed()) {
       if (nextLease !== null) await nextLease.release()
-      return err(
-        new DraftError(
-          'controller-unavailable',
-          'The editor is not ready yet.',
-        ),
-      )
+      return err(controllerUnavailableError())
     }
 
     const loaded = await this.store.getDraft(draftId)
-    if (this.#hasBeenDisposed()) {
+    if (this.#isDisposed()) {
       if (nextLease !== null) await nextLease.release()
-      return err(
-        new DraftError(
-          'controller-unavailable',
-          'The editor is not ready yet.',
-        ),
-      )
+      return err(controllerUnavailableError())
     }
     if (loaded.isErr()) {
       if (nextLease !== null) await nextLease.release()
@@ -332,7 +332,7 @@ export class ComposeController {
         this.store,
         recovered,
         (saveState, error) => {
-          if (this.#disposed || this.#queue !== nextQueue) return
+          if (this.#isDisposed() || this.#queue !== nextQueue) return
           this.#setState({
             saveState,
             errorMessage: error?.message ?? null,
@@ -387,7 +387,7 @@ export class ComposeController {
 
   async #refreshDraftList(): Promise<void> {
     const listing = await loadComposeDraftList(this.store, this.#draft)
-    if (this.#hasBeenDisposed()) return
+    if (this.#isDisposed()) return
     if (listing.isErr()) {
       this.#showError(listing.error)
       return
@@ -400,7 +400,7 @@ export class ComposeController {
     this.#setState({ errorMessage: error.message })
   }
 
-  #hasBeenDisposed(): boolean {
+  #isDisposed(): boolean {
     return this.#disposed
   }
 

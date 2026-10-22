@@ -1,6 +1,5 @@
 export type DraftErrorCode =
   | 'controller-unavailable'
-  | 'draft-locked'
   | 'draft-not-found'
   | 'history-update-failed'
   | 'invalid-draft'
@@ -13,10 +12,25 @@ export class DraftError extends Error {
   constructor(
     readonly code: DraftErrorCode,
     message: string,
+    options?: { cause?: unknown },
   ) {
-    super(message)
+    super(message, options)
     this.name = 'DraftError'
   }
+}
+
+export function controllerUnavailableError(): DraftError {
+  return new DraftError(
+    'controller-unavailable',
+    'The editor is not ready yet.',
+  )
+}
+
+export function lockUnavailableError(): DraftError {
+  return new DraftError(
+    'lock-unavailable',
+    'This browser cannot safely edit local drafts.',
+  )
 }
 
 export function asStorageError(): DraftError {

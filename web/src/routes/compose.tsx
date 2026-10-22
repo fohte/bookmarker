@@ -1,14 +1,9 @@
 import { ShareInputSchema } from 'api/contracts'
 import { useState } from 'react'
 
-import { ComposeScreen } from '#features/editor/compose-screen'
+import { ComposeScreen } from '#components/compose-screen'
+import { currentUrlWithoutDraft } from '#features/editor/compose-history'
 import { useComposeController } from '#features/editor/use-compose-controller'
-
-function cleanupUrlWithoutDraft(): string {
-  const url = new URL(window.location.href)
-  url.searchParams.delete('draft')
-  return `${url.pathname}${url.search}${url.hash}`
-}
 
 export function ComposeRoute() {
   const [sourceUrl, setSourceUrl] = useState('')
@@ -26,7 +21,7 @@ export function ComposeRoute() {
     }
 
     const result = await controller.openSource(parsed.data, {
-      cleanupUrl: cleanupUrlWithoutDraft(),
+      cleanupUrl: currentUrlWithoutDraft(),
       intake: 'manual',
     })
     result.match(

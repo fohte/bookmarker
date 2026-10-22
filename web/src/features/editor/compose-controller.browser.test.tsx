@@ -326,6 +326,66 @@ describe('ComposeController in a browser', () => {
     expect(captureOutput(actual)).toEqual(expected)
   })
 
+  it('serializes overlapping draft activation requests without leaking locks', async () => {
+    const baseStore = createIndexedDbDraftStore()
+    const initialDraft = draft()
+    const secondDraft = draft(secondDraftId)
+    const thirdDraft = draft('00000000-0000-4000-8000-000000000004')
+    valueOrThrow(await baseStore.addDraft(initialDraft))
+    valueOrThrow(await baseStore.addDraft(secondDraft))
+    valueOrThrow(await baseStore.addDraft(thirdDraft))
+
+    const secondReadStarted = deferred<undefined>()
+    const finishSecondRead = deferred<BookmarkDraft | null>()
+    const store: DraftStore = {
+      ...baseStore,
+      getDraft: (id) => {
+        if (id !== secondDraft.id) return baseStore.getDraft(id)
+        secondReadStarted.resolve(undefined)
+        return ResultAsync.fromPromise(
+          finishSecondRead.promise,
+          () => new DraftError('storage-failed', 'The test read failed.'),
+        )
+      },
+    }
+
+    const controller = new ComposeController(store)
+    await controller.start(initialDraft.id)
+    const selectSecond = controller.selectDraft(secondDraft.id)
+    await secondReadStarted.promise
+    const selectThird = controller.selectDraft(thirdDraft.id)
+    finishSecondRead.resolve(secondDraft)
+    await Promise.all([selectSecond, selectThird])
+
+    const secondLock = valueOrThrow(await acquireDraftLock(secondDraft.id))
+    const thirdLock = valueOrThrow(await acquireDraftLock(thirdDraft.id))
+    const beforeDispose = {
+      activeDraftId: controller.state.activeDraft?.id ?? null,
+      secondLockAvailable: secondLock !== null,
+      thirdLockHeld: thirdLock === null,
+    }
+    if (secondLock !== null) await secondLock.release()
+    if (thirdLock !== null) await thirdLock.release()
+    await controller.dispose()
+    const thirdLockAfterDispose = valueOrThrow(
+      await acquireDraftLock(thirdDraft.id),
+    )
+    if (thirdLockAfterDispose !== null) await thirdLockAfterDispose.release()
+
+    const actual = {
+      beforeDispose,
+      thirdLockAvailableAfterDispose: thirdLockAfterDispose !== null,
+    }
+    expect(captureOutput(actual)).toEqual({
+      beforeDispose: {
+        activeDraftId: thirdDraft.id,
+        secondLockAvailable: true,
+        thirdLockHeld: true,
+      },
+      thirdLockAvailableAfterDispose: true,
+    })
+  })
+
   it('blocks edits while a draft switch waits for its save to finish', async () => {
     const baseStore = createIndexedDbDraftStore()
     const initialDraft = draft()
@@ -585,6 +645,134 @@ describe('ComposeController in a browser', () => {
     }
 
     expect(captureOutput(actual)).toEqual(expected)
+  })
+
+  it('replays a committed share receipt after a new controller starts', async () => {
+    const store = createIndexedDbDraftStore()
+    const firstController = new ComposeController(store)
+    const input: ShareInput = {
+      version: 1,
+      url: 'https://example.test/shared-article',
+      title: 'Shared title',
+      sharedText: 'Shared article text',
+      partial: false,
+    }
+    const cleanupUrl = 'https://other.example.test/compose'
+    await firstController.start(null)
+    window.history.replaceState(
+      { tab: 'compose' },
+      '',
+      '/compose?share=payload&keep=yes#article',
+    )
+    const firstResult = await firstController.openSource(input, {
+      cleanupUrl,
+      intake: 'share',
+    })
+    const savedAfterFirst = valueOrThrow(await store.listDrafts()).drafts
+    const originalDraftId = savedAfterFirst[0]?.id ?? null
+    await firstController.dispose()
+
+    const restoredController = new ComposeController(store)
+    await restoredController.start(null)
+    const replayResult = await restoredController.openSource(input, {
+      cleanupUrl,
+      intake: 'share',
+    })
+    const savedAfterReplay = valueOrThrow(await store.listDrafts()).drafts
+    const replayState = {
+      reusesOriginalDraft:
+        restoredController.state.activeDraft?.id === originalDraftId,
+      savedDraftCount: savedAfterReplay.length,
+      url: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+      keepsImportId: isRecord(window.history.state)
+        ? typeof window.history.state['__bookmarkerDraftImportId'] === 'string'
+        : false,
+    }
+    await restoredController.dispose()
+
+    const actual = {
+      firstCommit: {
+        errorCode: firstResult.isErr() ? firstResult.error.code : null,
+        savedDraft: originalDraftId !== null,
+      },
+      replay: {
+        errorCode: replayResult.isErr() ? replayResult.error.code : null,
+        ...replayState,
+      },
+    }
+    expect(captureOutput(actual)).toEqual({
+      firstCommit: {
+        errorCode: 'history-update-failed',
+        savedDraft: true,
+      },
+      replay: {
+        errorCode: 'history-update-failed',
+        reusesOriginalDraft: true,
+        savedDraftCount: 1,
+        url: '/compose?share=payload&keep=yes#article',
+        keepsImportId: true,
+      },
+    })
+  })
+
+  it('keeps drafts viewable but rejects creation without Web Locks', async () => {
+    const store = createIndexedDbDraftStore()
+    const initialDraft = draft()
+    valueOrThrow(await store.addDraft(initialDraft))
+    const originalDescriptor = Object.getOwnPropertyDescriptor(
+      navigator,
+      'locks',
+    )
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: undefined,
+    })
+
+    let actual:
+      | {
+          activeDraftId: string | null
+          canEdit: boolean
+          lockState: string
+          openingError: string | null
+          savedDraftIds: string[]
+        }
+      | undefined
+    try {
+      const controller = new ComposeController(store)
+      await controller.start(initialDraft.id)
+      const opening = await controller.openSource(
+        {
+          version: 1,
+          url: 'https://example.test/new-article',
+          partial: true,
+        },
+        { cleanupUrl: '/compose', intake: 'manual' },
+      )
+      actual = {
+        activeDraftId: controller.state.activeDraft?.id ?? null,
+        canEdit: controller.state.canEdit,
+        lockState: controller.state.lockState,
+        openingError: opening.isErr() ? opening.error.code : null,
+        savedDraftIds: valueOrThrow(await store.listDrafts()).drafts.map(
+          ({ id }) => id,
+        ),
+      }
+      await controller.dispose()
+    } finally {
+      if (originalDescriptor === undefined) {
+        Reflect.deleteProperty(navigator, 'locks')
+      } else {
+        Object.defineProperty(navigator, 'locks', originalDescriptor)
+      }
+    }
+
+    expect(captureOutput(actual)).toEqual({
+      activeDraftId: initialDraft.id,
+      canEdit: false,
+      lockState: 'unsupported',
+      openingError: 'lock-unavailable',
+      savedDraftIds: [initialDraft.id],
+    })
   })
 
   it('asks before deleting a draft and removes it after confirmation', async () => {

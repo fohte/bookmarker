@@ -1,6 +1,9 @@
-import { ResultAsync } from 'neverthrow'
+import { errAsync, ResultAsync } from 'neverthrow'
 
-import { DraftError } from '#features/drafts/draft-error'
+import {
+  type DraftError,
+  lockUnavailableError,
+} from '#features/drafts/draft-error'
 
 export interface DraftLockLease {
   release(): Promise<void>
@@ -24,31 +27,36 @@ function createDeferred(): Deferred {
 }
 
 export function hasDraftLockSupport(): boolean {
-  return (
-    typeof navigator !== 'undefined' &&
-    typeof navigator.locks.request === 'function'
-  )
+  return getLockManager() !== null
+}
+
+function getLockManager(): LockManager | null {
+  if (typeof navigator === 'undefined') return null
+
+  const lockManager: unknown = Reflect.get(navigator, 'locks')
+  if (
+    typeof lockManager !== 'object' ||
+    lockManager === null ||
+    !('request' in lockManager) ||
+    typeof lockManager.request !== 'function'
+  ) {
+    return null
+  }
+
+  return navigator.locks
 }
 
 export function acquireDraftLock(
   draftId: string,
 ): ResultAsync<DraftLockLease | null, DraftError> {
-  if (!hasDraftLockSupport()) {
-    return ResultAsync.fromPromise(
-      Promise.reject(new Error('Web Locks is unavailable.')),
-      () =>
-        new DraftError(
-          'lock-unavailable',
-          'This browser cannot safely edit local drafts.',
-        ),
-    )
-  }
+  const lockManager = getLockManager()
+  if (lockManager === null) return errAsync(lockUnavailableError())
 
   const acquisition = new Promise<DraftLockLease | null>((resolve, reject) => {
     let settled = false
     const releaseSignal = createDeferred()
     const completion = createDeferred()
-    const request = navigator.locks.request(
+    const request = lockManager.request(
       `bookmarker:draft:${draftId}`,
       { mode: 'exclusive', ifAvailable: true },
       async (lock) => {
@@ -89,12 +97,5 @@ export function acquireDraftLock(
     )
   })
 
-  return ResultAsync.fromPromise(
-    acquisition,
-    () =>
-      new DraftError(
-        'lock-unavailable',
-        'This browser cannot safely edit local drafts.',
-      ),
-  )
+  return ResultAsync.fromPromise(acquisition, lockUnavailableError)
 }

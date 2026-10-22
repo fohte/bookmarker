@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 
 import { App } from '#App'
-import { ComposeScreen } from '#features/editor/compose-screen'
+import { ComposeScreen } from '#components/compose-screen'
 
 const meta = {
   component: App,
