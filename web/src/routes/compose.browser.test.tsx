@@ -42,9 +42,30 @@ vi.mock('#features/editor/use-compose-controller', () => ({
     selectDraft: controllerMocks.noop,
     retryLock: controllerMocks.noop,
     retrySave: controllerMocks.noop,
+    publishSelectedDestinations: controllerMocks.noop,
+    retryFailedDeliveries: controllerMocks.noop,
+    retryDeliverySave: controllerMocks.noop,
     requestDiscard: controllerMocks.noop,
     cancelDiscard: controllerMocks.noop,
     discardDraft: controllerMocks.noop,
+  }),
+}))
+
+vi.mock('#features/editor/use-compose-delivery', () => ({
+  useComposeDelivery: () => ({
+    metadata: null,
+    metadataErrorMessage: null,
+    isLoadingMetadata: true,
+    canPublish: false,
+    hasRetryableTargets: false,
+    canRetryFailed: false,
+    canOpenX: false,
+    xIntentHref: null,
+    authenticationRequired: false,
+    signInHref: null,
+    deliveryState: 'idle',
+    deliveryErrorMessage: null,
+    onLoadMetadata: controllerMocks.noop,
   }),
 }))
 

@@ -5,6 +5,14 @@ import type { DraftSaveState } from '#features/drafts/draft-save-queue'
 export type ComposeLockState =
   'loading' | 'available' | 'owned' | 'locked' | 'unsupported'
 
+export type ComposeDeliveryState =
+  | 'idle'
+  | 'saving-input'
+  | 'saving-pending'
+  | 'sending'
+  | 'saving-results'
+  | 'result-save-failed'
+
 export type ComposeState = {
   drafts: BookmarkDraft[]
   unreadableDraftCount: number
@@ -16,6 +24,9 @@ export type ComposeState = {
   errorMessage: string | null
   intakeError: string | null
   discardOpen: boolean
+  deliveryState: ComposeDeliveryState
+  deliveryErrorMessage: string | null
+  deliveryAuthenticationRequired: boolean
 }
 
 export const initialComposeState: ComposeState = {
@@ -29,4 +40,7 @@ export const initialComposeState: ComposeState = {
   errorMessage: null,
   intakeError: null,
   discardOpen: false,
+  deliveryState: 'idle',
+  deliveryErrorMessage: null,
+  deliveryAuthenticationRequired: false,
 }

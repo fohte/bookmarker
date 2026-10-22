@@ -9,6 +9,7 @@ import { ComposeScreen } from '#components/compose-screen'
 import { currentUrlWithoutDraft } from '#features/editor/compose-history'
 import { useComposeAnalysis } from '#features/editor/use-compose-analysis'
 import { useComposeController } from '#features/editor/use-compose-controller'
+import { useComposeDelivery } from '#features/editor/use-compose-delivery'
 import { useShareIntake } from '#features/share/use-share-intake'
 
 export function ComposeRoute() {
@@ -25,6 +26,11 @@ export function ComposeRoute() {
     canEdit: controller.state.canEdit && !controller.state.isLoading,
     autoAnalyzeDraftId,
     saveAnalysisResult: controller.saveAnalysisResult,
+  })
+  const delivery = useComposeDelivery({
+    draft: controller.state.activeDraft,
+    state: controller.state,
+    canEdit: controller.state.canEdit && !controller.state.isLoading,
   })
   const openSharedSource = useCallback(
     async (
@@ -107,6 +113,37 @@ export function ComposeRoute() {
       onCommonCommentChange={controller.updateCommonComment}
       onDestinationChange={controller.updateDestination}
       analysis={analysis}
+      deliveryControls={{
+        isLoadingMetadata: delivery.isLoadingMetadata,
+        metadata: delivery.metadata,
+        metadataErrorMessage: delivery.metadataErrorMessage,
+        canPublish: delivery.canPublish,
+        canRetryFailed: delivery.canRetryFailed,
+        hasRetryableTargets: delivery.hasRetryableTargets,
+        canOpenX: delivery.canOpenX,
+        xIntentHref: delivery.xIntentHref,
+        deliveryState: delivery.deliveryState,
+        deliveryErrorMessage: delivery.deliveryErrorMessage,
+        authenticationRequired: delivery.authenticationRequired,
+        signInHref: delivery.signInHref,
+        onPublish: () => {
+          if (delivery.metadata !== null) {
+            void controller.publishSelectedDestinations(delivery.metadata)
+          }
+        },
+        onRetryFailed: () => {
+          if (delivery.metadata !== null) {
+            void controller.retryFailedDeliveries(delivery.metadata)
+          }
+        },
+        onRetryDeliverySave: () => {
+          void controller.retryDeliverySave()
+        },
+        onRetryMetadata: delivery.onLoadMetadata,
+      }}
+      {...(delivery.metadata === null
+        ? {}
+        : { destinationMetadata: delivery.metadata })}
       copyConfirmationDestination={copyConfirmationDestination}
       onRequestCopyCommonComment={setCopyConfirmationDestination}
       onCancelCopyCommonComment={() => {

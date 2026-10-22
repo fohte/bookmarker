@@ -22,7 +22,10 @@ import type {
 } from 'api/contracts'
 
 import { ComposeDestinationTagsField } from '#components/compose-destination-tags-field'
-import { effectiveDestinationComment } from '#features/editor/compose-destination'
+import {
+  effectiveDestinationComment,
+  isRaindropCollectionAvailable,
+} from '#features/editor/compose-destination'
 
 const destinationNames: Record<DestinationId, string> = {
   hatena: 'Hatena Bookmark',
@@ -61,6 +64,14 @@ export function ComposeDestinationCard({
 }) {
   const destinationMetadata = metadata?.destinations[destination.destination]
   const selectionUnavailable = destinationMetadata?.configured === false
+  const raindropMetadata = metadata?.destinations.raindrop
+  const raindropCollections = raindropMetadata?.collections
+  const savedCollectionAvailable =
+    destination.destination === 'raindrop' &&
+    isRaindropCollectionAvailable(
+      destination.options.collectionId,
+      raindropCollections,
+    )
   const metadataError =
     destinationMetadata !== undefined && 'metadataError' in destinationMetadata
       ? destinationMetadata.metadataError
@@ -97,7 +108,9 @@ export function ComposeDestinationCard({
             aria-label={`Select ${name}`}
             checked={destination.selected}
             className="size-4 accent-primary disabled:opacity-50"
-            disabled={!canEdit || selectionUnavailable}
+            disabled={
+              !canEdit || (selectionUnavailable && !destination.selected)
+            }
             onChange={(event) => {
               onDestinationChange({
                 ...destination,
@@ -216,6 +229,15 @@ export function ComposeDestinationCard({
 
       {destination.destination === 'mastodon' && (
         <div className="space-y-3">
+          {metadata?.destinations.mastodon.maxCharacters !== undefined && (
+            <p className="text-xs text-muted-foreground" role="status">
+              This instance allows up to{' '}
+              {metadata.destinations.mastodon.maxCharacters} characters. Each
+              URL reserves{' '}
+              {metadata.destinations.mastodon.charactersReservedPerUrl ?? 0}{' '}
+              characters.
+            </p>
+          )}
           <div className="space-y-1.5">
             <label
               className="text-sm font-medium"
@@ -303,28 +325,59 @@ export function ComposeDestinationCard({
               className="text-sm font-medium"
               htmlFor="raindrop-collection"
             >
-              Collection ID
+              Collection
             </label>
-            <Input
-              disabled={!canEdit}
-              id="raindrop-collection"
-              inputMode="numeric"
-              onChange={(event) => {
-                const collectionId = event.currentTarget.valueAsNumber
-                if (Number.isInteger(collectionId)) {
+            <Select
+              disabled={!canEdit || raindropMetadata?.configured !== true}
+              onValueChange={(value) => {
+                const collectionId = Number(value)
+                if (
+                  Number.isInteger(collectionId) &&
+                  isRaindropCollectionAvailable(
+                    collectionId,
+                    raindropCollections,
+                  )
+                ) {
                   onDestinationChange({
                     ...destination,
                     options: { ...destination.options, collectionId },
                   })
                 }
               }}
-              type="number"
-              value={destination.options.collectionId}
-            />
-            <p className="text-xs text-muted-foreground">
-              -1 is Raindrop&apos;s Unsorted system collection. Other collection
-              IDs are kept as entered.
-            </p>
+              value={String(destination.options.collectionId)}
+            >
+              <SelectTrigger
+                aria-label="Raindrop collection"
+                id="raindrop-collection"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="-1">Unsorted</SelectItem>
+                {raindropCollections?.map((collection) => (
+                  <SelectItem key={collection.id} value={String(collection.id)}>
+                    {collection.title}
+                  </SelectItem>
+                ))}
+                {!savedCollectionAvailable && (
+                  <SelectItem
+                    disabled
+                    value={String(destination.options.collectionId)}
+                  >
+                    Saved collection ID {destination.options.collectionId}
+                    {raindropCollections === undefined
+                      ? ' (details unavailable)'
+                      : ' (not in the available list)'}
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            {raindropCollections !== undefined && !savedCollectionAvailable && (
+              <p className="text-xs text-muted-foreground" role="status">
+                Saved collection ID {destination.options.collectionId} is not
+                available. Choose an available collection.
+              </p>
+            )}
           </div>
           <ComposeDestinationTagsField
             disabled={!canEdit}
@@ -343,8 +396,8 @@ export function ComposeDestinationCard({
 
       {destination.destination === 'x' && (
         <p className="text-sm text-muted-foreground">
-          X opens an external composer. That action is not connected yet, so no
-          post result will be shown.
+          X opens a separate composer with the saved comment and article URL.
+          Posting there does not mark this draft as delivered.
         </p>
       )}
 

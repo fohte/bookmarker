@@ -60,7 +60,8 @@ export function ComposeDestinationsPanel({
 
       <div className="border-t border-border pt-4">
         <p className="text-sm text-muted-foreground" role="status">
-          These settings are saved locally. Publishing is not connected yet.
+          Each delivery uses a saved snapshot of the article and destination
+          settings.
         </p>
       </div>
     </Panel>
