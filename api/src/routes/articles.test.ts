@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest'
 
-import { app } from '#app'
+import { createApp } from '#app'
 import { createArticleExtractor } from '#articles/index'
 import type { ArticleDnsResolver } from '#articles/types'
 import { createArticlesRouter } from '#routes/articles'
+
+const appOrigin = 'http://127.0.0.1:5173'
+const app = createApp({
+  env: {
+    NODE_ENV: 'development',
+    APP_ORIGIN: appOrigin,
+    CF_ACCESS_ISSUER: 'https://access.example.invalid',
+    CF_ACCESS_AUD: 'example-access-audience',
+    DEV_AUTH_BYPASS: 'true',
+  },
+  isLoopbackListenerBound: () => true,
+})
 
 const noRecordError = (): Error & { code: string } =>
   Object.assign(new Error('No record'), { code: 'ENODATA' })
@@ -16,7 +28,7 @@ const createResolver = (): ArticleDnsResolver => ({
 
 const postJson = (input: unknown) => ({
   method: 'POST',
-  headers: { 'content-type': 'application/json' },
+  headers: { 'content-type': 'application/json', Origin: appOrigin },
   body: JSON.stringify(input),
 })
 const observe = (...values: unknown[]) => values
@@ -136,7 +148,7 @@ describe('POST /api/articles/extract', () => {
   it('rejects malformed JSON with the complete error envelope', async () => {
     const response = await app.request('/api/articles/extract', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', Origin: appOrigin },
       body: '{',
     })
 
