@@ -265,16 +265,35 @@ describe('ComposeRoute publishing in a browser', () => {
       await userEvent.click(
         button('button[aria-label="Open Hatena Bookmark settings"]'),
       )
-      const trigger = button('#hatena-comment-mode')
-      await userEvent.click(trigger)
     })
+    const settingsDialog = page.getByRole('dialog', {
+      exact: true,
+      name: 'Hatena Bookmark settings',
+    })
+    await act(async () => expect.element(settingsDialog).toBeVisible())
+
+    const trigger = button('#hatena-comment-mode')
+    const triggerLabel = trigger.getAttribute('aria-label')
+    if (triggerLabel === null) {
+      throw new Error('The comment mode select has no accessible name.')
+    }
+    const commentMode = page.getByRole('combobox', {
+      exact: true,
+      name: triggerLabel,
+    })
+    await act(async () => expect.element(commentMode).toBeVisible())
+    await act(async () => commentMode.click())
+    await act(async () =>
+      expect.element(commentMode).toHaveAttribute('aria-expanded', 'true'),
+    )
+
+    const individualCommentOption = page.getByRole('option', {
+      exact: true,
+      name: 'Use individual comment',
+    })
+    await act(async () => expect.element(individualCommentOption).toBeVisible())
     await act(async () => {
-      await page
-        .getByRole('option', {
-          exact: true,
-          name: 'Use individual comment',
-        })
-        .click()
+      await individualCommentOption.click()
       await userEvent.fill(
         textarea('#hatena-custom-comment'),
         'A separate individual comment 😀 ',

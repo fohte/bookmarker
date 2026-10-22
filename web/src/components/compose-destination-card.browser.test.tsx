@@ -158,6 +158,7 @@ function settingsLayout() {
 
 async function selectOption(
   triggerId: string,
+  settingsDialogName: string,
   optionName: string,
 ): Promise<void> {
   const trigger = document.getElementById(triggerId)
@@ -168,12 +169,25 @@ async function selectOption(
   if (triggerLabel === null) {
     throw new Error(`Select trigger ${triggerId} has no accessible name.`)
   }
+  const dialog = page.getByRole('dialog', {
+    exact: true,
+    name: settingsDialogName,
+  })
+  await act(async () => expect.element(dialog).toBeVisible())
+
+  const combobox = page.getByRole('combobox', {
+    exact: true,
+    name: triggerLabel,
+  })
+  await act(async () => expect.element(combobox).toBeVisible())
+  await act(async () => combobox.click())
   await act(async () =>
-    page.getByRole('combobox', { exact: true, name: triggerLabel }).click(),
+    expect.element(combobox).toHaveAttribute('aria-expanded', 'true'),
   )
-  await act(async () =>
-    page.getByRole('option', { exact: true, name: optionName }).click(),
-  )
+
+  const option = page.getByRole('option', { exact: true, name: optionName })
+  await act(async () => expect.element(option).toBeVisible())
+  await act(async () => option.click())
 }
 
 async function setInputValue(
@@ -558,11 +572,19 @@ describe('ComposeDestinationCard in a browser', () => {
     await act(async () =>
       userEvent.click(buttonWithAriaLabel('Open Hatena Bookmark settings')),
     )
-    await selectOption('hatena-comment-mode', 'Use common comment')
+    await selectOption(
+      'hatena-comment-mode',
+      'Hatena Bookmark settings',
+      'Use common comment',
+    )
     act(() => {
       buttonNamed('Change common comment').click()
     })
-    await selectOption('hatena-comment-mode', 'Use individual comment')
+    await selectOption(
+      'hatena-comment-mode',
+      'Hatena Bookmark settings',
+      'Use individual comment',
+    )
     const customComment = document.querySelector<HTMLTextAreaElement>(
       '#hatena-custom-comment',
     )
