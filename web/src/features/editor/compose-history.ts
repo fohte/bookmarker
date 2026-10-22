@@ -1,0 +1,166 @@
+import { err, ok, Result } from 'neverthrow'
+
+import { DraftError } from '#features/drafts/draft-error'
+
+const importStateKey = '__bookmarkerDraftImportId'
+const previousStateKey = '__bookmarkerPreviousHistoryState'
+const wrappedStateKey = '__bookmarkerWrappedHistoryState'
+
+export type ImportNavigation = {
+  importId: string
+  sourceUrl: string
+}
+
+export type FailedImportCleanup = ImportNavigation & {
+  cleanupUrl: string
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function withImportId(state: unknown, importId: string): unknown {
+  if (isRecord(state) && !(importStateKey in state)) {
+    return { ...state, [importStateKey]: importId }
+  }
+
+  return {
+    [importStateKey]: importId,
+    [wrappedStateKey]: true,
+    [previousStateKey]: state,
+  }
+}
+
+function withoutImportId(state: unknown, importId: string | null): unknown {
+  if (!isRecord(state) || state[importStateKey] !== importId) {
+    return state
+  }
+
+  if (state[wrappedStateKey] === true) {
+    return state[previousStateKey]
+  }
+
+  return Object.fromEntries(
+    Object.entries(state).filter(([key]) => key !== importStateKey),
+  )
+}
+
+export function currentUrlWithoutDraft(): string {
+  const url = new URL(window.location.href)
+  url.searchParams.delete('draft')
+  return `${url.pathname}${url.search}${url.hash}`
+}
+
+export function prepareImportNavigation(): Result<
+  ImportNavigation,
+  DraftError
+> {
+  if (
+    typeof window === 'undefined' ||
+    typeof crypto.randomUUID !== 'function'
+  ) {
+    return err(
+      new DraftError(
+        'lock-unavailable',
+        'This browser cannot safely create a local draft.',
+      ),
+    )
+  }
+
+  const currentState: unknown = window.history.state
+  const sourceUrl = window.location.href
+  if (isRecord(currentState)) {
+    const existingId = currentState[importStateKey]
+    if (typeof existingId === 'string' && existingId.length > 0) {
+      return ok({ importId: existingId, sourceUrl })
+    }
+  }
+
+  const importId = crypto.randomUUID()
+  const result = Result.fromThrowable(
+    () => {
+      window.history.replaceState(
+        withImportId(currentState, importId),
+        '',
+        window.location.href,
+      )
+    },
+    () =>
+      new DraftError(
+        'history-update-failed',
+        'The shared URL could not be prepared for saving.',
+      ),
+  )()
+
+  return result.map(() => ({ importId, sourceUrl }))
+}
+
+export function cleanupDraftNavigation(
+  cleanupUrl: string,
+  draftId: string | null,
+  importNavigation: ImportNavigation | null,
+): Result<undefined, DraftError> {
+  if (typeof window === 'undefined') {
+    return err(
+      new DraftError(
+        'history-update-failed',
+        'The draft URL could not be updated.',
+      ),
+    )
+  }
+
+  const parsedUrl = Result.fromThrowable(
+    () => new URL(cleanupUrl, window.location.href),
+    () =>
+      new DraftError(
+        'history-update-failed',
+        'The draft URL could not be updated.',
+      ),
+  )()
+  if (parsedUrl.isErr() || parsedUrl.value.origin !== window.location.origin) {
+    return err(
+      new DraftError(
+        'history-update-failed',
+        'The draft URL could not be updated.',
+      ),
+    )
+  }
+
+  if (
+    (importNavigation !== null &&
+      (!isRecord(window.history.state) ||
+        window.history.state[importStateKey] !== importNavigation.importId)) ||
+    (importNavigation !== null &&
+      window.location.href !== importNavigation.sourceUrl)
+  ) {
+    return err(
+      new DraftError(
+        'history-update-failed',
+        'The shared URL changed before the draft could be updated.',
+      ),
+    )
+  }
+
+  parsedUrl.value.searchParams.delete('draft')
+  if (draftId !== null) {
+    parsedUrl.value.searchParams.set('draft', draftId)
+  }
+
+  const nextState = withoutImportId(
+    window.history.state,
+    importNavigation?.importId ?? null,
+  )
+  const url = `${parsedUrl.value.pathname}${parsedUrl.value.search}${parsedUrl.value.hash}`
+  const result = Result.fromThrowable(
+    () => {
+      window.history.replaceState(nextState, '', url)
+    },
+    () =>
+      new DraftError(
+        'history-update-failed',
+        'The draft URL could not be updated.',
+      ),
+  )()
+
+  return result.map(() => undefined)
+}
