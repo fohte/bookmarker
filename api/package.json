@@ -1,0 +1,25 @@
+{
+  "name": "api",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "conc pnpm:test:type pnpm:test:unit",
+    "test:type": "tsc --noEmit",
+    "test:unit": "vitest run",
+    "build": "tsup",
+    "start": "node --import @fohte/service-kit/otel-register dist/index.js",
+    "dev": "tsx watch --import @fohte/service-kit/otel-register src/index.ts"
+  },
+  "dependencies": {
+    "@fohte/service-kit": "0.1.14",
+    "@opentelemetry/api": "1.9.1",
+    "neverthrow": "8.2.0"
+  },
+  "devDependencies": {
+    "tsup": "8.5.1",
+    "tsx": "4.23.15"
+  }
+}

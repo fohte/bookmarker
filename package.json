@@ -1,37 +1,35 @@
 {
   "name": "bookmarker",
-  "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "web",
+    "api"
+  ],
+  "packageManager": "pnpm@12.7.0",
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "test": "tsc --noEmit",
     "lint": "eslint .",
     "format:eslint": "eslint --fix .",
     "format:prettier": "prettier --write .",
-    "format": "conc -m 1 bun:format:eslint bun:format:prettier",
-    "postinstall": "typewind generate"
-  },
-  "dependencies": {
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
-    "next": "14.1.4"
+    "format": "conc -m 1 pnpm:format:eslint pnpm:format:prettier",
+    "test": "pnpm -r run test"
   },
   "devDependencies": {
-    "@fohte/eslint-config": "0.0.4",
-    "@types/node": "20.11.30",
-    "@types/react": "18.2.74",
-    "@types/react-dom": "18.2.24",
-    "autoprefixer": "10.4.19",
-    "concurrently": "8.2.2",
-    "daisyui": "4.6.3",
-    "eslint": "8.57.0",
-    "eslint-config-next": "14.1.4",
-    "postcss": "8.4.38",
-    "prettier": "3.2.5",
-    "tailwindcss": "3.3.7",
-    "typescript": "5.3.3",
-    "typewind": "0.1.5"
+    "@commitlint/cli": "21.2.3",
+    "@fohte/eslint-config": "0.5.1",
+    "@ninoseki/eslint-plugin-neverthrow": "0.3.2",
+    "@tsconfig/node-lts": "24.0.1",
+    "@tsconfig/strictest": "2.0.8",
+    "@types/node": "24.19.0",
+    "@typescript-eslint/eslint-plugin": "8.71.2",
+    "@typescript-eslint/parser": "8.71.2",
+    "concurrently": "10.0.5",
+    "eslint": "10.11.0",
+    "eslint-plugin-storybook": "10.6.0",
+    "eslint-plugin-tailwindcss": "4.4.0",
+    "knip": "6.38.0",
+    "prettier": "3.9.9",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
   }
 }
