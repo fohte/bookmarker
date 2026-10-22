@@ -67,7 +67,7 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-pnpm-store-
 
-      - run: pnpm install --filter "web..." --filter "api..." --frozen-lockfile
+      - run: pnpm install --filter "web..." --frozen-lockfile
 
       - name: Build Storybook
         run: cd "web" && pnpm run storybook:build
