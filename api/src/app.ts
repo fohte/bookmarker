@@ -10,6 +10,7 @@ import {
 } from '#middleware/access'
 import { createCsrfMiddleware } from '#middleware/csrf'
 import { respondWithApiError } from '#middleware/error-response'
+import { createAnalysisRoute } from '#routes/analysis'
 import { createArticlesRouter } from '#routes/articles'
 import { registerDestinationsRoute } from '#routes/destinations'
 import { registerPublishRoute } from '#routes/publish'
@@ -52,6 +53,7 @@ export const createApp = ({
   app.route('/api/articles', createArticlesRouter())
   app.get('/health', (context) => context.json({ status: 'ok' }))
   app.on('HEAD', '/health', (context) => context.body(null))
+  app.route('/api/analysis', createAnalysisRoute({ env: () => env }))
 
   const destinationRegistry = createDestinationRegistry()
   registerDestinationsRoute(app, destinationRegistry)

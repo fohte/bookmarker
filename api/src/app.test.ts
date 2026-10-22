@@ -521,6 +521,44 @@ describe('GET /health', () => {
     })
   })
 })
+describe('POST /api/analysis/summary', () => {
+  it('is registered on the Node API server', async () => {
+    const server = startApiServer({
+      hostname: '127.0.0.1',
+      port: 0,
+      env: testEnvironment,
+      jwks,
+    })
+    servers.push(server)
+    await once(server, 'listening')
+
+    const address = server.address()
+    const port =
+      address !== null && typeof address !== 'string'
+        ? String(address.port)
+        : '0'
+    const response = await fetch(
+      `http://127.0.0.1:${port}/api/analysis/summary`,
+      {
+        method: 'POST',
+        headers: await authenticatedHeaders({
+          Origin: appOrigin,
+          'Content-Type': 'application/json',
+        }),
+        body: '{invalid json',
+      },
+    )
+    expect(await summarizeResponse(response)).toEqual({
+      status: 400,
+      body: {
+        error: {
+          code: 'INVALID_ANALYSIS_REQUEST',
+          message: 'The request body must be valid JSON.',
+        },
+      },
+    })
+  })
+})
 
 describe('GET /api/destinations', () => {
   it('registers the route behind the shared authentication middleware', async () => {
