@@ -11,7 +11,6 @@ import {
   DraftError,
 } from '#features/drafts/draft-error'
 import {
-  acquireDraftLock,
   type DraftLockLease,
   hasDraftLockSupport,
 } from '#features/drafts/draft-lock'
@@ -35,9 +34,9 @@ import {
 } from '#features/editor/compose-discard'
 import {
   clearDraftVerification,
-  recoverPendingDeliveries,
   updateDraftArticle,
 } from '#features/editor/compose-draft'
+import { activateComposeDraft } from '#features/editor/compose-draft-activation'
 import type { FailedImportCleanup } from '#features/editor/compose-history'
 import { ComposeIntake } from '#features/editor/compose-intake'
 import { loadComposeDraftList } from '#features/editor/compose-list'
@@ -359,56 +358,29 @@ export class ComposeController {
     }
     if (this.#isDisposed()) return err(controllerUnavailableError())
 
-    const lockResult = await acquireDraftLock(draftId)
-    const nextLease = lockResult.isOk() ? lockResult.value : null
-    const nextLockState: ComposeLockState = lockResult.isErr()
-      ? 'unsupported'
-      : nextLease === null
-        ? 'locked'
-        : 'owned'
-
-    if (this.#isDisposed()) {
-      if (nextLease !== null) await nextLease.release()
-      return err(controllerUnavailableError())
-    }
-
-    const loaded = await this.store.getDraft(draftId)
-    if (this.#isDisposed()) {
-      if (nextLease !== null) await nextLease.release()
-      return err(controllerUnavailableError())
-    }
-    if (loaded.isErr()) {
-      if (nextLease !== null) await nextLease.release()
+    const activation = await activateComposeDraft(draftId, {
+      store: this.store,
+      isDisposed: () => this.#isDisposed(),
+      isCurrentQueue: (queue) => this.#queue === queue,
+      onQueueStateChange: (saveState, error) => {
+        this.#setState({
+          saveState,
+          errorMessage: error?.message ?? null,
+        })
+      },
+    })
+    if (activation.isErr()) {
       this.#resumeCurrentDraft()
-      return err(loaded.error)
-    }
-    if (loaded.value === null) {
-      if (nextLease !== null) await nextLease.release()
-      this.#resumeCurrentDraft()
-      return err(
-        new DraftError(
-          'draft-not-found',
-          'This local draft could not be found.',
-        ),
-      )
+      return err(activation.error)
     }
 
-    const recovered =
-      nextLease === null ? loaded.value : recoverPendingDeliveries(loaded.value)
-    let nextQueue: DraftSaveQueue | null = null
-    if (nextLease !== null) {
-      nextQueue = new DraftSaveQueue(
-        this.store,
-        recovered,
-        (saveState, error) => {
-          if (this.#isDisposed() || this.#queue !== nextQueue) return
-          this.#setState({
-            saveState,
-            errorMessage: error?.message ?? null,
-          })
-        },
-      )
-    }
+    const {
+      draft: recovered,
+      lease: nextLease,
+      queue: nextQueue,
+      lockState: nextLockState,
+      recoveredPending,
+    } = activation.value
 
     this.#draft = recovered
     this.#lease = nextLease
@@ -421,14 +393,14 @@ export class ComposeController {
       ],
       canEdit: nextLease !== null,
       lockState: nextLockState,
-      saveState: recovered === loaded.value ? 'saved' : 'saving',
+      saveState: recoveredPending ? 'saving' : 'saved',
       errorMessage: null,
       intakeError: null,
       discardOpen: false,
       isLoading: false,
     })
 
-    if (nextQueue !== null && recovered !== loaded.value) {
+    if (nextQueue !== null && recoveredPending) {
       nextQueue.enqueue(recovered)
       const recoverySave = await nextQueue.flush()
       if (recoverySave.isErr()) this.#showError(recoverySave.error)
