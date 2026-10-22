@@ -1,24 +1,22 @@
-import { Button } from '@fohte/ui/button'
-import { Input } from '@fohte/ui/input'
-import { Panel } from '@fohte/ui/panel'
 import type { BookmarkDraft } from 'api/contracts'
+import { useState } from 'react'
 
-function draftTitle(draft: BookmarkDraft): string {
-  const articleTitle = draft.article?.title
-  if (articleTitle !== undefined && articleTitle.length > 0) return articleTitle
-
-  const sourceTitle = draft.source.title
-  return sourceTitle !== undefined && sourceTitle.length > 0
-    ? sourceTitle
-    : draft.source.url
-}
+import { ComposeArticleDetailsDialog } from '#components/compose-article-details-dialog'
+import { ComposeArticleHeader } from '#components/compose-article-header'
+import { ComposeDraftManagerDialog } from '#components/compose-draft-manager-dialog'
 
 export function ComposeDraftPanel({
   activeDraft,
   drafts,
   canEdit,
+  canCreate,
   canSwitchDraft,
+  saveState,
+  sourceUrl,
+  intakeError,
   articleTextError,
+  onSourceUrlChange,
+  onOpenSource,
   onSelectDraft,
   onTitleChange,
   onArticleTextChange,
@@ -27,124 +25,64 @@ export function ComposeDraftPanel({
   activeDraft: BookmarkDraft | null
   drafts: BookmarkDraft[]
   canEdit: boolean
+  canCreate: boolean
   canSwitchDraft: boolean
+  saveState: 'saving' | 'saved' | 'failed'
+  sourceUrl: string
+  intakeError: string | null
   articleTextError: string | null
+  onSourceUrlChange: (value: string) => void
+  onOpenSource: () => void
   onSelectDraft: (id: string) => void
   onTitleChange: (value: string) => void
   onArticleTextChange: (value: string) => void
   onRequestDiscard: () => void
 }) {
-  const title = activeDraft?.article?.title ?? ''
-  const articleText = activeDraft?.article?.text ?? ''
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [draftManagerOpen, setDraftManagerOpen] = useState(false)
 
   return (
-    <Panel padding="md" className="space-y-5 rounded-lg p-5 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="font-medium">Draft editor</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {activeDraft === null
-              ? 'Choose a draft or paste a URL above.'
-              : 'Changes are saved as you type.'}
-          </p>
-        </div>
-        {activeDraft !== null && (
-          <Button
-            disabled={!canEdit}
-            onClick={onRequestDiscard}
-            variant="destructive"
-            size="sm"
-          >
-            Discard
-          </Button>
-        )}
-      </div>
-
-      {drafts.length > 0 && (
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium" htmlFor="draft-selection">
-            Saved drafts
-          </label>
-          <select
-            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
-            disabled={!canSwitchDraft}
-            id="draft-selection"
-            onChange={(event) => {
-              onSelectDraft(event.currentTarget.value)
-            }}
-            value={activeDraft?.id ?? ''}
-          >
-            <option disabled value="">
-              Select a draft
-            </option>
-            {drafts.map((draft) => (
-              <option key={draft.id} value={draft.id}>
-                {draftTitle(draft)}
-              </option>
-            ))}
-          </select>
-        </div>
+    <>
+      <ComposeArticleHeader
+        activeDraft={activeDraft}
+        draftCount={drafts.length}
+        onOpenDetails={() => {
+          setDetailsOpen(true)
+        }}
+        onOpenDrafts={() => {
+          setDraftManagerOpen(true)
+        }}
+        saveState={saveState}
+      />
+      {activeDraft !== null && (
+        <ComposeArticleDetailsDialog
+          activeDraft={activeDraft}
+          articleTextError={articleTextError}
+          canEdit={canEdit}
+          onArticleTextChange={onArticleTextChange}
+          onOpenChange={setDetailsOpen}
+          onTitleChange={onTitleChange}
+          open={detailsOpen}
+        />
       )}
-
-      {activeDraft === null ? (
-        <div className="rounded-md border border-dashed border-border px-4 py-8 text-center">
-          <p className="font-medium">No draft is open</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {drafts.length === 0
-              ? 'A pasted URL creates your first local draft.'
-              : 'Select a saved draft or create another one.'}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Article URL
-            </p>
-            <p className="break-all text-sm">{activeDraft.source.url}</p>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="article-title">
-              Title
-            </label>
-            <Input
-              disabled={!canEdit}
-              id="article-title"
-              onChange={(event) => {
-                onTitleChange(event.currentTarget.value)
-              }}
-              value={title}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="article-text">
-              Manual article text
-            </label>
-            <textarea
-              aria-describedby={
-                articleTextError === null ? undefined : 'article-text-error'
-              }
-              className="min-h-36 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!canEdit}
-              id="article-text"
-              onChange={(event) => {
-                onArticleTextChange(event.currentTarget.value)
-              }}
-              placeholder="Paste or write article text here."
-              value={articleText}
-            />
-            {articleTextError !== null && (
-              <p
-                className="text-sm text-destructive"
-                id="article-text-error"
-                role="alert"
-              >
-                {articleTextError}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-    </Panel>
+      <ComposeDraftManagerDialog
+        activeDraft={activeDraft}
+        canCreate={canCreate}
+        canDiscard={canEdit}
+        canSwitchDraft={canSwitchDraft}
+        drafts={drafts}
+        intakeError={intakeError}
+        onOpenChange={setDraftManagerOpen}
+        onOpenSource={onOpenSource}
+        onRequestDiscard={() => {
+          setDraftManagerOpen(false)
+          onRequestDiscard()
+        }}
+        onSelectDraft={onSelectDraft}
+        onSourceUrlChange={onSourceUrlChange}
+        open={draftManagerOpen}
+        sourceUrl={sourceUrl}
+      />
+    </>
   )
 }

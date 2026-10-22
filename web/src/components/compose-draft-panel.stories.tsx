@@ -5,17 +5,17 @@ import { ComposeDraftPanel } from '#components/compose-draft-panel'
 
 const draft: BookmarkDraft = {
   version: 1,
-  id: '00000000-0000-4000-8000-000000000001',
+  id: '00000000-0000-4000-8000-000000000104',
   source: {
     version: 1,
-    url: 'https://example.test/article',
-    title: 'A sample article title',
+    url: 'https://stories.example.test/glass-lantern',
+    title: 'A fictional glass lantern note',
     partial: true,
   },
   article: {
-    url: 'https://example.test/article',
-    title: 'A sample article title',
-    text: 'A short fictional passage for the editor preview.',
+    url: 'https://stories.example.test/glass-lantern',
+    title: 'A fictional glass lantern note',
+    text: 'A fictional passage about making a glass lantern.',
     source: 'manual',
     partial: true,
   },
@@ -31,8 +31,14 @@ const meta = {
     activeDraft: draft,
     drafts: [draft],
     canEdit: true,
+    canCreate: true,
     canSwitchDraft: true,
+    saveState: 'saved',
+    sourceUrl: '',
+    intakeError: null,
     articleTextError: null,
+    onSourceUrlChange: () => undefined,
+    onOpenSource: () => undefined,
     onSelectDraft: () => undefined,
     onTitleChange: () => undefined,
     onArticleTextChange: () => undefined,
@@ -44,29 +50,35 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-export const Editing: Story = {
-  name: 'The editor shows the selected article details.',
+export const SavedArticle: Story = {
+  name: 'The compact header identifies the saved article.',
 }
 
 export const Empty: Story = {
-  args: { activeDraft: null, drafts: [] },
-  name: 'The editor invites the reader to choose or create a draft.',
+  args: { activeDraft: null, drafts: [], canEdit: false, canCreate: true },
+  name: 'The compact header opens draft management without an active draft.',
+}
+
+export const Saving: Story = {
+  args: { saveState: 'saving' },
+  name: 'The compact header shows that the latest input is being saved.',
+}
+
+export const SaveFailed: Story = {
+  args: { saveState: 'failed' },
+  name: 'The compact header keeps the failed save state visible.',
 }
 
 export const ReadOnly: Story = {
   args: { canEdit: false },
-  name: 'The article fields are disabled while another saved draft stays available.',
+  name: 'The compact header keeps read-only draft management available.',
 }
 
 export const DeliveryInProgress: Story = {
-  args: { canEdit: false, canSwitchDraft: false },
-  name: 'The editor prevents draft switching during delivery.',
-}
-
-export const ArticleTextTooLong: Story = {
   args: {
-    articleTextError:
-      'Article text must be 100,000 UTF-16 code units or fewer.',
+    canEdit: false,
+    canCreate: false,
+    canSwitchDraft: false,
   },
-  name: 'The editor explains why an oversized article text was rejected.',
+  name: 'The compact header preserves delivery restrictions.',
 }

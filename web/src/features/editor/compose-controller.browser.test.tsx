@@ -325,6 +325,80 @@ describe('ComposeController in a browser', () => {
     expect(captureOutput(actual)).toEqual(expected)
   })
 
+  it('opens a separate manual URL draft while preserving edits to the current draft', async () => {
+    const store = createIndexedDbDraftStore()
+    const existingDraftId = '00000000-0000-4000-8000-000000000211'
+    const existingUrl = 'https://fictional.example.test/first-article'
+    const newUrl = 'https://fictional.example.test/second-article'
+    const existingDraft: BookmarkDraft = {
+      version: 1,
+      id: existingDraftId,
+      source: {
+        version: 1,
+        url: existingUrl,
+        title: 'A fictional first article',
+        partial: true,
+      },
+      article: {
+        url: existingUrl,
+        title: 'A fictional first article',
+        text: 'A fictional first passage.',
+        source: 'manual',
+        partial: true,
+      },
+      commonComment: 'A fictional first comment.',
+      destinations: [],
+      delivery: [],
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    }
+    valueOrThrow(await store.addDraft(existingDraft))
+
+    const controller = new ComposeController(store)
+    await controller.start(existingDraftId)
+    controller.updateTitle('A revised fictional title')
+    controller.updateArticleText('A revised fictional passage.')
+    controller.updateCommonComment('A revised fictional comment.')
+    const opened = await controller.openSource(
+      { version: 1, url: newUrl, partial: true },
+      { cleanupUrl: '/compose?keep=yes#article', intake: 'manual' },
+    )
+    const activeNewDraftUrl = controller.state.activeDraft?.source.url ?? null
+    await controller.selectDraft(existingDraftId)
+    const restored = await store.getDraft(existingDraftId)
+    const savedDrafts = await store.listDrafts()
+    await controller.dispose()
+
+    const actual = {
+      openedNewDraft: opened.isOk(),
+      activeNewDraftUrl,
+      savedDraftCount: savedDrafts.isOk()
+        ? savedDrafts.value.drafts.length
+        : null,
+      restoredExistingDraft:
+        restored.isErr() || restored.value === null
+          ? null
+          : { ...restored.value, updatedAt: '<saved timestamp>' },
+    }
+
+    expect(captureOutput(actual)).toEqual({
+      openedNewDraft: true,
+      activeNewDraftUrl: newUrl,
+      savedDraftCount: 2,
+      restoredExistingDraft: {
+        ...existingDraft,
+        article: {
+          url: existingUrl,
+          title: 'A revised fictional title',
+          text: 'A revised fictional passage.',
+          source: 'manual',
+          partial: true,
+        },
+        commonComment: 'A revised fictional comment.',
+        updatedAt: '<saved timestamp>',
+      },
+    })
+  })
+
   it.each(['shared', 'fetched'] as const)(
     'marks pasted text from a %s article as manual and clears analysis in one saved snapshot',
     async (source) => {

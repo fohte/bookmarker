@@ -7,7 +7,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@fohte/ui/dialog'
-import { Input } from '@fohte/ui/input'
 import { Panel } from '@fohte/ui/panel'
 import type {
   DestinationDraft,
@@ -92,15 +91,6 @@ export function ComposeScreen({
           </p>
           <h1 className="mt-1 text-2xl font-semibold">Article drafts</h1>
         </div>
-        <p className="text-sm text-muted-foreground" role="status">
-          {state.saveState === 'saving'
-            ? 'Saving…'
-            : state.saveState === 'failed'
-              ? 'Save failed'
-              : activeDraft === null
-                ? 'On this device'
-                : 'Saved on this device'}
-        </p>
       </header>
 
       {state.errorMessage !== null && (
@@ -148,40 +138,23 @@ export function ComposeScreen({
         </div>
       )}
 
-      <Panel padding="md" className="space-y-3 rounded-lg p-5 sm:p-6">
-        <div>
-          <h2 className="font-medium">New draft</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Paste an article URL to start a separate draft.
-          </p>
-        </div>
-        <form
-          className="flex flex-col gap-2 sm:flex-row"
-          onSubmit={(event) => {
-            event.preventDefault()
-            onOpenSource()
-          }}
-        >
-          <label className="sr-only" htmlFor="source-url">
-            Article URL
-          </label>
-          <Input
-            autoComplete="url"
-            id="source-url"
-            onChange={(event) => {
-              onSourceUrlChange(event.currentTarget.value)
-            }}
-            placeholder="https://example.test/article"
-            value={sourceUrl}
-          />
-          <Button
-            disabled={!canCreate || sourceUrl.trim().length === 0}
-            type="submit"
-          >
-            Create draft
-          </Button>
-        </form>
-      </Panel>
+      <ComposeDraftPanel
+        activeDraft={activeDraft}
+        articleTextError={articleTextError}
+        canCreate={canCreate}
+        canEdit={canEdit}
+        canSwitchDraft={!deliveryBusy}
+        drafts={state.drafts}
+        intakeError={state.intakeError}
+        onArticleTextChange={onArticleTextChange}
+        onOpenSource={onOpenSource}
+        onRequestDiscard={onRequestDiscard}
+        onSelectDraft={onSelectDraft}
+        onSourceUrlChange={onSourceUrlChange}
+        onTitleChange={onTitleChange}
+        saveState={state.saveState}
+        sourceUrl={sourceUrl}
+      />
 
       {state.isLoading ? (
         <Panel
@@ -193,17 +166,6 @@ export function ComposeScreen({
       ) : (
         <section className="grid items-start gap-6 lg:grid-cols-2">
           <div className="space-y-6">
-            <ComposeDraftPanel
-              activeDraft={activeDraft}
-              canEdit={canEdit}
-              canSwitchDraft={!deliveryBusy}
-              articleTextError={articleTextError}
-              drafts={state.drafts}
-              onArticleTextChange={onArticleTextChange}
-              onRequestDiscard={onRequestDiscard}
-              onSelectDraft={onSelectDraft}
-              onTitleChange={onTitleChange}
-            />
             <ComposeAnalysisPanel
               {...analysis}
               canEdit={canEdit && !state.isLoading}
