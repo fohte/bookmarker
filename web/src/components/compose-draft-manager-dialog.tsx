@@ -9,15 +9,7 @@ import {
 import { Input } from '@fohte/ui/input'
 import type { BookmarkDraft } from 'api/contracts'
 
-function draftTitle(draft: BookmarkDraft): string {
-  const articleTitle = draft.article?.title
-  if (articleTitle !== undefined && articleTitle.length > 0) return articleTitle
-
-  const sourceTitle = draft.source.title
-  return sourceTitle !== undefined && sourceTitle.length > 0
-    ? sourceTitle
-    : draft.source.url
-}
+import { getComposeDraftTitle } from '#components/compose-draft-title'
 
 export function ComposeDraftManagerDialog({
   open,
@@ -44,7 +36,7 @@ export function ComposeDraftManagerDialog({
   intakeError: string | null
   onOpenChange: (open: boolean) => void
   onSourceUrlChange: (value: string) => void
-  onOpenSource: () => void
+  onOpenSource: () => Promise<boolean>
   onSelectDraft: (id: string) => void
   onRequestDiscard: () => void
 }) {
@@ -78,7 +70,7 @@ export function ComposeDraftManagerDialog({
                 </option>
                 {drafts.map((draft) => (
                   <option key={draft.id} value={draft.id}>
-                    {draftTitle(draft)}
+                    {getComposeDraftTitle(draft, draft.source.url)}
                   </option>
                 ))}
               </select>
@@ -89,7 +81,9 @@ export function ComposeDraftManagerDialog({
             className="space-y-2"
             onSubmit={(event) => {
               event.preventDefault()
-              onOpenSource()
+              void onOpenSource().then((opened) => {
+                if (opened) onOpenChange(false)
+              })
             }}
           >
             <div className="space-y-1.5">

@@ -31,7 +31,7 @@ export type ComposeScreenProps = {
   state: ComposeState
   sourceUrl: string
   onSourceUrlChange: (value: string) => void
-  onOpenSource: () => void
+  onOpenSource: () => Promise<boolean>
   onSelectDraft: (id: string) => void
   onTitleChange: (value: string) => void
   onArticleTextChange: (value: string) => void

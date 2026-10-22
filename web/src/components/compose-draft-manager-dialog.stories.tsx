@@ -38,7 +38,7 @@ const meta = {
     intakeError: null,
     onOpenChange: () => undefined,
     onSourceUrlChange: () => undefined,
-    onOpenSource: () => undefined,
+    onOpenSource: () => Promise.resolve(true),
     onSelectDraft: () => undefined,
     onRequestDiscard: () => undefined,
   },

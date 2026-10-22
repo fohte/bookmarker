@@ -1,7 +1,13 @@
 import '#index.css'
 
 import type { BookmarkDraft } from 'api/contracts'
-import { act, createElement, type ReactNode, useState } from 'react'
+import {
+  act,
+  type ComponentProps,
+  createElement,
+  type ReactNode,
+  useState,
+} from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { userEvent } from 'vitest/browser'
@@ -37,6 +43,29 @@ function draft(id: string, title: string): BookmarkDraft {
 
 const firstDraft = draft(firstDraftId, 'A fictional first article')
 const secondDraft = draft(secondDraftId, 'A fictional second article')
+
+function panelProps(
+  overrides: Partial<ComponentProps<typeof ComposeDraftPanel>> = {},
+): ComponentProps<typeof ComposeDraftPanel> {
+  return {
+    activeDraft: firstDraft,
+    drafts: [firstDraft, secondDraft],
+    canEdit: true,
+    canCreate: true,
+    canSwitchDraft: true,
+    saveState: 'saved',
+    sourceUrl: '',
+    intakeError: null,
+    articleTextError: null,
+    onSourceUrlChange: () => undefined,
+    onOpenSource: () => Promise.resolve(true),
+    onSelectDraft: () => undefined,
+    onTitleChange: () => undefined,
+    onArticleTextChange: () => undefined,
+    onRequestDiscard: () => undefined,
+    ...overrides,
+  }
+}
 
 let mounted: { container: HTMLDivElement; root: Root } | null = null
 
@@ -94,61 +123,48 @@ function EditableDraftPanel() {
 
   return (
     <ComposeDraftPanel
-      activeDraft={activeDraft}
-      articleTextError="The fictional article text exceeds the allowed length."
-      canCreate
-      canEdit
-      canSwitchDraft
-      drafts={[firstDraft, secondDraft]}
-      intakeError={null}
-      onArticleTextChange={(text) => {
-        setActiveDraft((current) => {
-          const article = current.article
-          return article === undefined
-            ? current
-            : { ...current, article: { ...article, text } }
-        })
-      }}
-      onOpenSource={() => undefined}
-      onRequestDiscard={() => undefined}
-      onSelectDraft={() => undefined}
-      onSourceUrlChange={() => undefined}
-      onTitleChange={(title) => {
-        setActiveDraft((current) => {
-          const article = current.article
-          return article === undefined
-            ? current
-            : { ...current, article: { ...article, title } }
-        })
-      }}
-      saveState="saved"
-      sourceUrl=""
+      {...panelProps({
+        activeDraft,
+        articleTextError:
+          'The fictional article text exceeds the allowed length.',
+        onArticleTextChange: (text) => {
+          setActiveDraft((current) => {
+            const article = current.article
+            return article === undefined
+              ? current
+              : { ...current, article: { ...article, text } }
+          })
+        },
+        onTitleChange: (title) => {
+          setActiveDraft((current) => {
+            const article = current.article
+            return article === undefined
+              ? current
+              : { ...current, article: { ...article, title } }
+          })
+        },
+      })}
     />
   )
 }
 
-function EmptyDraftPanel({ onCreate }: { onCreate: (url: string) => void }) {
+function EmptyDraftPanel({
+  onCreate,
+}: {
+  onCreate: (url: string) => Promise<boolean>
+}) {
   const [sourceUrl, setSourceUrl] = useState('')
 
   return (
     <ComposeDraftPanel
-      activeDraft={null}
-      articleTextError={null}
-      canCreate
-      canEdit={false}
-      canSwitchDraft
-      drafts={[]}
-      intakeError={null}
-      onArticleTextChange={() => undefined}
-      onOpenSource={() => {
-        onCreate(sourceUrl)
-      }}
-      onRequestDiscard={() => undefined}
-      onSelectDraft={() => undefined}
-      onSourceUrlChange={setSourceUrl}
-      onTitleChange={() => undefined}
-      saveState="saved"
-      sourceUrl={sourceUrl}
+      {...panelProps({
+        activeDraft: null,
+        drafts: [],
+        canEdit: false,
+        sourceUrl,
+        onSourceUrlChange: setSourceUrl,
+        onOpenSource: () => onCreate(sourceUrl),
+      })}
     />
   )
 }
@@ -211,23 +227,15 @@ describe('ComposeDraftPanel in a browser', () => {
   it('keeps saved drafts selectable after discard or while a draft is read-only', async () => {
     const selectedAfterDiscard: string[] = []
     mount(
-      createElement(ComposeDraftPanel, {
-        activeDraft: null,
-        drafts: [firstDraft, secondDraft],
-        canEdit: false,
-        canCreate: true,
-        canSwitchDraft: true,
-        saveState: 'saved',
-        sourceUrl: '',
-        intakeError: null,
-        articleTextError: null,
-        onSourceUrlChange: () => undefined,
-        onOpenSource: () => undefined,
-        onSelectDraft: (id: string) => selectedAfterDiscard.push(id),
-        onTitleChange: () => undefined,
-        onArticleTextChange: () => undefined,
-        onRequestDiscard: () => undefined,
-      }),
+      createElement(
+        ComposeDraftPanel,
+        panelProps({
+          activeDraft: null,
+          drafts: [firstDraft, secondDraft],
+          canEdit: false,
+          onSelectDraft: (id: string) => selectedAfterDiscard.push(id),
+        }),
+      ),
     )
     await clickButton('Drafts (2)')
     const afterDiscardSelector = document.querySelector('#draft-selection')
@@ -238,6 +246,9 @@ describe('ComposeDraftPanel in a browser', () => {
     await act(async () => {
       await userEvent.selectOptions(afterDiscardSelector, secondDraftId)
     })
+    await waitFor(() => document.querySelector('[role="dialog"]') === null)
+    const managerClosedAfterDiscardSelection =
+      document.querySelector('[role="dialog"]') === null
 
     const current = mounted
     if (current !== null) {
@@ -250,23 +261,14 @@ describe('ComposeDraftPanel in a browser', () => {
 
     const selectedWhileReadOnly: string[] = []
     mount(
-      createElement(ComposeDraftPanel, {
-        activeDraft: firstDraft,
-        drafts: [firstDraft, secondDraft],
-        canEdit: false,
-        canCreate: true,
-        canSwitchDraft: true,
-        saveState: 'saved',
-        sourceUrl: '',
-        intakeError: null,
-        articleTextError: null,
-        onSourceUrlChange: () => undefined,
-        onOpenSource: () => undefined,
-        onSelectDraft: (id: string) => selectedWhileReadOnly.push(id),
-        onTitleChange: () => undefined,
-        onArticleTextChange: () => undefined,
-        onRequestDiscard: () => undefined,
-      }),
+      createElement(
+        ComposeDraftPanel,
+        panelProps({
+          activeDraft: firstDraft,
+          canEdit: false,
+          onSelectDraft: (id: string) => selectedWhileReadOnly.push(id),
+        }),
+      ),
     )
     await clickButton('Drafts (2)')
     const readOnlySelector = document.querySelector('#draft-selection')
@@ -277,15 +279,20 @@ describe('ComposeDraftPanel in a browser', () => {
     await act(async () => {
       await userEvent.selectOptions(readOnlySelector, secondDraftId)
     })
+    await waitFor(() => document.querySelector('[role="dialog"]') === null)
+    const managerClosedAfterReadOnlySelection =
+      document.querySelector('[role="dialog"]') === null
 
     const actual = {
       afterDiscard: {
         selectorDisabled: afterDiscardDisabled,
         selectedDraftIds: selectedAfterDiscard,
+        managerClosed: managerClosedAfterDiscardSelection,
       },
       whileReadOnly: {
         selectorDisabled: readOnlyDisabled,
         selectedDraftIds: selectedWhileReadOnly,
+        managerClosed: managerClosedAfterReadOnlySelection,
       },
     }
 
@@ -293,10 +300,12 @@ describe('ComposeDraftPanel in a browser', () => {
       afterDiscard: {
         selectorDisabled: false,
         selectedDraftIds: [secondDraftId],
+        managerClosed: true,
       },
       whileReadOnly: {
         selectorDisabled: false,
         selectedDraftIds: [secondDraftId],
+        managerClosed: true,
       },
     })
   })
@@ -305,7 +314,10 @@ describe('ComposeDraftPanel in a browser', () => {
     const createdUrls: string[] = []
     mount(
       createElement(EmptyDraftPanel, {
-        onCreate: (url) => createdUrls.push(url),
+        onCreate: (url) => {
+          createdUrls.push(url)
+          return Promise.resolve(true)
+        },
       }),
     )
     await clickButton('Drafts (0)')
@@ -317,32 +329,64 @@ describe('ComposeDraftPanel in a browser', () => {
       await userEvent.fill(sourceUrl, 'https://stories.example.test/new-entry')
       await userEvent.click(buttonByText('Create draft'))
     })
+    await waitFor(() => document.querySelector('[role="dialog"]') === null)
 
-    expect(captureOutput(createdUrls)).toEqual([
-      'https://stories.example.test/new-entry',
-    ])
+    const actual = {
+      createdUrls,
+      managerOpen: document.querySelector('[role="dialog"]') !== null,
+    }
+
+    expect(captureOutput(actual)).toEqual({
+      createdUrls: ['https://stories.example.test/new-entry'],
+      managerOpen: false,
+    })
+  })
+
+  it('keeps URL entry open when creating a draft fails', async () => {
+    const attemptedUrls: string[] = []
+    mount(
+      createElement(EmptyDraftPanel, {
+        onCreate: (url) => {
+          attemptedUrls.push(url)
+          return Promise.resolve(false)
+        },
+      }),
+    )
+    await clickButton('Drafts (0)')
+    const sourceUrl = document.querySelector<HTMLInputElement>('#source-url')
+    if (sourceUrl === null) {
+      throw new Error('The new article URL field was not rendered.')
+    }
+    await act(async () => {
+      await userEvent.fill(
+        sourceUrl,
+        'https://stories.example.test/retry-entry',
+      )
+      await userEvent.click(buttonByText('Create draft'))
+    })
+
+    const actual = {
+      attemptedUrls,
+      sourceUrl: sourceUrl.value,
+      managerOpen: document.querySelector('[role="dialog"]') !== null,
+    }
+
+    expect(captureOutput(actual)).toEqual({
+      attemptedUrls: ['https://stories.example.test/retry-entry'],
+      sourceUrl: 'https://stories.example.test/retry-entry',
+      managerOpen: true,
+    })
   })
 
   it('closes draft management before requesting discard confirmation', async () => {
     const discardRequests: string[] = []
     mount(
-      createElement(ComposeDraftPanel, {
-        activeDraft: firstDraft,
-        drafts: [firstDraft, secondDraft],
-        canEdit: true,
-        canCreate: true,
-        canSwitchDraft: true,
-        saveState: 'saved',
-        sourceUrl: '',
-        intakeError: null,
-        articleTextError: null,
-        onSourceUrlChange: () => undefined,
-        onOpenSource: () => undefined,
-        onSelectDraft: () => undefined,
-        onTitleChange: () => undefined,
-        onArticleTextChange: () => undefined,
-        onRequestDiscard: () => discardRequests.push(firstDraft.id),
-      }),
+      createElement(
+        ComposeDraftPanel,
+        panelProps({
+          onRequestDiscard: () => discardRequests.push(firstDraft.id),
+        }),
+      ),
     )
     await clickButton('Drafts (2)')
     await clickButton('Discard current draft')
@@ -361,23 +405,15 @@ describe('ComposeDraftPanel in a browser', () => {
 
   it('disables draft changes while a delivery is in progress', async () => {
     mount(
-      createElement(ComposeDraftPanel, {
-        activeDraft: firstDraft,
-        drafts: [firstDraft, secondDraft],
-        canEdit: false,
-        canCreate: false,
-        canSwitchDraft: false,
-        saveState: 'saved',
-        sourceUrl: 'https://stories.example.test/another-entry',
-        intakeError: null,
-        articleTextError: null,
-        onSourceUrlChange: () => undefined,
-        onOpenSource: () => undefined,
-        onSelectDraft: () => undefined,
-        onTitleChange: () => undefined,
-        onArticleTextChange: () => undefined,
-        onRequestDiscard: () => undefined,
-      }),
+      createElement(
+        ComposeDraftPanel,
+        panelProps({
+          canEdit: false,
+          canCreate: false,
+          canSwitchDraft: false,
+          sourceUrl: 'https://stories.example.test/another-entry',
+        }),
+      ),
     )
     await clickButton('Drafts (2)')
 

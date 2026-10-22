@@ -38,7 +38,7 @@ const meta = {
     intakeError: null,
     articleTextError: null,
     onSourceUrlChange: () => undefined,
-    onOpenSource: () => undefined,
+    onOpenSource: () => Promise.resolve(true),
     onSelectDraft: () => undefined,
     onTitleChange: () => undefined,
     onArticleTextChange: () => undefined,
@@ -67,18 +67,4 @@ export const Saving: Story = {
 export const SaveFailed: Story = {
   args: { saveState: 'failed' },
   name: 'The compact header keeps the failed save state visible.',
-}
-
-export const ReadOnly: Story = {
-  args: { canEdit: false },
-  name: 'The compact header keeps read-only draft management available.',
-}
-
-export const DeliveryInProgress: Story = {
-  args: {
-    canEdit: false,
-    canCreate: false,
-    canSwitchDraft: false,
-  },
-  name: 'The compact header preserves delivery restrictions.',
 }

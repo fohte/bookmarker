@@ -32,7 +32,7 @@ export function ComposeDraftPanel({
   intakeError: string | null
   articleTextError: string | null
   onSourceUrlChange: (value: string) => void
-  onOpenSource: () => void
+  onOpenSource: () => Promise<boolean>
   onSelectDraft: (id: string) => void
   onTitleChange: (value: string) => void
   onArticleTextChange: (value: string) => void

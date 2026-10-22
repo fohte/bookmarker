@@ -2,15 +2,7 @@ import { Button } from '@fohte/ui/button'
 import { Panel } from '@fohte/ui/panel'
 import type { BookmarkDraft } from 'api/contracts'
 
-function displayTitle(draft: BookmarkDraft): string {
-  const articleTitle = draft.article?.title
-  if (articleTitle !== undefined && articleTitle.length > 0) return articleTitle
-
-  const sourceTitle = draft.source.title
-  return sourceTitle !== undefined && sourceTitle.length > 0
-    ? sourceTitle
-    : 'Untitled article'
-}
+import { getComposeDraftTitle } from '#components/compose-draft-title'
 
 export function ComposeArticleHeader({
   activeDraft,
@@ -43,12 +35,12 @@ export function ComposeArticleHeader({
             title={
               activeDraft === null
                 ? 'No article selected'
-                : displayTitle(activeDraft)
+                : getComposeDraftTitle(activeDraft, 'Untitled article')
             }
           >
             {activeDraft === null
               ? 'No article selected'
-              : displayTitle(activeDraft)}
+              : getComposeDraftTitle(activeDraft, 'Untitled article')}
           </p>
           <p
             className="truncate text-xs text-muted-foreground"
