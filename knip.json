@@ -8,7 +8,7 @@
       "ignoreBinaries": ["playwright"]
     },
     "api": {
-      "entry": ["scripts/authorize-hatena*.ts!"]
+      "entry": ["scripts/authorize-hatena.[t]s!"]
     },
     "web": {
       "ignoreDependencies": [
