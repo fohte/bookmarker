@@ -20,7 +20,10 @@ import {
   type ComposeAnalysisPanelProps,
 } from '#components/compose-analysis-panel'
 import { ComposeCommonCommentPanel } from '#components/compose-common-comment-panel'
-import { ComposeDeliveryPanel } from '#components/compose-delivery-panel'
+import {
+  ComposeDeliveryPanel,
+  type ComposeDeliveryPanelProps,
+} from '#components/compose-delivery-panel'
 import { ComposeDestinationsPanel } from '#components/compose-destinations-panel'
 import { ComposeDraftPanel } from '#components/compose-draft-panel'
 import type { ComposeState } from '#features/editor/compose-controller'
@@ -37,6 +40,7 @@ export type ComposeScreenProps = {
   onCommonCommentChange: (value: string) => void
   onDestinationChange: (destination: DestinationDraft) => void
   analysis: Omit<ComposeAnalysisPanelProps, 'canEdit'>
+  deliveryControls: Omit<ComposeDeliveryPanelProps, 'delivery'>
   destinationMetadata?: DestinationMetadata
   copyConfirmationDestination: DestinationId | null
   onRequestCopyCommonComment: (destination: DestinationId) => void
@@ -61,6 +65,7 @@ export function ComposeScreen({
   onCommonCommentChange,
   onDestinationChange,
   analysis,
+  deliveryControls,
   destinationMetadata,
   copyConfirmationDestination,
   onRequestCopyCommonComment,
@@ -73,7 +78,10 @@ export function ComposeScreen({
   onConfirmDiscard,
 }: ComposeScreenProps) {
   const activeDraft = state.activeDraft
-  const canCreate = state.lockState !== 'unsupported' && !state.isLoading
+  const deliveryBusy = state.deliveryState !== 'idle'
+  const canEdit = state.canEdit && !deliveryBusy
+  const canCreate =
+    state.lockState !== 'unsupported' && !state.isLoading && !deliveryBusy
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6">
@@ -187,7 +195,7 @@ export function ComposeScreen({
           <div className="space-y-6">
             <ComposeDraftPanel
               activeDraft={activeDraft}
-              canEdit={state.canEdit}
+              canEdit={canEdit}
               articleTextError={articleTextError}
               drafts={state.drafts}
               onArticleTextChange={onArticleTextChange}
@@ -197,20 +205,23 @@ export function ComposeScreen({
             />
             <ComposeAnalysisPanel
               {...analysis}
-              canEdit={state.canEdit && !state.isLoading}
+              canEdit={canEdit && !state.isLoading}
             />
-            <ComposeDeliveryPanel delivery={activeDraft?.delivery ?? []} />
+            <ComposeDeliveryPanel
+              delivery={activeDraft?.delivery ?? []}
+              {...deliveryControls}
+            />
           </div>
           <div className="space-y-6">
             <ComposeCommonCommentPanel
               activeDraft={activeDraft}
-              canEdit={state.canEdit}
+              canEdit={canEdit}
               onCommentChange={onCommonCommentChange}
               onRetrySave={onRetrySave}
               saveState={state.saveState}
             />
             <ComposeDestinationsPanel
-              canEdit={state.canEdit}
+              canEdit={canEdit}
               commonComment={activeDraft?.commonComment ?? ''}
               copyConfirmationDestination={copyConfirmationDestination}
               destinations={activeDraft?.destinations ?? []}

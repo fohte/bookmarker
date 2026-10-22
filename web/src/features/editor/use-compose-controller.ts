@@ -2,6 +2,7 @@ import type {
   BookmarkDraft,
   DestinationDraft,
   DestinationId,
+  DestinationMetadata,
   ShareInput,
 } from 'api/contracts'
 import { err } from 'neverthrow'
@@ -102,6 +103,29 @@ export function useComposeController() {
     return Promise.resolve()
   }, [])
 
+  const publishSelectedDestinations = useCallback(
+    (metadata: DestinationMetadata) => {
+      const controller = controllerRef.current
+      if (controller !== null) {
+        return controller.publishSelectedDestinations(metadata)
+      }
+      return Promise.resolve()
+    },
+    [],
+  )
+
+  const retryFailedDeliveries = useCallback((metadata: DestinationMetadata) => {
+    const controller = controllerRef.current
+    if (controller !== null) return controller.retryFailedDeliveries(metadata)
+    return Promise.resolve()
+  }, [])
+
+  const retryDeliverySave = useCallback(() => {
+    const controller = controllerRef.current
+    if (controller !== null) return controller.retryDeliverySave()
+    return Promise.resolve()
+  }, [])
+
   const requestDiscard = useCallback(() => {
     controllerRef.current?.requestDiscard()
   }, [])
@@ -129,6 +153,9 @@ export function useComposeController() {
     selectDraft,
     retryLock,
     retrySave,
+    publishSelectedDestinations,
+    retryFailedDeliveries,
+    retryDeliverySave,
     requestDiscard,
     cancelDiscard,
     discardDraft,

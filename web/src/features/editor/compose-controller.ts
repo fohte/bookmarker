@@ -2,6 +2,7 @@ import {
   type BookmarkDraft,
   type DestinationDraft,
   type DestinationId,
+  type DestinationMetadata,
   type ShareInput,
 } from 'api/contracts'
 import { err, ok, type Result } from 'neverthrow'
@@ -24,6 +25,8 @@ import {
   type ComposeAnalysisSaveCommand,
   matchesAnalysisSaveCommand,
 } from '#features/editor/compose-analysis-command'
+import { ComposeDeliveryCoordinator } from '#features/editor/compose-delivery-coordinator'
+import { createComposeDeliveryDraftPort } from '#features/editor/compose-delivery-draft'
 import {
   copyCommonCommentDraft,
   updateDestinationDraft,
@@ -51,6 +54,8 @@ export class ComposeController {
   #lease: DraftLockLease | null = null
   #queue: DraftSaveQueue | null = null
   #intake: ComposeIntake
+  #deliveryDraftPort: ReturnType<typeof createComposeDeliveryDraftPort>
+  #delivery: ComposeDeliveryCoordinator
   #failedImportCleanups = new Map<string, FailedImportCleanup>()
   #activationPromise: Promise<Result<BookmarkDraft, DraftError>> | null = null
   #disposed = false
@@ -59,6 +64,39 @@ export class ComposeController {
   constructor(
     private readonly store: DraftStore = createIndexedDbDraftStore(),
   ) {
+    this.#deliveryDraftPort = createComposeDeliveryDraftPort({
+      isDisposed: () => this.#disposed,
+      getDraft: () => this.#draft,
+      setDraft: (draft) => {
+        this.#draft = draft
+      },
+      getQueue: () => this.#queue,
+      hasLease: () => this.#lease !== null,
+      getDrafts: () => this.state.drafts,
+      setState: (patch) => {
+        this.#setState(patch)
+      },
+    })
+    this.#delivery = new ComposeDeliveryCoordinator({
+      ...this.#deliveryDraftPort,
+      canOperate: () =>
+        !this.#disposed &&
+        this.#draft !== null &&
+        this.#queue !== null &&
+        this.#lease !== null &&
+        this.state.canEdit &&
+        !this.state.isLoading &&
+        !this.state.discardOpen,
+      flushQueue: async () =>
+        this.#queue === null ? ok(undefined) : await this.#queue.flush(),
+      retryQueue: async () =>
+        this.#queue === null
+          ? err(controllerUnavailableError())
+          : await this.#queue.retry(),
+      setState: (patch) => {
+        this.#setState(patch)
+      },
+    })
     this.#intake = new ComposeIntake({
       store,
       pauseCurrentDraft: () => {
@@ -129,6 +167,16 @@ export class ComposeController {
     input: ShareInput,
     options: { cleanupUrl: string; intake: 'manual' | 'share' },
   ): Promise<Result<BookmarkDraft, DraftError>> {
+    if (this.#delivery.isBusy) {
+      return Promise.resolve(
+        err(
+          new DraftError(
+            'delivery-in-progress',
+            'A delivery is in progress. Try creating a draft again after it finishes.',
+          ),
+        ),
+      )
+    }
     return this.#intake.openSource(input, options)
   }
 
@@ -158,6 +206,8 @@ export class ComposeController {
       draft === null ||
       this.#queue === null ||
       this.#lease === null ||
+      this.#disposed ||
+      this.#delivery.isBusy ||
       !this.state.canEdit ||
       this.state.isLoading ||
       !matchesAnalysisSaveCommand(draft, command)
@@ -177,25 +227,47 @@ export class ComposeController {
     this.#updateDraft((draft) => copyCommonCommentDraft(draft, destinationId))
   }
 
+  publishSelectedDestinations(metadata: DestinationMetadata): Promise<void> {
+    return this.#delivery.publishSelectedDestinations(metadata)
+  }
+
+  retryFailedDeliveries(metadata: DestinationMetadata): Promise<void> {
+    return this.#delivery.retryFailedDeliveries(metadata)
+  }
+
+  retryDeliverySave(): Promise<void> {
+    if (this.#disposed) return Promise.resolve()
+    return this.#delivery.retryDeliverySave()
+  }
+
   async selectDraft(draftId: string): Promise<void> {
+    if (this.#delivery.isBusy) return
     const result = await this.#activateDraft(draftId)
     if (result.isErr()) this.#showError(result.error)
   }
 
   async retryLock(): Promise<void> {
+    if (this.#delivery.isBusy) return
     if (this.#draft === null) return
     const result = await this.#activateDraft(this.#draft.id)
     if (result.isErr()) this.#showError(result.error)
   }
 
   async retrySave(): Promise<void> {
+    if (this.#disposed) return
+    if (this.#delivery.hasPendingResult) {
+      await this.#delivery.retryDeliverySave()
+      return
+    }
     if (this.#queue === null) return
     const result = await this.#queue.retry()
     if (result.isErr()) this.#showError(result.error)
   }
 
   requestDiscard(): void {
-    if (this.#lease !== null) this.#setState({ discardOpen: true })
+    if (this.#lease !== null && !this.#delivery.isBusy) {
+      this.#setState({ discardOpen: true })
+    }
   }
 
   cancelDiscard(): void {
@@ -203,6 +275,7 @@ export class ComposeController {
   }
 
   discardDraft(): Promise<void> {
+    if (this.#delivery.isBusy) return Promise.resolve()
     return discardComposeDraft({
       isLoading: this.state.isLoading,
       draft: this.#draft,
@@ -235,12 +308,12 @@ export class ComposeController {
   dispose(): Promise<void> {
     if (this.#disposePromise !== null) return this.#disposePromise
     this.#disposed = true
-
-    const queue = this.#queue
-    const lease = this.#lease
-    this.#queue = null
-    this.#lease = null
     this.#disposePromise = (async () => {
+      await this.#delivery.waitForOperation()
+      const queue = this.#queue
+      const lease = this.#lease
+      this.#queue = null
+      this.#lease = null
       if (queue !== null) {
         const result = await queue.flush()
         result.match(
@@ -261,6 +334,8 @@ export class ComposeController {
       this.#queue === null ||
       this.#lease === null ||
       !this.state.canEdit ||
+      this.#disposed ||
+      this.#delivery.isBusy ||
       this.state.isLoading
     )
       return

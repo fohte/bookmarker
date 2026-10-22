@@ -79,6 +79,16 @@ export function effectiveDestinationComment(
     : destination.customComment
 }
 
+export function isRaindropCollectionAvailable(
+  collectionId: number,
+  collections: readonly { id: number }[] | undefined,
+): boolean {
+  return (
+    collectionId === -1 ||
+    collections?.some((collection) => collection.id === collectionId) === true
+  )
+}
+
 export function updateDestinationDraft(
   draft: BookmarkDraft,
   destination: DestinationDraft,

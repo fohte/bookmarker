@@ -2,6 +2,7 @@ export type DraftErrorCode =
   | 'controller-unavailable'
   | 'draft-discarded'
   | 'draft-not-found'
+  | 'delivery-in-progress'
   | 'history-update-failed'
   | 'invalid-draft'
   | 'invalid-source'

@@ -39,6 +39,9 @@ const savedState: ComposeState = {
   errorMessage: null,
   intakeError: null,
   discardOpen: false,
+  deliveryState: 'idle',
+  deliveryErrorMessage: null,
+  deliveryAuthenticationRequired: false,
 }
 
 const emptyState: ComposeState = {
@@ -58,6 +61,40 @@ const handlers: Omit<ComposeScreenProps, 'state' | 'sourceUrl'> = {
   articleTextError: null,
   onCommonCommentChange: () => undefined,
   onDestinationChange: () => undefined,
+  deliveryControls: {
+    isLoadingMetadata: false,
+    metadata: {
+      destinations: {
+        hatena: { configured: true },
+        mastodon: {
+          configured: true,
+          maxCharacters: 500,
+          charactersReservedPerUrl: 23,
+        },
+        raindrop: {
+          configured: true,
+          collections: [
+            { id: 187, title: 'Fictional reading list', public: false },
+          ],
+        },
+        x: { configured: true },
+      },
+    },
+    metadataErrorMessage: null,
+    canPublish: true,
+    canRetryFailed: false,
+    hasRetryableTargets: false,
+    canOpenX: false,
+    xIntentHref: null,
+    deliveryState: 'idle',
+    deliveryErrorMessage: null,
+    authenticationRequired: false,
+    signInHref: null,
+    onPublish: () => undefined,
+    onRetryFailed: () => undefined,
+    onRetryDeliverySave: () => undefined,
+    onRetryMetadata: () => undefined,
+  },
   analysis: {
     article: exampleDraft.article ?? null,
     extractionState: 'not-requested',
@@ -119,6 +156,51 @@ export const Saving: Story = {
     sourceUrl: 'https://example.test/another-article',
   },
   name: 'The editor shows that the latest input is being saved.',
+}
+
+const sendingDraft: BookmarkDraft = {
+  ...exampleDraft,
+  destinations: [
+    {
+      destination: 'hatena',
+      selected: true,
+      commentMode: 'common',
+      customComment: '',
+      options: { tags: ['fictional'], private: false },
+    },
+  ],
+  delivery: [
+    {
+      article: {
+        url: 'https://example.test/article',
+        title: 'A sample article title',
+      },
+      target: {
+        destination: 'hatena',
+        operationId: '00000000-0000-4000-8000-000000000011',
+        comment: 'A note to share with this article.',
+        options: { tags: ['fictional'], private: false },
+      },
+    },
+  ],
+}
+
+export const Sending: Story = {
+  args: {
+    state: {
+      ...savedState,
+      drafts: [sendingDraft],
+      activeDraft: sendingDraft,
+      deliveryState: 'sending',
+    },
+    deliveryControls: {
+      ...handlers.deliveryControls,
+      deliveryState: 'sending',
+      canPublish: false,
+    },
+    sourceUrl: 'https://example.test/another-article',
+  },
+  name: 'The editor prevents changes while a saved delivery is sending.',
 }
 
 export const SaveFailed: Story = {

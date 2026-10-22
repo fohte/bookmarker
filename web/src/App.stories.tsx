@@ -26,6 +26,9 @@ export const Preview: Story = {
           errorMessage: null,
           intakeError: null,
           discardOpen: false,
+          deliveryState: 'idle',
+          deliveryErrorMessage: null,
+          deliveryAuthenticationRequired: false,
         }}
         sourceUrl=""
         onSourceUrlChange={() => undefined}
@@ -51,6 +54,24 @@ export const Preview: Story = {
           onSummarizeArticle: () => undefined,
           onVerifyComment: () => undefined,
           onVerificationTargetChange: () => undefined,
+        }}
+        deliveryControls={{
+          isLoadingMetadata: true,
+          metadata: null,
+          metadataErrorMessage: null,
+          canPublish: false,
+          canRetryFailed: false,
+          hasRetryableTargets: false,
+          canOpenX: false,
+          xIntentHref: null,
+          deliveryState: 'idle',
+          deliveryErrorMessage: null,
+          authenticationRequired: false,
+          signInHref: null,
+          onPublish: () => undefined,
+          onRetryFailed: () => undefined,
+          onRetryDeliverySave: () => undefined,
+          onRetryMetadata: () => undefined,
         }}
         copyConfirmationDestination={null}
         onRequestCopyCommonComment={() => undefined}

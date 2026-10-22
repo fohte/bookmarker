@@ -355,7 +355,7 @@ describe('ComposeDestinationCard in a browser', () => {
     expect(captureOutput(actual)).toEqual(expected)
   })
 
-  it('saves unfinished tags while keeping an unconfigured selection unchanged', async () => {
+  it('saves unfinished tags and lets a saved unconfigured selection be removed', async () => {
     const updates: DestinationDraft[] = []
     const container = mount(
       <ComposeDestinationCard
@@ -378,11 +378,14 @@ describe('ComposeDestinationCard in a browser', () => {
       inputNamed('Hatena tags (comma separated)'),
       'stored,unfinished',
     )
+    const selectionInitiallyChecked = selected.checked
+    await act(async () => userEvent.click(selected))
 
     const actual = {
       updates,
       selectionDisabled: selected.disabled,
-      selectionChecked: selected.checked,
+      selectionInitiallyChecked,
+      requestedDeselection: updates.at(-1)?.selected ?? null,
       configurationMessage:
         container.querySelector('article header p')?.textContent ?? null,
     }
@@ -395,13 +398,111 @@ describe('ComposeDestinationCard in a browser', () => {
           customComment: 'A saved individual comment.',
           options: { tags: ['stored', 'unfinished'], private: true },
         },
+        {
+          destination: 'hatena',
+          selected: false,
+          commentMode: 'custom',
+          customComment: 'A saved individual comment.',
+          options: { tags: ['stored'], private: true },
+        },
       ],
-      selectionDisabled: true,
-      selectionChecked: true,
+      selectionDisabled: false,
+      selectionInitiallyChecked: true,
+      requestedDeselection: false,
       configurationMessage:
         'This destination is not connected. Its saved settings are kept.',
     }
 
     expect(captureOutput(actual)).toEqual(expected)
+  })
+
+  it('keeps an unknown Raindrop collection until a real collection is selected', async () => {
+    const raindrop: DestinationDraft = {
+      destination: 'raindrop',
+      selected: true,
+      commentMode: 'common',
+      customComment: '',
+      options: { collectionId: 918, tags: ['unfinished', '', ' tail '] },
+    }
+    const metadata: DestinationMetadata = {
+      destinations: {
+        hatena: { configured: true },
+        mastodon: { configured: true },
+        raindrop: {
+          configured: true,
+          collections: [
+            { id: 71, title: 'Fictional reading collection', public: false },
+          ],
+        },
+        x: { configured: true },
+      },
+    }
+    const updates: DestinationDraft[] = []
+    mount(
+      <ComposeDestinationCard
+        canEdit
+        commonComment="A shared fictional comment."
+        copyConfirmationOpen={false}
+        destination={raindrop}
+        metadata={metadata}
+        onCancelCopyCommonComment={() => undefined}
+        onCopyCommonComment={() => undefined}
+        onDestinationChange={(next) => updates.push(next)}
+        onRequestCopyCommonComment={() => undefined}
+      />,
+    )
+
+    const status = document.querySelector('[role="status"]')?.textContent
+    const trigger = document.getElementById('raindrop-collection')
+    if (!(trigger instanceof HTMLButtonElement)) {
+      throw new Error('Raindrop collection selector was not found.')
+    }
+    await act(async () => userEvent.click(trigger))
+
+    const visibleOptions = [
+      ...document.querySelectorAll('[role="option"]'),
+    ].filter((item) => {
+      const bounds = item.getBoundingClientRect()
+      return bounds.width > 0 && bounds.height > 0
+    })
+    const unknownOption = visibleOptions.find((item) =>
+      item.textContent.includes('Saved collection ID 918'),
+    )
+    const realCollection = visibleOptions.find(
+      (item) => item.textContent.trim() === 'Fictional reading collection',
+    )
+    if (!(unknownOption instanceof HTMLElement)) {
+      throw new Error('The saved Raindrop collection option was not found.')
+    }
+    const unknownOptionDisabled =
+      unknownOption.getAttribute('aria-disabled') === 'true'
+    if (!(realCollection instanceof HTMLElement)) {
+      throw new Error('The real Raindrop collection was not found.')
+    }
+    await act(async () => userEvent.click(realCollection))
+
+    expect(
+      captureOutput({
+        status,
+        unknownOptionDisabled,
+        updates,
+      }),
+    ).toEqual({
+      status:
+        'Saved collection ID 918 is not available. Choose an available collection.',
+      unknownOptionDisabled: true,
+      updates: [
+        {
+          destination: 'raindrop',
+          selected: true,
+          commentMode: 'common',
+          customComment: '',
+          options: {
+            collectionId: 71,
+            tags: ['unfinished', '', ' tail '],
+          },
+        },
+      ],
+    })
   })
 })

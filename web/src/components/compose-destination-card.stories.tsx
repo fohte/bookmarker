@@ -43,7 +43,11 @@ const x: DestinationDraft = {
 const metadata: DestinationMetadata = {
   destinations: {
     hatena: { configured: false },
-    mastodon: { configured: true },
+    mastodon: {
+      configured: true,
+      maxCharacters: 500,
+      charactersReservedPerUrl: 23,
+    },
     raindrop: {
       configured: true,
       collections: [
@@ -81,18 +85,48 @@ export const Hatena: Story = {
 }
 
 export const Mastodon: Story = {
-  args: { destination: mastodon },
-  name: 'Mastodon shows visibility, content warning, and sensitive settings.',
+  args: { destination: mastodon, metadata },
+  name: 'Mastodon shows its character limit and posting settings.',
 }
 
 export const Raindrop: Story = {
-  args: { destination: raindrop },
-  name: 'Raindrop keeps the selected collection and unfinished tag.',
+  args: { destination: raindrop, metadata },
+  name: 'Raindrop offers real collections and keeps its unfinished tag.',
+}
+
+export const UnavailableRaindropCollection: Story = {
+  args: {
+    destination: {
+      ...raindrop,
+      options: { ...raindrop.options, collectionId: 999 },
+    },
+    metadata,
+  },
+  name: 'Raindrop keeps an unavailable saved collection until the user changes it.',
+}
+
+export const RaindropDetailsUnavailable: Story = {
+  args: {
+    destination: raindrop,
+    metadata: {
+      destinations: {
+        ...metadata.destinations,
+        raindrop: {
+          configured: true,
+          metadataError: {
+            code: 'unavailable',
+            message: 'Collection details are temporarily unavailable.',
+          },
+        },
+      },
+    },
+  },
+  name: 'Raindrop keeps the saved collection when collection details fail.',
 }
 
 export const X: Story = {
   args: { destination: x },
-  name: 'X explains that its external composer is not connected yet.',
+  name: 'X keeps its external composer separate from API delivery.',
 }
 
 export const Unconfigured: Story = {
