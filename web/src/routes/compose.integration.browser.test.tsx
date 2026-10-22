@@ -12,7 +12,7 @@ import {
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { userEvent } from 'vitest/browser'
+import { page, userEvent } from 'vitest/browser'
 
 import { createIndexedDbDraftStore } from '#features/drafts/draft-store'
 import { ComposeRoute } from '#routes/compose'
@@ -262,19 +262,24 @@ describe('ComposeRoute publishing in a browser', () => {
       )
       await userEvent.click(input('input[aria-label="Select Hatena Bookmark"]'))
       await userEvent.click(input('input[aria-label="Select Mastodon"]'))
+      await userEvent.click(
+        button('button[aria-label="Open Hatena Bookmark settings"]'),
+      )
       const trigger = button('#hatena-comment-mode')
       await userEvent.click(trigger)
-      const customOption = [
-        ...document.querySelectorAll('[role="option"]'),
-      ].find((option) => option.textContent.trim() === 'Use individual comment')
-      if (!(customOption instanceof HTMLElement)) {
-        throw new Error('The individual comment option was not found.')
-      }
-      await userEvent.click(customOption)
+    })
+    await act(async () => {
+      await page
+        .getByRole('option', {
+          exact: true,
+          name: 'Use individual comment',
+        })
+        .click()
       await userEvent.fill(
         textarea('#hatena-custom-comment'),
         'A separate individual comment 😀 ',
       )
+      await userEvent.click(button('[data-slot="dialog-close"]'))
     })
 
     await waitFor(() =>

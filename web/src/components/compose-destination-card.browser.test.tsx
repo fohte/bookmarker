@@ -1,3 +1,5 @@
+import '#index.css'
+
 import type {
   DestinationDraft,
   DestinationId,
@@ -54,6 +56,14 @@ function buttonNamed(name: string): HTMLButtonElement {
   return button
 }
 
+function buttonWithAriaLabel(name: string): HTMLButtonElement {
+  const button = document.querySelector(`button[aria-label="${name}"]`)
+  if (!(button instanceof HTMLButtonElement)) {
+    throw new Error(`Button with aria-label ${name} was not found.`)
+  }
+  return button
+}
+
 function inputNamed(name: string): HTMLInputElement {
   const input = document.querySelector(`input[aria-label="${name}"]`)
   if (!(input instanceof HTMLInputElement)) {
@@ -104,6 +114,48 @@ function confirmationLayout() {
   }
 }
 
+function settingsLayout() {
+  const dialog = [
+    ...document.querySelectorAll<HTMLElement>('[data-slot="dialog-content"]'),
+  ].find((item) => item.textContent.includes('Mastodon settings'))
+  if (dialog === undefined) throw new Error('Mastodon settings were not open.')
+
+  const lastSetting = [...dialog.querySelectorAll('label')].find((label) =>
+    label.textContent.includes('Mark media as sensitive'),
+  )
+  if (lastSetting === undefined) {
+    throw new Error('Mastodon settings were incomplete.')
+  }
+  const scrollArea = dialog.querySelector<HTMLElement>(
+    '[data-slot="destination-settings-scroll"]',
+  )
+  if (scrollArea === null) {
+    throw new Error('Mastodon settings scroll area was not found.')
+  }
+
+  scrollArea.scrollTop = scrollArea.scrollHeight
+  const dialogRect = dialog.getBoundingClientRect()
+  const scrollAreaRect = scrollArea.getBoundingClientRect()
+  const settingRect = lastSetting.getBoundingClientRect()
+  const tolerance = 1
+
+  return {
+    dialogWithinViewport:
+      dialogRect.left >= -tolerance &&
+      dialogRect.right <= window.innerWidth + tolerance &&
+      dialogRect.top >= -tolerance &&
+      dialogRect.bottom <= window.innerHeight + tolerance,
+    lastSettingWithinScrollArea:
+      settingRect.left >= scrollAreaRect.left - tolerance &&
+      settingRect.right <= scrollAreaRect.right + tolerance &&
+      settingRect.top >= scrollAreaRect.top - tolerance &&
+      settingRect.bottom <= scrollAreaRect.bottom + tolerance,
+    pageHasHorizontalOverflow:
+      document.documentElement.scrollWidth >
+      document.documentElement.clientWidth,
+  }
+}
+
 async function selectOption(
   triggerId: string,
   optionName: string,
@@ -112,15 +164,16 @@ async function selectOption(
   if (!(trigger instanceof HTMLButtonElement)) {
     throw new Error(`Select trigger ${triggerId} was not found.`)
   }
-  await act(async () => userEvent.click(trigger))
-
-  const option = [...document.querySelectorAll('[role="option"]')].find(
-    (item) => item.textContent.trim() === optionName,
-  )
-  if (!(option instanceof HTMLElement)) {
-    throw new Error(`Select option ${optionName} was not found.`)
+  const triggerLabel = trigger.getAttribute('aria-label')
+  if (triggerLabel === null) {
+    throw new Error(`Select trigger ${triggerId} has no accessible name.`)
   }
-  await act(async () => userEvent.click(option))
+  await act(async () =>
+    page.getByRole('combobox', { exact: true, name: triggerLabel }).click(),
+  )
+  await act(async () =>
+    page.getByRole('option', { exact: true, name: optionName }).click(),
+  )
 }
 
 async function setInputValue(
@@ -157,6 +210,7 @@ describe('ComposeDestinationCard in a browser', () => {
 
     function Harness() {
       const [isOpen, setIsOpen] = useState(false)
+      const [settingsOpen, setSettingsOpen] = useState(false)
       currentConfirmationOpen = isOpen
       return (
         <ComposeDestinationCard
@@ -164,6 +218,8 @@ describe('ComposeDestinationCard in a browser', () => {
           commonComment="A shared comment."
           copyConfirmationOpen={isOpen}
           destination={existingDestination}
+          settingsOpen={settingsOpen}
+          onSettingsOpenChange={setSettingsOpen}
           onCancelCopyCommonComment={() => {
             setIsOpen(false)
           }}
@@ -181,12 +237,17 @@ describe('ComposeDestinationCard in a browser', () => {
     }
 
     mount(createElement(Harness))
+    await act(async () =>
+      userEvent.click(buttonWithAriaLabel('Open Hatena Bookmark settings')),
+    )
     await act(async () => userEvent.click(buttonNamed('Copy common comment')))
     const afterRequest = {
       requestedDestinations: [...requestedDestinations],
       copiedDestinations: [...copiedDestinations],
       confirmationTitle:
-        document.querySelector('[role="dialog"] h2')?.textContent ?? null,
+        [...document.querySelectorAll('[role="dialog"] h2')].find(
+          (title) => title.textContent === 'Replace the individual comment?',
+        )?.textContent ?? null,
     }
 
     act(() => {
@@ -220,6 +281,8 @@ describe('ComposeDestinationCard in a browser', () => {
         commonComment="A shared comment."
         copyConfirmationOpen
         destination={existingDestination}
+        settingsOpen={false}
+        onSettingsOpenChange={() => undefined}
         onCancelCopyCommonComment={() => undefined}
         onCopyCommonComment={() => undefined}
         onDestinationChange={() => undefined}
@@ -229,11 +292,11 @@ describe('ComposeDestinationCard in a browser', () => {
 
     const layouts: ReturnType<typeof confirmationLayout>[] = []
     await act(async () => {
-      await page.viewport(1280, 900)
+      await page.viewport(420, 600)
     })
     layouts.push(confirmationLayout())
     await act(async () => {
-      await page.viewport(390, 844)
+      await page.viewport(390, 600)
     })
     layouts.push(confirmationLayout())
 
@@ -257,6 +320,70 @@ describe('ComposeDestinationCard in a browser', () => {
     ])
   })
 
+  it('keeps Mastodon settings usable within mini viewports', async () => {
+    mount(
+      <ComposeDestinationCard
+        canEdit
+        commonComment="A shared comment."
+        copyConfirmationOpen={false}
+        destination={{
+          destination: 'mastodon',
+          selected: false,
+          commentMode: 'custom',
+          customComment: 'A saved individual comment.',
+          options: {
+            visibility: 'private',
+            spoilerText: 'A saved content warning.',
+            sensitive: true,
+          },
+        }}
+        settingsOpen
+        onSettingsOpenChange={() => undefined}
+        onCancelCopyCommonComment={() => undefined}
+        onCopyCommonComment={() => undefined}
+        onDestinationChange={() => undefined}
+        onRequestCopyCommonComment={() => undefined}
+      />,
+    )
+
+    const layouts: ReturnType<typeof settingsLayout>[] = []
+    await act(async () => {
+      await page.viewport(420, 600)
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            resolve()
+          }),
+        )
+      })
+    })
+    layouts.push(settingsLayout())
+    await act(async () => {
+      await page.viewport(390, 600)
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            resolve()
+          }),
+        )
+      })
+    })
+    layouts.push(settingsLayout())
+
+    expect(captureOutput(layouts)).toEqual([
+      {
+        dialogWithinViewport: true,
+        lastSettingWithinScrollArea: true,
+        pageHasHorizontalOverflow: false,
+      },
+      {
+        dialogWithinViewport: true,
+        lastSettingWithinScrollArea: true,
+        pageHasHorizontalOverflow: false,
+      },
+    ])
+  })
+
   it('copies the common comment directly when the individual comment is empty', async () => {
     const copied: string[] = []
     const container = mount(
@@ -269,6 +396,8 @@ describe('ComposeDestinationCard in a browser', () => {
           commentMode: 'common',
           customComment: '',
         }}
+        settingsOpen
+        onSettingsOpenChange={() => undefined}
         onCancelCopyCommonComment={() => undefined}
         onCopyCommonComment={(destination) => {
           copied.push(destination)
@@ -292,6 +421,99 @@ describe('ComposeDestinationCard in a browser', () => {
     expect(captureOutput(actual)).toEqual(expected)
   })
 
+  it('opens settings for an unselected destination and keeps edits after selection changes', async () => {
+    const updates: DestinationDraft[] = []
+    const initialDestination: DestinationDraft = {
+      destination: 'hatena',
+      selected: false,
+      commentMode: 'custom',
+      customComment: 'A note about an imagined garden.',
+      options: { tags: ['quartz'], private: true },
+    }
+    let settingsOpen = false
+
+    function Harness() {
+      const [destination, setDestination] = useState(initialDestination)
+      const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+      settingsOpen = isSettingsOpen
+      return (
+        <ComposeDestinationCard
+          canEdit
+          commonComment="A shared comment."
+          copyConfirmationOpen={false}
+          destination={destination}
+          settingsOpen={isSettingsOpen}
+          onSettingsOpenChange={setIsSettingsOpen}
+          onCancelCopyCommonComment={() => undefined}
+          onCopyCommonComment={() => undefined}
+          onDestinationChange={(next) => {
+            updates.push(next)
+            setDestination(next)
+          }}
+          onRequestCopyCommonComment={() => undefined}
+        />
+      )
+    }
+
+    mount(createElement(Harness))
+    await act(async () =>
+      userEvent.click(buttonWithAriaLabel('Open Hatena Bookmark settings')),
+    )
+    const commentInput = document.querySelector<HTMLTextAreaElement>(
+      '#hatena-custom-comment',
+    )
+    const tagsInput = inputNamed('Hatena tags (comma separated)')
+    if (commentInput === null)
+      throw new Error('The custom comment was missing.')
+    await act(async () =>
+      userEvent.fill(commentInput, 'A note about a fictional observatory.'),
+    )
+    await setInputValue(tagsInput, 'quartz,moonlit')
+    await act(async () => userEvent.click(buttonNamed('Close')))
+    await act(async () => userEvent.click(inputNamed('Select Hatena Bookmark')))
+    await act(async () =>
+      userEvent.click(buttonWithAriaLabel('Open Hatena Bookmark settings')),
+    )
+
+    const reopenedComment = document.querySelector<HTMLTextAreaElement>(
+      '#hatena-custom-comment',
+    )
+    const actual = {
+      updates,
+      selected: inputNamed('Select Hatena Bookmark').checked,
+      settingsOpen,
+      comment: reopenedComment?.value ?? null,
+      tags: inputNamed('Hatena tags (comma separated)').value,
+      private: document.querySelector<HTMLInputElement>(
+        '[role="dialog"] input[type="checkbox"]',
+      )?.checked,
+    }
+    expect(captureOutput(actual)).toEqual({
+      updates: [
+        {
+          ...initialDestination,
+          customComment: 'A note about a fictional observatory.',
+        },
+        {
+          ...initialDestination,
+          customComment: 'A note about a fictional observatory.',
+          options: { tags: ['quartz', 'moonlit'], private: true },
+        },
+        {
+          ...initialDestination,
+          selected: true,
+          customComment: 'A note about a fictional observatory.',
+          options: { tags: ['quartz', 'moonlit'], private: true },
+        },
+      ],
+      selected: true,
+      settingsOpen: true,
+      comment: 'A note about a fictional observatory.',
+      tags: 'quartz,moonlit',
+      private: true,
+    })
+  })
+
   it('keeps custom text while switching to the common comment and back', async () => {
     const updates: DestinationDraft[] = []
     const initialDestination: DestinationDraft = {
@@ -302,6 +524,7 @@ describe('ComposeDestinationCard in a browser', () => {
     function Harness() {
       const [destination, setDestination] = useState(initialDestination)
       const [commonComment, setCommonComment] = useState('A shared comment.')
+      const [settingsOpen, setSettingsOpen] = useState(false)
       return (
         <>
           <ComposeDestinationCard
@@ -309,6 +532,8 @@ describe('ComposeDestinationCard in a browser', () => {
             commonComment={commonComment}
             copyConfirmationOpen={false}
             destination={destination}
+            settingsOpen={settingsOpen}
+            onSettingsOpenChange={setSettingsOpen}
             onCancelCopyCommonComment={() => undefined}
             onCopyCommonComment={() => undefined}
             onDestinationChange={(next) => {
@@ -329,14 +554,21 @@ describe('ComposeDestinationCard in a browser', () => {
       )
     }
 
-    const container = mount(createElement(Harness))
+    mount(createElement(Harness))
+    await act(async () =>
+      userEvent.click(buttonWithAriaLabel('Open Hatena Bookmark settings')),
+    )
     await selectOption('hatena-comment-mode', 'Use common comment')
-    await act(async () => userEvent.click(buttonNamed('Change common comment')))
+    act(() => {
+      buttonNamed('Change common comment').click()
+    })
     await selectOption('hatena-comment-mode', 'Use individual comment')
-    const customComment = container.querySelector<HTMLTextAreaElement>(
+    const customComment = document.querySelector<HTMLTextAreaElement>(
       '#hatena-custom-comment',
     )
-    const preview = container.querySelector('article > div > p')?.textContent
+    const preview = [...document.querySelectorAll('[role="dialog"] p')].find(
+      (paragraph) => paragraph.textContent.startsWith('Preview:'),
+    )?.textContent
 
     const actual = {
       updates,
@@ -357,21 +589,30 @@ describe('ComposeDestinationCard in a browser', () => {
 
   it('saves unfinished tags and lets a saved unconfigured selection be removed', async () => {
     const updates: DestinationDraft[] = []
-    const container = mount(
-      <ComposeDestinationCard
-        canEdit
-        commonComment="A shared comment."
-        copyConfirmationOpen={false}
-        destination={existingDestination}
-        metadata={unconfiguredMetadata}
-        onCancelCopyCommonComment={() => undefined}
-        onCopyCommonComment={() => undefined}
-        onDestinationChange={(destination) => {
-          updates.push(destination)
-        }}
-        onRequestCopyCommonComment={() => undefined}
-      />,
-    )
+    function Harness() {
+      const [destination, setDestination] = useState(existingDestination)
+      const [settingsOpen, setSettingsOpen] = useState(true)
+      return (
+        <ComposeDestinationCard
+          canEdit
+          commonComment="A shared comment."
+          copyConfirmationOpen={false}
+          destination={destination}
+          metadata={unconfiguredMetadata}
+          settingsOpen={settingsOpen}
+          onSettingsOpenChange={setSettingsOpen}
+          onCancelCopyCommonComment={() => undefined}
+          onCopyCommonComment={() => undefined}
+          onDestinationChange={(next) => {
+            updates.push(next)
+            setDestination(next)
+          }}
+          onRequestCopyCommonComment={() => undefined}
+        />
+      )
+    }
+
+    const container = mount(createElement(Harness))
 
     const selected = inputNamed('Select Hatena Bookmark')
     await setInputValue(
@@ -379,6 +620,7 @@ describe('ComposeDestinationCard in a browser', () => {
       'stored,unfinished',
     )
     const selectionInitiallyChecked = selected.checked
+    await act(async () => userEvent.click(buttonNamed('Close')))
     await act(async () => userEvent.click(selected))
 
     const actual = {
@@ -387,7 +629,7 @@ describe('ComposeDestinationCard in a browser', () => {
       selectionInitiallyChecked,
       requestedDeselection: updates.at(-1)?.selected ?? null,
       configurationMessage:
-        container.querySelector('article header p')?.textContent ?? null,
+        container.querySelector('article [role="status"]')?.textContent ?? null,
     }
     const expected = {
       updates: [
@@ -403,14 +645,13 @@ describe('ComposeDestinationCard in a browser', () => {
           selected: false,
           commentMode: 'custom',
           customComment: 'A saved individual comment.',
-          options: { tags: ['stored'], private: true },
+          options: { tags: ['stored', 'unfinished'], private: true },
         },
       ],
-      selectionDisabled: false,
+      selectionDisabled: true,
       selectionInitiallyChecked: true,
       requestedDeselection: false,
-      configurationMessage:
-        'This destination is not connected. Its saved settings are kept.',
+      configurationMessage: 'Not connected',
     }
 
     expect(captureOutput(actual)).toEqual(expected)
@@ -445,6 +686,8 @@ describe('ComposeDestinationCard in a browser', () => {
         copyConfirmationOpen={false}
         destination={raindrop}
         metadata={metadata}
+        settingsOpen
+        onSettingsOpenChange={() => undefined}
         onCancelCopyCommonComment={() => undefined}
         onCopyCommonComment={() => undefined}
         onDestinationChange={(next) => updates.push(next)}
@@ -458,28 +701,20 @@ describe('ComposeDestinationCard in a browser', () => {
       throw new Error('Raindrop collection selector was not found.')
     }
     await act(async () => userEvent.click(trigger))
-
-    const visibleOptions = [
-      ...document.querySelectorAll('[role="option"]'),
-    ].filter((item) => {
-      const bounds = item.getBoundingClientRect()
-      return bounds.width > 0 && bounds.height > 0
+    const unknownOption = page.getByRole('option', {
+      exact: true,
+      name: 'Saved collection ID 918 (not in the available list)',
     })
-    const unknownOption = visibleOptions.find((item) =>
-      item.textContent.includes('Saved collection ID 918'),
-    )
-    const realCollection = visibleOptions.find(
-      (item) => item.textContent.trim() === 'Fictional reading collection',
-    )
-    if (!(unknownOption instanceof HTMLElement)) {
-      throw new Error('The saved Raindrop collection option was not found.')
-    }
     const unknownOptionDisabled =
-      unknownOption.getAttribute('aria-disabled') === 'true'
-    if (!(realCollection instanceof HTMLElement)) {
-      throw new Error('The real Raindrop collection was not found.')
-    }
-    await act(async () => userEvent.click(realCollection))
+      unknownOption.element().getAttribute('aria-disabled') === 'true'
+    await act(async () =>
+      page
+        .getByRole('option', {
+          exact: true,
+          name: 'Fictional reading collection',
+        })
+        .click(),
+    )
 
     expect(
       captureOutput({
