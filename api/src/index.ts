@@ -1,3 +1,5 @@
 import '#bootstrap'
 
-export { greet } from '#greet'
+import { startApiServer } from '#server'
+
+startApiServer()
