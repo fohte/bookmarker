@@ -54,7 +54,7 @@ const emptyState: ComposeState = {
 
 const handlers: Omit<ComposeScreenProps, 'state' | 'sourceUrl'> = {
   onSourceUrlChange: () => undefined,
-  onOpenSource: () => undefined,
+  onOpenSource: () => Promise.resolve(true),
   onSelectDraft: () => undefined,
   onTitleChange: () => undefined,
   onArticleTextChange: () => undefined,

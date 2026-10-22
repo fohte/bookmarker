@@ -59,7 +59,7 @@ export function ComposeRoute() {
     setArticleTextError(null)
   }, [controller.state.activeDraft?.id])
 
-  const openManualSource = async () => {
+  const openManualSource = async (): Promise<boolean> => {
     const parsed = ShareInputSchema.safeParse({
       version: 1,
       url: sourceUrl.trim(),
@@ -67,19 +67,21 @@ export function ComposeRoute() {
     })
     if (!parsed.success) {
       controller.reportIntakeError('Enter a valid HTTP or HTTPS article URL.')
-      return
+      return false
     }
 
     const result = await controller.openSource(parsed.data, {
       cleanupUrl: currentUrlWithoutDraft(),
       intake: 'manual',
     })
-    result.match(
+    return result.match(
       () => {
         setSourceUrl('')
+        return true
       },
       (error) => {
         controller.reportIntakeError(error.message)
+        return false
       },
     )
   }
@@ -105,7 +107,7 @@ export function ComposeRoute() {
       state={controller.state}
       sourceUrl={sourceUrl}
       onSourceUrlChange={setSourceUrl}
-      onOpenSource={() => void openManualSource()}
+      onOpenSource={openManualSource}
       onSelectDraft={(id) => void controller.selectDraft(id)}
       onTitleChange={controller.updateTitle}
       onArticleTextChange={updateArticleText}
