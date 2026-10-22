@@ -9,6 +9,7 @@ import { DeliveryResultSchema } from '#contracts/delivery'
 import { DestinationDraftSchema } from '#contracts/destination'
 import { PublishTargetSchema } from '#contracts/publish'
 import { ShareInputSchema } from '#contracts/share-input'
+import { findDuplicateDestinationIndexes } from '#contracts/unique-destinations'
 
 const DeliverySnapshotSchema = z
   .object({
@@ -38,18 +39,12 @@ export const BookmarkDraftSchema = z
   })
   .strict()
   .superRefine(({ destinations }, context) => {
-    const seen = new Set<string>()
-
-    for (const [index, { destination }] of destinations.entries()) {
-      if (seen.has(destination)) {
-        context.addIssue({
-          code: 'custom',
-          path: ['destinations', index, 'destination'],
-          message: 'Each destination can only appear once.',
-        })
-      }
-
-      seen.add(destination)
+    for (const index of findDuplicateDestinationIndexes(destinations)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['destinations', index, 'destination'],
+        message: 'Each destination can only appear once.',
+      })
     }
   })
 

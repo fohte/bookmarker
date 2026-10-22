@@ -3,10 +3,10 @@ import { z } from 'zod'
 import {
   HatenaOptionsSchema,
   MastodonOptionsSchema,
-  PublishDestinationIdSchema,
   RaindropOptionsSchema,
 } from '#contracts/destination'
 import { HttpUrlSchema } from '#contracts/http'
+import { findDuplicateDestinationIndexes } from '#contracts/unique-destinations'
 
 export const PublishTargetSchema = z.discriminatedUnion('destination', [
   z
@@ -46,18 +46,12 @@ export const PublishRequestSchema = z
   })
   .strict()
   .superRefine(({ targets }, context) => {
-    const seen = new Set<z.infer<typeof PublishDestinationIdSchema>>()
-
-    for (const [index, { destination }] of targets.entries()) {
-      if (seen.has(destination)) {
-        context.addIssue({
-          code: 'custom',
-          path: ['targets', index, 'destination'],
-          message: 'Each destination can only appear once.',
-        })
-      }
-
-      seen.add(destination)
+    for (const index of findDuplicateDestinationIndexes(targets)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['targets', index, 'destination'],
+        message: 'Each destination can only appear once.',
+      })
     }
   })
 
