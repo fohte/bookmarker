@@ -179,6 +179,49 @@ afterEach(async () => {
 })
 
 describe('ComposeController delivery', () => {
+  it('keeps a disconnected saved destination selected without sending', async () => {
+    const base = createIndexedDbDraftStore()
+    const initialDraft = draft()
+    valueOrThrow(await base.addDraft(initialDraft))
+    const fetchMock = vi.fn(() => Promise.resolve(response({ results: [] })))
+    vi.stubGlobal('fetch', fetchMock)
+    const controller = new ComposeController(base)
+    await controller.start(initialDraft.id)
+
+    const disconnectedMetadata: DestinationMetadata = {
+      destinations: {
+        ...metadata.destinations,
+        hatena: { configured: false },
+      },
+    }
+    await controller.publishSelectedDestinations(disconnectedMetadata)
+
+    const actual = {
+      requestCount: fetchMock.mock.calls.length,
+      deliveryState: controller.state.deliveryState,
+      deliveryErrorMessage: controller.state.deliveryErrorMessage,
+      selectedDestination:
+        controller.state.activeDraft?.destinations[0] ?? null,
+      delivery: controller.state.activeDraft?.delivery ?? [],
+    }
+    await controller.dispose()
+
+    expect(captureOutput(actual)).toEqual({
+      requestCount: 0,
+      deliveryState: 'idle',
+      deliveryErrorMessage:
+        'hatena is not connected. Connect it before publishing.',
+      selectedDestination: {
+        destination: 'hatena',
+        selected: true,
+        commentMode: 'common',
+        customComment: 'An inactive individual comment',
+        options: { tags: ['fictional tag'], private: false },
+      },
+      delivery: [],
+    })
+  })
+
   it('waits for the pending snapshot and saves results before showing success', async () => {
     const base = createIndexedDbDraftStore()
     const initialDraft = draft()

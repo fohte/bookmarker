@@ -153,6 +153,14 @@ export const SavingPendingSnapshot: Story = {
   name: 'The editor waits for the pending snapshot before sending.',
 }
 
+export const SavingLatestInput: Story = {
+  args: {
+    deliveryState: 'saving-input',
+    canPublish: false,
+  },
+  name: 'The editor saves the latest input before sending.',
+}
+
 export const ResultSaveFailed: Story = {
   args: {
     delivery: delivery.slice(0, 1),
@@ -187,6 +195,15 @@ export const MetadataUnavailable: Story = {
     canPublish: false,
   },
   name: 'The editor keeps publishing disabled when destination details fail.',
+}
+
+export const LoadingMetadata: Story = {
+  args: {
+    isLoadingMetadata: true,
+    metadata: null,
+    canPublish: false,
+  },
+  name: 'The editor checks which destinations are connected.',
 }
 
 export const XIntentReady: Story = {

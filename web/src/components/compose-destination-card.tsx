@@ -66,7 +66,7 @@ export function ComposeDestinationCard({
   const selectionUnavailable = destinationMetadata?.configured === false
   const raindropMetadata = metadata?.destinations.raindrop
   const raindropCollections = raindropMetadata?.collections
-  const hasSavedRaindropCollection =
+  const savedCollectionAvailable =
     destination.destination === 'raindrop' &&
     isRaindropCollectionAvailable(
       destination.options.collectionId,
@@ -359,7 +359,7 @@ export function ComposeDestinationCard({
                     {collection.title}
                   </SelectItem>
                 ))}
-                {!hasSavedRaindropCollection && (
+                {!savedCollectionAvailable && (
                   <SelectItem
                     disabled
                     value={String(destination.options.collectionId)}
@@ -372,13 +372,12 @@ export function ComposeDestinationCard({
                 )}
               </SelectContent>
             </Select>
-            {raindropCollections !== undefined &&
-              !hasSavedRaindropCollection && (
-                <p className="text-xs text-muted-foreground" role="status">
-                  Saved collection ID {destination.options.collectionId} is not
-                  available. Choose an available collection.
-                </p>
-              )}
+            {raindropCollections !== undefined && !savedCollectionAvailable && (
+              <p className="text-xs text-muted-foreground" role="status">
+                Saved collection ID {destination.options.collectionId} is not
+                available. Choose an available collection.
+              </p>
+            )}
           </div>
           <ComposeDestinationTagsField
             disabled={!canEdit}

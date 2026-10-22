@@ -131,7 +131,7 @@ export const X: Story = {
 
 export const Unconfigured: Story = {
   args: { destination: { ...hatena, selected: true }, metadata },
-  name: 'Hatena stays selected but cannot be changed while unconfigured.',
+  name: 'The disconnected Hatena destination can be deselected.',
 }
 
 export const ConfirmingCopy: Story = {

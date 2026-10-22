@@ -53,10 +53,6 @@ function unknownResponse(request: PublishRequest): DeliveryResponse {
   }
 }
 
-function updatedSnapshot(draft: BookmarkDraft): BookmarkDraft {
-  return structuredClone(draft)
-}
-
 export class ComposeDeliveryCoordinator {
   #busy = false
   #operation: Promise<void> | null = null
@@ -139,7 +135,7 @@ export class ComposeDeliveryCoordinator {
       return
     }
 
-    const pending = updatedSnapshot(appendPendingDeliverySnapshots(draft, plan))
+    const pending = appendPendingDeliverySnapshots(draft, plan)
     await this.#sendPlan(draft, pending, plan, 'Publishing')
   }
 
@@ -167,8 +163,10 @@ export class ComposeDeliveryCoordinator {
     this.port.setState({ deliveryState: 'sending' })
     const response = await this.#publishRequest(plan.request)
     const authenticationRequired = response.authenticationRequired === true
-    const outcome = updatedSnapshot(
-      applyDeliveryResults(pending, plan.request, response.results),
+    const outcome = applyDeliveryResults(
+      pending,
+      plan.request,
+      response.results,
     )
     const saved = await this.#saveOutcome(
       outcome,
@@ -199,7 +197,7 @@ export class ComposeDeliveryCoordinator {
         return
       }
 
-      const pending = updatedSnapshot(makeRetryPending(current, target))
+      const pending = makeRetryPending(current, target)
       const result = await this.#sendPlan(
         current,
         pending,
@@ -212,9 +210,8 @@ export class ComposeDeliveryCoordinator {
   }
 
   async #restoreBeforeSend(draft: BookmarkDraft): Promise<void> {
-    const snapshot = updatedSnapshot(draft)
-    this.port.restoreDraft(snapshot)
-    if (this.port.enqueueSnapshot(snapshot)) {
+    this.port.restoreDraft(draft)
+    if (this.port.enqueueSnapshot(draft)) {
       const rollbackSave = await this.port.flushQueue()
       rollbackSave.match(
         () => undefined,
@@ -298,7 +295,10 @@ export class ComposeDeliveryCoordinator {
   async #publishRequest(request: PublishRequest): Promise<DeliveryResponse> {
     const response = await ResultAsync.fromPromise(
       publishTargets(request),
-      () => unknownResponse(request),
+      (cause) => {
+        console.error('Unexpected publishing client failure.', cause)
+        return unknownResponse(request)
+      },
     )
     return response.match(
       (result) => result,

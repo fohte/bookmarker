@@ -36,9 +36,6 @@ export function createComposeDeliveryDraftPort(
 
   return {
     getDraft: access.getDraft,
-    setState: (patch: Partial<ComposeState>) => {
-      access.setState(patch)
-    },
     stageDraft(draft: BookmarkDraft): boolean {
       const queue = access.getQueue()
       if (
