@@ -35,7 +35,7 @@ In AWS Systems Manager Parameter Store, create each parameter with type `SecureS
 | `/infra/bookmarker/mastodon-base-url`     | The target instance HTTPS origin. |
 | `/infra/bookmarker/mastodon-access-token` | The issued user access token.     |
 
-After saving the parameters, inject the values into the API process as `MASTODON_BASE_URL` and `MASTODON_ACCESS_TOKEN`, then restart the process so the adapter reads the new environment values. Keep parameter values out of logs and deployment output.
+After saving both parameters, verify that the API `ExternalSecret` has synchronized them. Then restart the API deployment with a rollout restart so its processes read the values as `MASTODON_BASE_URL` and `MASTODON_ACCESS_TOKEN`. Keep parameter values out of logs and deployment output.
 
 ## Delivery and failure handling
 
