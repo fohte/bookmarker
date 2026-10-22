@@ -283,7 +283,10 @@ describe('ComposeDestinationCard in a browser', () => {
     )
 
     const selected = inputNamed('Select Hatena Bookmark')
-    await setInputValue(inputNamed('Hatena tags'), 'stored,unfinished')
+    await setInputValue(
+      inputNamed('Hatena tags (comma separated)'),
+      'stored,unfinished',
+    )
 
     const actual = {
       updates,

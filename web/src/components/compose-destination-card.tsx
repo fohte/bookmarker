@@ -21,6 +21,9 @@ import type {
   DestinationMetadata,
 } from 'api/contracts'
 
+import { ComposeDestinationTagsField } from '#components/compose-destination-tags-field'
+import { effectiveDestinationComment } from '#features/editor/compose-destination'
+
 const destinationNames: Record<DestinationId, string> = {
   hatena: 'Hatena Bookmark',
   mastodon: 'Mastodon',
@@ -28,13 +31,12 @@ const destinationNames: Record<DestinationId, string> = {
   x: 'X',
 }
 
-function tagsToText(tags: string[]): string {
-  return tags.join(',')
-}
-
-function tagsFromText(value: string): string[] {
-  return value === '' ? [] : value.split(',')
-}
+const visibilityLabels = {
+  public: 'Public',
+  unlisted: 'Unlisted',
+  private: 'Followers only',
+  direct: 'Mentioned people only',
+} as const
 
 export function ComposeDestinationCard({
   destination,
@@ -64,14 +66,7 @@ export function ComposeDestinationCard({
       ? destinationMetadata.metadataError
       : undefined
   const name = destinationNames[destination.destination]
-  const comment =
-    destination.commentMode === 'common'
-      ? commonComment
-      : destination.customComment
-
-  const update = (updated: DestinationDraft) => {
-    onDestinationChange(updated)
-  }
+  const comment = effectiveDestinationComment(commonComment, destination)
 
   const requestCopy = () => {
     if (destination.customComment.length > 0) {
@@ -104,7 +99,10 @@ export function ComposeDestinationCard({
             className="size-4 accent-primary disabled:opacity-50"
             disabled={!canEdit || selectionUnavailable}
             onChange={(event) => {
-              update({ ...destination, selected: event.currentTarget.checked })
+              onDestinationChange({
+                ...destination,
+                selected: event.currentTarget.checked,
+              })
             }}
             type="checkbox"
           />
@@ -123,7 +121,7 @@ export function ComposeDestinationCard({
           disabled={!canEdit}
           onValueChange={(value) => {
             if (value === 'common' || value === 'custom') {
-              update({ ...destination, commentMode: value })
+              onDestinationChange({ ...destination, commentMode: value })
             }
           }}
           value={destination.commentMode}
@@ -132,7 +130,11 @@ export function ComposeDestinationCard({
             aria-label={`${name} comment mode`}
             id={`${destination.destination}-comment-mode`}
           >
-            <SelectValue />
+            <SelectValue>
+              {destination.commentMode === 'common'
+                ? 'Use common comment'
+                : 'Use individual comment'}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="common">Use common comment</SelectItem>
@@ -157,7 +159,7 @@ export function ComposeDestinationCard({
             disabled={!canEdit}
             id={`${destination.destination}-custom-comment`}
             onChange={(event) => {
-              update({
+              onDestinationChange({
                 ...destination,
                 customComment: event.currentTarget.value,
               })
@@ -179,37 +181,25 @@ export function ComposeDestinationCard({
 
       {destination.destination === 'hatena' && (
         <div className="space-y-3">
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="hatena-tags">
-              Tags (comma separated)
-            </label>
-            <Input
-              aria-label="Hatena tags"
-              autoComplete="off"
-              disabled={!canEdit}
-              id="hatena-tags"
-              onChange={(event) => {
-                update({
-                  ...destination,
-                  options: {
-                    ...destination.options,
-                    tags: tagsFromText(event.currentTarget.value),
-                  },
-                })
-              }}
-              value={tagsToText(destination.options.tags)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Each edit, including an unfinished tag, is saved on this device.
-            </p>
-          </div>
+          <ComposeDestinationTagsField
+            disabled={!canEdit}
+            id="hatena-tags"
+            label="Hatena tags (comma separated)"
+            onTagsChange={(tags) => {
+              onDestinationChange({
+                ...destination,
+                options: { ...destination.options, tags },
+              })
+            }}
+            tags={destination.options.tags}
+          />
           <label className="flex items-center gap-2 text-sm">
             <input
               checked={destination.options.private}
               className="size-4 accent-primary disabled:opacity-50"
               disabled={!canEdit}
               onChange={(event) => {
-                update({
+                onDestinationChange({
                   ...destination,
                   options: {
                     ...destination.options,
@@ -242,7 +232,7 @@ export function ComposeDestinationCard({
                   value === 'private' ||
                   value === 'direct'
                 ) {
-                  update({
+                  onDestinationChange({
                     ...destination,
                     options: { ...destination.options, visibility: value },
                   })
@@ -254,7 +244,9 @@ export function ComposeDestinationCard({
                 aria-label="Mastodon visibility"
                 id="mastodon-visibility"
               >
-                <SelectValue />
+                <SelectValue>
+                  {visibilityLabels[destination.options.visibility]}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="public">Public</SelectItem>
@@ -272,7 +264,7 @@ export function ComposeDestinationCard({
               disabled={!canEdit}
               id="mastodon-cw"
               onChange={(event) => {
-                update({
+                onDestinationChange({
                   ...destination,
                   options: {
                     ...destination.options,
@@ -289,7 +281,7 @@ export function ComposeDestinationCard({
               className="size-4 accent-primary disabled:opacity-50"
               disabled={!canEdit}
               onChange={(event) => {
-                update({
+                onDestinationChange({
                   ...destination,
                   options: {
                     ...destination.options,
@@ -320,7 +312,7 @@ export function ComposeDestinationCard({
               onChange={(event) => {
                 const collectionId = event.currentTarget.valueAsNumber
                 if (Number.isInteger(collectionId)) {
-                  update({
+                  onDestinationChange({
                     ...destination,
                     options: { ...destination.options, collectionId },
                   })
@@ -334,30 +326,18 @@ export function ComposeDestinationCard({
               IDs are kept as entered.
             </p>
           </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="raindrop-tags">
-              Tags (comma separated)
-            </label>
-            <Input
-              aria-label="Raindrop tags"
-              autoComplete="off"
-              disabled={!canEdit}
-              id="raindrop-tags"
-              onChange={(event) => {
-                update({
-                  ...destination,
-                  options: {
-                    ...destination.options,
-                    tags: tagsFromText(event.currentTarget.value),
-                  },
-                })
-              }}
-              value={tagsToText(destination.options.tags)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Each edit, including an unfinished tag, is saved on this device.
-            </p>
-          </div>
+          <ComposeDestinationTagsField
+            disabled={!canEdit}
+            id="raindrop-tags"
+            label="Raindrop tags (comma separated)"
+            onTagsChange={(tags) => {
+              onDestinationChange({
+                ...destination,
+                options: { ...destination.options, tags },
+              })
+            }}
+            tags={destination.options.tags}
+          />
         </div>
       )}
 

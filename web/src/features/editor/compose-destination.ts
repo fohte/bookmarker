@@ -74,6 +74,23 @@ export function replaceDestinationDraft(
   )
 }
 
+export function effectiveDestinationComment(
+  commonComment: string,
+  destination: DestinationDraft,
+): string {
+  return destination.commentMode === 'common'
+    ? commonComment
+    : destination.customComment
+}
+
+function preserveVerificationUnlessCommentChanges(
+  draft: BookmarkDraft,
+  previousComment: string,
+  nextComment: string,
+): BookmarkDraft {
+  return previousComment === nextComment ? draft : clearDraftVerification(draft)
+}
+
 export function updateDestinationDraft(
   draft: BookmarkDraft,
   destination: DestinationDraft,
@@ -82,21 +99,23 @@ export function updateDestinationDraft(
     draft.destinations,
     destination.destination,
   )
-  const previousComment =
-    previous.commentMode === 'common'
-      ? draft.commonComment
-      : previous.customComment
-  const nextComment =
-    destination.commentMode === 'common'
-      ? draft.commonComment
-      : destination.customComment
+  const previousComment = effectiveDestinationComment(
+    draft.commonComment,
+    previous,
+  )
+  const nextComment = effectiveDestinationComment(
+    draft.commonComment,
+    destination,
+  )
   const updated = {
     ...draft,
     destinations: replaceDestinationDraft(draft.destinations, destination),
   }
-  return previousComment === nextComment
-    ? updated
-    : clearDraftVerification(updated)
+  return preserveVerificationUnlessCommentChanges(
+    updated,
+    previousComment,
+    nextComment,
+  )
 }
 
 export function copyCommonCommentDraft(
@@ -104,19 +123,29 @@ export function copyCommonCommentDraft(
   destinationId: DestinationId,
 ): BookmarkDraft {
   const destination = getDestinationDraft(draft.destinations, destinationId)
-  const previousComment =
-    destination.commentMode === 'common'
-      ? draft.commonComment
-      : destination.customComment
+  const previousComment = effectiveDestinationComment(
+    draft.commonComment,
+    destination,
+  )
+  const copiedDestination = {
+    ...destination,
+    commentMode: 'custom' as const,
+    customComment: draft.commonComment,
+  }
   const updated = {
     ...draft,
-    destinations: replaceDestinationDraft(draft.destinations, {
-      ...destination,
-      commentMode: 'custom',
-      customComment: draft.commonComment,
-    }),
+    destinations: replaceDestinationDraft(
+      draft.destinations,
+      copiedDestination,
+    ),
   }
-  return previousComment === draft.commonComment
-    ? updated
-    : clearDraftVerification(updated)
+  const nextComment = effectiveDestinationComment(
+    draft.commonComment,
+    copiedDestination,
+  )
+  return preserveVerificationUnlessCommentChanges(
+    updated,
+    previousComment,
+    nextComment,
+  )
 }
