@@ -32,11 +32,27 @@ if [[ -z "$port" ]]; then
 fi
 
 url="http://127.0.0.1:${port}/health"
+last_status=000
+last_body=''
 for ((attempt = 0; attempt < 30; attempt += 1)); do
   response=$(curl --silent --write-out $'\n%{http_code}' --max-time 2 "$url" || true)
   status=${response##*$'\n'}
+  body=${response%$'\n'*}
+  if [[ "$status" == "$response" ]]; then
+    status=000
+    body=$response
+  fi
+  last_status=$status
+  last_body=${body:0:256}
+
   if [[ "$status" == 200 ]]; then
-    exit 0
+    if [[ "$body" == '{"status":"ok"}' ]]; then
+      exit 0
+    fi
+
+    echo "The API returned HTTP 200 with an unexpected /health body: ${last_body}." >&2
+    docker logs "$container" >&2
+    exit 1
   fi
 
   if [[ $(docker inspect --format '{{.State.Running}}' "$container" || true) != true ]]; then
@@ -48,6 +64,6 @@ for ((attempt = 0; attempt < 30; attempt += 1)); do
   sleep 1
 done
 
-echo "The API did not return HTTP 200 from ${url}." >&2
+echo "The API did not return HTTP 200 from ${url} (last status: ${last_status}; body: ${last_body})." >&2
 docker logs "$container" >&2
 exit 1
