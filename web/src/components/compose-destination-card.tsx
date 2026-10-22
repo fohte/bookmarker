@@ -5,21 +5,11 @@ import type {
   DestinationMetadata,
 } from 'api/contracts'
 
+import {
+  destinationNames,
+  visibilityLabels,
+} from '#components/compose-destination-labels'
 import { ComposeDestinationSettings } from '#components/compose-destination-settings'
-
-const destinationNames: Record<DestinationId, string> = {
-  hatena: 'Hatena Bookmark',
-  mastodon: 'Mastodon',
-  raindrop: 'Raindrop',
-  x: 'X',
-}
-
-const visibilityLabels = {
-  public: 'Public',
-  unlisted: 'Unlisted',
-  private: 'Followers only',
-  direct: 'Mentioned people only',
-} as const
 
 function getDestinationSettingsSummary(destination: DestinationDraft): string {
   const summary =

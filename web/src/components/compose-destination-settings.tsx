@@ -22,25 +22,15 @@ import type {
 } from 'api/contracts'
 import { type ReactNode, type RefObject, useRef } from 'react'
 
+import {
+  destinationNames,
+  visibilityLabels,
+} from '#components/compose-destination-labels'
 import { ComposeDestinationTagsField } from '#components/compose-destination-tags-field'
 import {
   effectiveDestinationComment,
   isRaindropCollectionAvailable,
 } from '#features/editor/compose-destination'
-
-const destinationNames: Record<DestinationId, string> = {
-  hatena: 'Hatena Bookmark',
-  mastodon: 'Mastodon',
-  raindrop: 'Raindrop',
-  x: 'X',
-}
-
-const visibilityLabels = {
-  public: 'Public',
-  unlisted: 'Unlisted',
-  private: 'Followers only',
-  direct: 'Mentioned people only',
-} as const
 
 function DialogSelectContent({
   container,
