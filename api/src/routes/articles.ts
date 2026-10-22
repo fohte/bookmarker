@@ -38,7 +38,6 @@ const readRequestBody = (
     tooLarge ? REQUEST_BODY_TOO_LARGE : INVALID_REQUEST_BODY,
   )
 }
-
 const errorResponse = (
   context: Context,
   code: string,
@@ -139,5 +138,3 @@ export const createArticlesRouter = (
 
   return router
 }
-
-export const articlesRouter = createArticlesRouter()
