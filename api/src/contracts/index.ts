@@ -22,6 +22,11 @@ export {
   PublishDestinationIdSchema,
   RaindropOptionsSchema,
 } from '#contracts/destination'
+export type {
+  DestinationMetadata,
+  DestinationMetadataError,
+} from '#contracts/destination-metadata'
+export { DestinationMetadataSchema } from '#contracts/destination-metadata'
 export type { BookmarkDraft } from '#contracts/draft'
 export { BookmarkDraftSchema } from '#contracts/draft'
 export type { ApiErrorEnvelope } from '#contracts/error'
