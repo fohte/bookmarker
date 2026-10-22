@@ -10,8 +10,10 @@ import { HttpUrlSchema } from '#contracts/http'
 import {
   discardResponseBody,
   readResponseText,
+  REQUEST_TIMEOUT_MS,
   sendOAuthForm,
 } from '#destinations/hatena/http'
+import type { HatenaCredentials } from '#destinations/hatena/types'
 import type {
   DestinationAdapter,
   PublishAdapterError,
@@ -21,7 +23,6 @@ const HATENA_BOOKMARK_URL = new URL(
   'https://bookmark.hatenaapis.com/rest/1/my/bookmark',
 )
 const MAX_RESPONSE_BYTES = 65_536
-const REQUEST_TIMEOUT_MS = 10_000
 
 type HatenaEnvironment = Partial<
   Record<
@@ -32,13 +33,6 @@ type HatenaEnvironment = Partial<
     string
   >
 >
-
-type HatenaCredentials = {
-  consumerKey: string
-  consumerSecret: string
-  accessToken: string
-  accessTokenSecret: string
-}
 
 type HatenaAdapterDependencies = {
   env?: HatenaEnvironment
@@ -77,6 +71,30 @@ const createPublishError = (
   outcome: PublishAdapterError['outcome'],
   retryable: boolean,
 ): PublishAdapterError => ({ code, outcome, retryable })
+
+const classifyPublishStatus = (
+  status: number,
+): PublishAdapterError | undefined => {
+  if (status === 429) {
+    return createPublishError('rate_limited', 'failed', true)
+  }
+
+  if (status === 401 || status === 403) {
+    return createPublishError('unauthorized', 'failed', false)
+  }
+
+  if (status >= 500) {
+    return createPublishError('unavailable', 'unknown', false)
+  }
+
+  if (status === 408 || (status >= 300 && status < 400) || status < 200) {
+    return createPublishError('invalid_response', 'unknown', false)
+  }
+
+  return status >= 400
+    ? createPublishError('rejected', 'failed', false)
+    : undefined
+}
 
 const parseBookmarkPermalink = (
   text: string,
@@ -142,44 +160,15 @@ const publishHatenaBookmark = (
   })
     .mapErr(() => createPublishError('unavailable', 'unknown', false))
     .andThen((response) => {
-      if (response.status === 429) {
+      const statusError = classifyPublishStatus(response.status)
+      if (statusError !== undefined) {
         discardResponseBody(response)
-        return errAsync(createPublishError('rate_limited', 'failed', true))
-      }
-
-      if (response.status === 401 || response.status === 403) {
-        discardResponseBody(response)
-        return errAsync(createPublishError('unauthorized', 'failed', false))
-      }
-
-      if (
-        response.status === 408 ||
-        (response.status >= 300 && response.status < 400) ||
-        response.status < 200 ||
-        response.status >= 500
-      ) {
-        discardResponseBody(response)
-        return errAsync(
-          createPublishError(
-            response.status >= 500 ? 'unavailable' : 'invalid_response',
-            'unknown',
-            false,
-          ),
-        )
-      }
-
-      if (response.status >= 400) {
-        discardResponseBody(response)
-        return errAsync(createPublishError('rejected', 'failed', false))
+        return errAsync(statusError)
       }
 
       return readResponseText(response, MAX_RESPONSE_BYTES)
-        .andThen((text) => {
-          const parsed = parseBookmarkPermalink(text)
-          return parsed.isOk()
-            ? okAsync(parsed.value)
-            : errAsync(createPublishError('invalid_response', 'unknown', false))
-        })
+        .andThen((text) => parseBookmarkPermalink(text))
+        .mapErr(() => createPublishError('invalid_response', 'unknown', false))
         .map((remoteUrl) => ({
           destination: 'hatena' as const,
           operationId: target.operationId,
@@ -187,7 +176,6 @@ const publishHatenaBookmark = (
           retryable: false as const,
           remoteUrl,
         }))
-        .mapErr(() => createPublishError('invalid_response', 'unknown', false))
     })
 }
 

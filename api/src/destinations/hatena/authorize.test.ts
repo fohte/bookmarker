@@ -181,14 +181,68 @@ describe('authorizeHatena', () => {
     })
   })
 
-  it('rejects an existing credentials file and repository-local output paths', async () => {
+  it('rejects malformed request-token responses before prompting for a verifier or writing credentials', async () => {
+    const prompts: string[] = []
+    const output: string[] = []
+    const credentialWrites: Array<{
+      path: string
+      credentials: {
+        consumerKey: string
+        consumerSecret: string
+        accessToken: string
+        accessTokenSecret: string
+      }
+    }> = []
+    let fetchCount = 0
+    const result = await authorizeHatena('/outside/credentials.json', {
+      fetch: () => {
+        fetchCount += 1
+        return Promise.resolve(
+          new Response(
+            'oauth_token=fictional-token&oauth_token=duplicate-token&oauth_token_secret=fictional-secret&oauth_callback_confirmed=true',
+            { status: 200 },
+          ),
+        )
+      },
+      prompt: (label) => {
+        prompts.push(label)
+        return okAsync(
+          prompts.length === 1
+            ? 'fictional-consumer-key'
+            : 'fictional-consumer-secret',
+        )
+      },
+      writeLine: (line) => output.push(line),
+      writeCredentials: (path, credentials) => {
+        credentialWrites.push({ path, credentials })
+        return okAsync(undefined)
+      },
+      nonce: () => 'fictional-nonce',
+      timestamp: () => 1_700_000_000,
+    }).match(
+      () => ({ kind: 'success' as const }),
+      (error) => ({ kind: 'error' as const, error }),
+    )
+
+    const summarizeMalformedResponse = () => ({
+      result,
+      fetchCount,
+      prompts,
+      output,
+      credentialWrites,
+    })
+    expect(summarizeMalformedResponse()).toEqual({
+      result: { kind: 'error', error: 'invalid_response' },
+      fetchCount: 1,
+      prompts: ['Consumer key: ', 'Consumer secret: '],
+      output: [],
+      credentialWrites: [],
+    })
+  })
+
+  it('refuses to replace an existing credentials file', async () => {
     const directory = await makeTemporaryDirectory()
-    const repository = join(directory, 'repository')
-    const outside = join(directory, 'outside')
-    await mkdir(repository)
-    await mkdir(outside)
-    const outputPath = join(outside, 'credentials.json')
-    const resolvedOutputPath = join(await realpath(outside), 'credentials.json')
+    const outputPath = join(directory, 'credentials.json')
     await writeFile(outputPath, 'fictional-existing-content', 'utf8')
     const writeResult = await writeCredentialsFile(outputPath, {
       consumerKey: 'fictional-key',
@@ -199,6 +253,25 @@ describe('authorizeHatena', () => {
       () => ({ kind: 'success' as const }),
       (error) => ({ kind: 'error' as const, error }),
     )
+
+    const summarizeFileSafety = async () => ({
+      writeResult,
+      existingFile: await readFile(outputPath, 'utf8'),
+    })
+    expect(await summarizeFileSafety()).toEqual({
+      writeResult: { kind: 'error', error: 'output_failed' },
+      existingFile: 'fictional-existing-content',
+    })
+  })
+
+  it('rejects repository-local output paths and resolves external paths', async () => {
+    const directory = await makeTemporaryDirectory()
+    const repository = join(directory, 'repository')
+    const outside = join(directory, 'outside')
+    await mkdir(repository)
+    await mkdir(outside)
+    const outputPath = join(outside, 'credentials.json')
+    const resolvedOutputPath = join(await realpath(outside), 'credentials.json')
     const localPathResult = await resolveOutputPathOutsideRepository(
       join(repository, 'credentials.json'),
       repository,
@@ -214,15 +287,8 @@ describe('authorizeHatena', () => {
       (error) => ({ kind: 'error' as const, error }),
     )
 
-    const summarizeFileSafety = async () => ({
-      writeResult,
-      existingFile: await readFile(outputPath, 'utf8'),
-      localPathResult,
-      outsidePathResult,
-    })
-    expect(await summarizeFileSafety()).toEqual({
-      writeResult: { kind: 'error', error: 'output_failed' },
-      existingFile: 'fictional-existing-content',
+    const summarizePathResults = () => ({ localPathResult, outsidePathResult })
+    expect(summarizePathResults()).toEqual({
       localPathResult: { kind: 'error', error: 'invalid_output_path' },
       outsidePathResult: { kind: 'success', path: resolvedOutputPath },
     })

@@ -14,22 +14,16 @@ import { err, errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow'
 import {
   discardResponseBody,
   readResponseText,
+  REQUEST_TIMEOUT_MS,
   sendOAuthForm,
 } from '#destinations/hatena/http'
+import type { HatenaCredentials } from '#destinations/hatena/types'
 
 const HATENA_INITIATE_URL = new URL('https://www.hatena.com/oauth/initiate')
 const HATENA_TOKEN_URL = new URL('https://www.hatena.com/oauth/token')
 const HATENA_AUTHORIZE_URL = new URL('https://www.hatena.ne.jp/oauth/authorize')
 const OAUTH_SCOPE = 'read_public,read_private,write_public,write_private'
-const REQUEST_TIMEOUT_MS = 10_000
 const MAX_RESPONSE_BYTES = 16_384
-
-export type HatenaAccessCredentials = {
-  consumerKey: string
-  consumerSecret: string
-  accessToken: string
-  accessTokenSecret: string
-}
 
 export type HatenaAuthorizationError =
   | 'input_failed'
@@ -45,17 +39,12 @@ export type HatenaAuthorizationDependencies = {
   writeLine: (line: string) => void
   writeCredentials: (
     path: string,
-    credentials: HatenaAccessCredentials,
+    credentials: HatenaCredentials,
   ) => ResultAsync<undefined, 'output_failed'>
   nonce?: () => string
   timestamp?: () => number
   timeoutMs?: number
 }
-
-const authorizationError = (
-  error: HatenaAuthorizationError,
-): ResultAsync<undefined, HatenaAuthorizationError> =>
-  errAsync<undefined, HatenaAuthorizationError>(error)
 
 const readSingleValue = (
   parameters: URLSearchParams,
@@ -104,97 +93,135 @@ const parseAccessToken = (
     : err('invalid_response')
 }
 
-const requestPrompt = (
+const promptNonEmpty = (
   dependencies: HatenaAuthorizationDependencies,
   label: string,
-): ResultAsync<string, 'input_failed'> => dependencies.prompt(label)
+): ResultAsync<string, 'input_failed' | 'invalid_input'> =>
+  dependencies
+    .prompt(label)
+    .andThen((value) =>
+      value.length === 0
+        ? errAsync<string, 'invalid_input'>('invalid_input')
+        : okAsync<string, 'input_failed' | 'invalid_input'>(value),
+    )
+
+const promptConsumerCredentials = (
+  dependencies: HatenaAuthorizationDependencies,
+): ResultAsync<
+  { consumerKey: string; consumerSecret: string },
+  'input_failed' | 'invalid_input'
+> =>
+  promptNonEmpty(dependencies, 'Consumer key: ').andThen((consumerKey) =>
+    promptNonEmpty(dependencies, 'Consumer secret: ').map((consumerSecret) => ({
+      consumerKey,
+      consumerSecret,
+    })),
+  )
+
+const buildSigningOptions = (
+  dependencies: HatenaAuthorizationDependencies,
+) => ({
+  ...(dependencies.nonce === undefined ? {} : { nonce: dependencies.nonce() }),
+  ...(dependencies.timestamp === undefined
+    ? {}
+    : { timestamp: dependencies.timestamp() }),
+  timeoutMs: dependencies.timeoutMs ?? REQUEST_TIMEOUT_MS,
+})
+
+const requestRequestToken = (
+  dependencies: HatenaAuthorizationDependencies,
+  consumerKey: string,
+  consumerSecret: string,
+): ResultAsync<{ token: string; secret: string }, HatenaAuthorizationError> =>
+  sendOAuthForm({
+    fetch: dependencies.fetch,
+    url: HATENA_INITIATE_URL,
+    body: new URLSearchParams([['scope', OAUTH_SCOPE]]),
+    credentials: { consumerKey, consumerSecret },
+    callback: 'oob',
+    ...buildSigningOptions(dependencies),
+  })
+    .mapErr(() => 'request_failed' as const)
+    .andThen(readOAuthForm)
+    .andThen(parseRequestToken)
+
+const exchangeAccessToken = (
+  dependencies: HatenaAuthorizationDependencies,
+  consumerKey: string,
+  consumerSecret: string,
+  token: string,
+  tokenSecret: string,
+  verifier: string,
+): ResultAsync<
+  { accessToken: string; accessTokenSecret: string },
+  HatenaAuthorizationError
+> =>
+  sendOAuthForm({
+    fetch: dependencies.fetch,
+    url: HATENA_TOKEN_URL,
+    body: new URLSearchParams(),
+    credentials: { consumerKey, consumerSecret, token, tokenSecret },
+    verifier,
+    ...buildSigningOptions(dependencies),
+  })
+    .mapErr(() => 'request_failed' as const)
+    .andThen(readOAuthForm)
+    .andThen(parseAccessToken)
+
+const authorizeWithConsumerCredentials = (
+  outputPath: string,
+  dependencies: HatenaAuthorizationDependencies,
+  consumerKey: string,
+  consumerSecret: string,
+): ResultAsync<undefined, HatenaAuthorizationError> =>
+  requestRequestToken(dependencies, consumerKey, consumerSecret).andThen(
+    ({ token, secret }) => {
+      const authorizationUrl = new URL(HATENA_AUTHORIZE_URL)
+      authorizationUrl.searchParams.set('oauth_token', token)
+      dependencies.writeLine(
+        `Approve Hatena access in a browser: ${authorizationUrl.toString()}`,
+      )
+
+      return promptNonEmpty(dependencies, 'OAuth verifier: ').andThen(
+        (verifier) =>
+          exchangeAccessToken(
+            dependencies,
+            consumerKey,
+            consumerSecret,
+            token,
+            secret,
+            verifier,
+          ).andThen(({ accessToken, accessTokenSecret }) =>
+            dependencies
+              .writeCredentials(outputPath, {
+                consumerKey,
+                consumerSecret,
+                accessToken,
+                accessTokenSecret,
+              })
+              .mapErr(() => 'output_failed' as const),
+          ),
+      )
+    },
+  )
 
 export const authorizeHatena = (
   outputPath: string,
   dependencies: HatenaAuthorizationDependencies,
 ): ResultAsync<undefined, HatenaAuthorizationError> =>
-  requestPrompt(dependencies, 'Consumer key: ').andThen((consumerKey) => {
-    if (consumerKey.length === 0) return authorizationError('invalid_input')
-
-    return requestPrompt(dependencies, 'Consumer secret: ').andThen(
-      (consumerSecret) => {
-        if (consumerSecret.length === 0) {
-          return authorizationError('invalid_input')
-        }
-
-        const requestTokenBody = new URLSearchParams([['scope', OAUTH_SCOPE]])
-        return sendOAuthForm({
-          fetch: dependencies.fetch,
-          url: HATENA_INITIATE_URL,
-          body: requestTokenBody,
-          credentials: { consumerKey, consumerSecret },
-          callback: 'oob',
-          ...(dependencies.nonce === undefined
-            ? {}
-            : { nonce: dependencies.nonce() }),
-          ...(dependencies.timestamp === undefined
-            ? {}
-            : { timestamp: dependencies.timestamp() }),
-          timeoutMs: dependencies.timeoutMs ?? REQUEST_TIMEOUT_MS,
-        })
-          .mapErr(() => 'request_failed' as const)
-          .andThen(readOAuthForm)
-          .andThen(parseRequestToken)
-          .andThen(({ token, secret }) => {
-            const authorizationUrl = new URL(HATENA_AUTHORIZE_URL)
-            authorizationUrl.searchParams.set('oauth_token', token)
-            dependencies.writeLine(
-              `Approve Hatena access in a browser: ${authorizationUrl.toString()}`,
-            )
-
-            return requestPrompt(dependencies, 'OAuth verifier: ').andThen(
-              (verifier) => {
-                if (verifier.length === 0) {
-                  return authorizationError('invalid_input')
-                }
-
-                return sendOAuthForm({
-                  fetch: dependencies.fetch,
-                  url: HATENA_TOKEN_URL,
-                  body: new URLSearchParams(),
-                  credentials: {
-                    consumerKey,
-                    consumerSecret,
-                    token,
-                    tokenSecret: secret,
-                  },
-                  verifier,
-                  ...(dependencies.nonce === undefined
-                    ? {}
-                    : { nonce: dependencies.nonce() }),
-                  ...(dependencies.timestamp === undefined
-                    ? {}
-                    : { timestamp: dependencies.timestamp() }),
-                  timeoutMs: dependencies.timeoutMs ?? REQUEST_TIMEOUT_MS,
-                })
-                  .mapErr(() => 'request_failed' as const)
-                  .andThen(readOAuthForm)
-                  .andThen(parseAccessToken)
-                  .andThen(({ accessToken, accessTokenSecret }) =>
-                    dependencies
-                      .writeCredentials(outputPath, {
-                        consumerKey,
-                        consumerSecret,
-                        accessToken,
-                        accessTokenSecret,
-                      })
-                      .mapErr(() => 'output_failed' as const),
-                  )
-              },
-            )
-          })
-      },
-    )
-  })
+  promptConsumerCredentials(dependencies).andThen(
+    ({ consumerKey, consumerSecret }) =>
+      authorizeWithConsumerCredentials(
+        outputPath,
+        dependencies,
+        consumerKey,
+        consumerSecret,
+      ),
+  )
 
 export const writeCredentialsFile = (
   path: string,
-  credentials: HatenaAccessCredentials,
+  credentials: HatenaCredentials,
 ): ResultAsync<undefined, 'output_failed'> =>
   ResultAsync.fromPromise(
     open(path, 'wx', 0o600).then(async (file) => {

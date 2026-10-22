@@ -1,6 +1,6 @@
 # Hatena Bookmarks
 
-The API reads `HATENA_CONSUMER_KEY`, `HATENA_CONSUMER_SECRET`, `HATENA_ACCESS_TOKEN`, and `HATENA_ACCESS_TOKEN_SECRET` from the backend environment. Leave all four unset to keep Hatena disabled.
+The API reads `HATENA_CONSUMER_KEY`, `HATENA_CONSUMER_SECRET`, `HATENA_ACCESS_TOKEN`, and `HATENA_ACCESS_TOKEN_SECRET` from the backend environment. All four must be non-empty to enable Hatena. Leave them unset or empty to keep Hatena disabled. If you load the repository's `.env.example`, clear its sample Hatena values when you do not have credentials.
 
 ## Create credentials
 
@@ -50,7 +50,7 @@ This creates or updates these `SecureString` parameters:
 | `HATENA_ACCESS_TOKEN`        | `/infra/bookmarker/hatena-access-token`        |
 | `HATENA_ACCESS_TOKEN_SECRET` | `/infra/bookmarker/hatena-access-token-secret` |
 
-After the existing ExternalSecret syncs the parameters to the backend, restart the API deployment so it reads the new environment values.
+Make these values available as the four backend environment variables, then restart the API process so it reads them at startup.
 
 ## Publishing behavior
 

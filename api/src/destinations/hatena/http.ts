@@ -2,6 +2,8 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
 import { createOAuthAuthorizationHeader } from '#destinations/hatena/oauth'
 
+export const REQUEST_TIMEOUT_MS = 10_000
+
 type OAuthCredentials = {
   consumerKey: string
   consumerSecret: string
@@ -13,8 +15,7 @@ type SendOAuthFormInput = {
   fetch: typeof fetch
   url: URL
   body: URLSearchParams
-  credentials?: OAuthCredentials
-  authorization?: string
+  credentials: OAuthCredentials
   callback?: string
   verifier?: string
   nonce?: string
@@ -28,7 +29,6 @@ export const sendOAuthForm = ({
   url,
   body,
   credentials,
-  authorization,
   callback,
   verifier,
   nonce,
@@ -36,20 +36,16 @@ export const sendOAuthForm = ({
   timeoutMs,
   headers = {},
 }: SendOAuthFormInput): ResultAsync<Response, 'request_failed'> => {
-  const requestAuthorization =
-    authorization ??
-    (credentials === undefined
-      ? ''
-      : createOAuthAuthorizationHeader({
-          method: 'POST',
-          url,
-          bodyParameters: body,
-          ...credentials,
-          ...(callback === undefined ? {} : { callback }),
-          ...(verifier === undefined ? {} : { verifier }),
-          ...(nonce === undefined ? {} : { nonce }),
-          ...(timestamp === undefined ? {} : { timestamp }),
-        }))
+  const requestAuthorization = createOAuthAuthorizationHeader({
+    method: 'POST',
+    url,
+    bodyParameters: body,
+    ...credentials,
+    ...(callback === undefined ? {} : { callback }),
+    ...(verifier === undefined ? {} : { verifier }),
+    ...(nonce === undefined ? {} : { nonce }),
+    ...(timestamp === undefined ? {} : { timestamp }),
+  })
 
   return ResultAsync.fromPromise(
     fetchRequest(url, {
