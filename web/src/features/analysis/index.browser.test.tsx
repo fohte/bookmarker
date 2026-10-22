@@ -1,5 +1,5 @@
 import type { Article, ShareInput, Summary, Verification } from 'api/contracts'
-import type { Result } from 'neverthrow'
+import { type Result, ResultAsync } from 'neverthrow'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,7 +8,9 @@ import {
   type AnalysisClientError,
   type ArticleAnalysisOptions,
   createManualArticle,
+  extractArticle as requestExtractArticle,
   useArticleAnalysis,
+  verifyComment as requestVerifyComment,
 } from '#features/analysis/index'
 
 const article: Article = {
@@ -68,18 +70,34 @@ const deferred = <T,>() => {
   }
 }
 
+type AnalysisOperations = NonNullable<Parameters<typeof useArticleAnalysis>[1]>
+
 let root: Root | undefined
 let current!: ReturnType<typeof useArticleAnalysis>
 let container: HTMLDivElement | undefined
 
-const Harness = ({ value }: { value: ArticleAnalysisOptions }) => {
-  current = useArticleAnalysis(value)
+const Harness = ({
+  value,
+  operations,
+}: {
+  value: ArticleAnalysisOptions
+  operations?: AnalysisOperations
+}) => {
+  current = useArticleAnalysis(value, operations)
   return null
 }
 
-const render = (value: ArticleAnalysisOptions) => {
+const render = (
+  value: ArticleAnalysisOptions,
+  operations?: AnalysisOperations,
+) => {
   act(() => {
-    root?.render(<Harness value={value} />)
+    root?.render(
+      <Harness
+        value={value}
+        {...(operations === undefined ? {} : { operations })}
+      />,
+    )
   })
 }
 
@@ -271,29 +289,68 @@ describe('useArticleAnalysis', () => {
     })
   })
 
-  it('cancels and retries a summary without accepting the old response', async () => {
-    const pending: Array<(response: Response) => void> = []
+  it('cancels an unabortable result after an article revision changes from A to B to A', async () => {
+    const pending = deferred<Summary>()
     const signals: AbortSignal[] = []
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        (_input: RequestInfo | URL, init?: RequestInit) =>
-          new Promise<Response>((resolve, reject) => {
-            const signal = init?.signal
-            if (signal !== undefined && signal !== null) {
-              signals.push(signal)
-              signal.addEventListener(
-                'abort',
-                () => {
-                  reject(new DOMException('Aborted.', 'AbortError'))
-                },
-                { once: true },
-              )
-            }
-            pending.push(resolve)
-          }),
-      ),
-    )
+    const operations: AnalysisOperations = {
+      extractArticle: requestExtractArticle,
+      summarizeArticle: (_article, requestOptions) => {
+        if (requestOptions?.signal !== undefined) {
+          signals.push(requestOptions.signal)
+        }
+        return ResultAsync.fromSafePromise(pending.promise)
+      },
+      verifyComment: requestVerifyComment,
+    }
+
+    render(options, operations)
+
+    let request!: Promise<Result<Summary, AnalysisClientError>>
+    await act(async () => {
+      request = current.summarize()
+      await Promise.resolve()
+    })
+    render({ ...options, articleRevision: 2 }, operations)
+    render(options, operations)
+
+    let result!: Result<Summary, AnalysisClientError>
+    await act(async () => {
+      pending.resolve(summary)
+      result = await request
+    })
+
+    expect(
+      observe({
+        result: resultKind(result),
+        state: current.summary,
+        aborted: signals.map((signal) => signal.aborted),
+      }),
+    ).toEqual({
+      result: 'cancelled',
+      state: { status: 'stale' },
+      aborted: [true],
+    })
+  })
+
+  it('cancels and retries a summary without accepting the old response', async () => {
+    const pending = [deferred<Summary>(), deferred<Summary>()]
+    const signals: AbortSignal[] = []
+    let requestIndex = 0
+    const operations: AnalysisOperations = {
+      extractArticle: requestExtractArticle,
+      summarizeArticle: (_article, requestOptions) => {
+        if (requestOptions?.signal !== undefined) {
+          signals.push(requestOptions.signal)
+        }
+        const request = pending[requestIndex]
+        requestIndex += 1
+        return ResultAsync.fromSafePromise(
+          request?.promise ?? Promise.resolve(summary),
+        )
+      },
+      verifyComment: requestVerifyComment,
+    }
+    render(options, operations)
 
     let cancelledRequest!: Promise<Result<Summary, AnalysisClientError>>
     await act(async () => {
@@ -303,16 +360,23 @@ describe('useArticleAnalysis', () => {
     act(() => {
       current.cancelSummary()
     })
-    const cancelledResult = await cancelledRequest
 
     let retryRequest!: Promise<Result<Summary, AnalysisClientError>>
     await act(async () => {
       retryRequest = current.summarize()
       await Promise.resolve()
     })
+
+    let cancelledResult!: Result<Summary, AnalysisClientError>
+    await act(async () => {
+      pending[0]?.resolve(summary)
+      cancelledResult = await cancelledRequest
+    })
+    const stateAfterOldSuccess = current.summary
+
     let retryResult!: Result<Summary, AnalysisClientError>
     await act(async () => {
-      pending[1]?.(jsonResponse(summary))
+      pending[1]?.resolve(summary)
       retryResult = await retryRequest
     })
 
@@ -320,13 +384,15 @@ describe('useArticleAnalysis', () => {
       observe({
         cancelled: resultKind(cancelledResult),
         retry: resultKind(retryResult),
+        stateAfterOldSuccess,
         state: current.summary,
         aborted: signals.map((signal) => signal.aborted),
-        requestCount: pending.length,
+        requestCount: requestIndex,
       }),
     ).toEqual({
       cancelled: 'cancelled',
       retry: 'success',
+      stateAfterOldSuccess: { status: 'loading' },
       state: { status: 'success', value: summary },
       aborted: [true, false],
       requestCount: 2,

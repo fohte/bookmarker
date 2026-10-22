@@ -5,10 +5,17 @@ import type {
   Summary,
   Verification,
 } from 'api/contracts'
+import { ResultAsync } from 'neverthrow'
 import { act, StrictMode, useCallback, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import {
+  type AnalysisClientError,
+  extractArticle as requestExtractArticle,
+  useArticleAnalysis,
+  verifyComment as requestVerifyComment,
+} from '#features/analysis/index'
 import type { ComposeAnalysisSaveCommand } from '#features/editor/compose-analysis-command'
 import { useComposeAnalysis } from '#features/editor/use-compose-analysis'
 
@@ -100,25 +107,49 @@ const jsonResponse = (body: unknown, status = 200): Response =>
     headers: { 'content-type': 'application/json' },
   })
 
+const deferred = <T,>() => {
+  let resolvePromise: ((value: T) => void) | undefined
+  const promise = new Promise<T>((resolve) => {
+    resolvePromise = resolve
+  })
+
+  return {
+    promise,
+    resolve: (value: T) => resolvePromise?.(value),
+  }
+}
+
 const captureOutput = <T,>(value: T): T => value
 
 type HookProps = Parameters<typeof useComposeAnalysis>[0]
+type AnalysisOperations = NonNullable<Parameters<typeof useArticleAnalysis>[1]>
 
 let root: Root | undefined
 let current!: ReturnType<typeof useComposeAnalysis>
 let container: HTMLDivElement | undefined
 
-const Harness = (props: HookProps) => {
-  current = useComposeAnalysis(props)
+const Harness = ({
+  value,
+  operations,
+}: {
+  value: HookProps
+  operations?: AnalysisOperations
+}) => {
+  current = useComposeAnalysis(value, operations)
   return null
 }
 
-const mount = async (props: HookProps) => {
+const mount = async (props: HookProps, operations?: AnalysisOperations) => {
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(<Harness {...props} />)
+    root?.render(
+      <Harness
+        value={props}
+        {...(operations === undefined ? {} : { operations })}
+      />,
+    )
     await Promise.resolve()
   })
 }
@@ -170,6 +201,81 @@ describe('useComposeAnalysis', () => {
 
     expect(captureOutput({ summaryState: current.summaryState })).toEqual({
       summaryState: 'authentication-required',
+    })
+  })
+
+  it('does not save an unabortable summary after the article changes', async () => {
+    const pending = deferred<Summary>()
+    const signals: AbortSignal[] = []
+    const operations: AnalysisOperations = {
+      extractArticle: requestExtractArticle,
+      summarizeArticle: (_article, requestOptions) => {
+        if (requestOptions?.signal !== undefined) {
+          signals.push(requestOptions.signal)
+        }
+        return ResultAsync.fromPromise(
+          pending.promise,
+          (): AnalysisClientError => ({
+            kind: 'network',
+            message: 'The request could not reach the server.',
+          }),
+        )
+      },
+      verifyComment: requestVerifyComment,
+    }
+    const savedCommands: ComposeAnalysisSaveCommand[] = []
+    const initialDraft = draft(undefined)
+    const props: HookProps = {
+      draft: initialDraft,
+      canEdit: true,
+      autoAnalyzeDraftId: null,
+      saveAnalysisResult: (command) => {
+        savedCommands.push(command)
+        return true
+      },
+    }
+    await mount(props, operations)
+
+    let request!: Promise<void>
+    await act(async () => {
+      request = current.onSummarizeArticle()
+      await Promise.resolve()
+    })
+
+    const changedDraft: BookmarkDraft = {
+      ...initialDraft,
+      article: {
+        ...article,
+        title: 'The updated violet kite note',
+      },
+    }
+    await act(async () => {
+      root?.render(
+        <Harness
+          value={{ ...props, draft: changedDraft }}
+          operations={operations}
+        />,
+      )
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      pending.resolve(summary)
+      await request
+    })
+
+    expect(
+      captureOutput({
+        savedCommands,
+        summary: current.summary,
+        summaryState: current.summaryState,
+        aborted: signals.map((signal) => signal.aborted),
+      }),
+    ).toEqual({
+      savedCommands: [],
+      summary: null,
+      summaryState: 'stale',
+      aborted: [true],
     })
   })
 

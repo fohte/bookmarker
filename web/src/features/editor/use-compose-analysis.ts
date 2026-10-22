@@ -38,6 +38,7 @@ const analysisOperations = {
   summarizeArticle: summarizeArticleRequest,
   verifyComment: verifyCommentRequest,
 }
+type AnalysisOperations = NonNullable<Parameters<typeof useArticleAnalysis>[1]>
 
 const displayState = <T>(state: AnalysisState<T>): AnalysisDisplayState => {
   switch (state.status) {
@@ -89,17 +90,20 @@ const manualArticleForAnalysis = (article: Article | undefined) => {
   )
 }
 
-export function useComposeAnalysis({
-  draft,
-  canEdit,
-  autoAnalyzeDraftId,
-  saveAnalysisResult,
-}: {
-  draft: BookmarkDraft | null
-  canEdit: boolean
-  autoAnalyzeDraftId: string | null
-  saveAnalysisResult: (command: ComposeAnalysisSaveCommand) => boolean
-}) {
+export function useComposeAnalysis(
+  {
+    draft,
+    canEdit,
+    autoAnalyzeDraftId,
+    saveAnalysisResult,
+  }: {
+    draft: BookmarkDraft | null
+    canEdit: boolean
+    autoAnalyzeDraftId: string | null
+    saveAnalysisResult: (command: ComposeAnalysisSaveCommand) => boolean
+  },
+  operations: AnalysisOperations = analysisOperations,
+) {
   const [selectedTargetId, setSelectedTargetId] = useState('common')
   const [pendingSummary, setPendingSummary] = useState<PendingSummary | null>(
     null,
@@ -147,7 +151,7 @@ export function useComposeAnalysis({
     articleRevision: article === null ? '' : JSON.stringify(article),
     comment: target === null ? null : { id: target.id, value: target.value },
   }
-  const analysis = useArticleAnalysis(analysisOptions, analysisOperations)
+  const analysis = useArticleAnalysis(analysisOptions, operations)
 
   useEffect(() => {
     setSelectedTargetId('common')

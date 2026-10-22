@@ -1,5 +1,5 @@
 import type { Article, ShareInput, Summary, Verification } from 'api/contracts'
-import type { Result, ResultAsync } from 'neverthrow'
+import { err, type Result, type ResultAsync } from 'neverthrow'
 import {
   type Dispatch,
   type SetStateAction,
@@ -58,6 +58,10 @@ const defaultOperations: AnalysisOperations = {
 
 const idleState: AnalysisState<never> = { status: 'idle' }
 const staleState: AnalysisState<never> = { status: 'stale' }
+const cancelledOperationError: AnalysisClientError = {
+  kind: 'cancelled',
+  message: 'The request was cancelled.',
+}
 
 const invalidate = (operation: Operation): boolean => {
   const wasRunning = operation.controller !== undefined
@@ -109,15 +113,15 @@ const runOperation = async <T>(
   setState({ key, state: { status: 'loading' } })
 
   const result = await execute(controller.signal)
-  if (operation.generation === generation) {
-    operation.controller = undefined
-    const state = result.match<AnalysisState<T>>(
-      (value) => ({ status: 'success', value }),
-      (error) =>
-        error.kind === 'cancelled' ? staleState : { status: 'error', error },
-    )
-    setState({ key, state })
-  }
+  if (operation.generation !== generation) return err(cancelledOperationError)
+
+  operation.controller = undefined
+  const state = result.match<AnalysisState<T>>(
+    (value) => ({ status: 'success', value }),
+    (error) =>
+      error.kind === 'cancelled' ? staleState : { status: 'error', error },
+  )
+  setState({ key, state })
 
   return result
 }
