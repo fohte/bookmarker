@@ -13,5 +13,5 @@ export default defineConfig({
   // applies to the real package in node_modules instead of a bundled copy.
   skipNodeModulesBundle: true,
   // Keep source-backed self-references out of the dist-only runtime image.
-  noExternal: [/^#/, 'api/contracts'],
+  noExternal: [/^#/, /^api\/contracts$/],
 })
