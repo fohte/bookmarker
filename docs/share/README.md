@@ -1,5 +1,7 @@
 # Share entrypoints
 
+Use [https://b.fohte.net](https://b.fohte.net) as the deployed Bookmarker host. The former host, `bookmarker.fohte.net`, is retired and does not redirect. If you already configured the URL-only shortcut, Safari article shortcut, or macOS browser bookmarklet, update their targets to `https://b.fohte.net`.
+
 Share links use one of two forms:
 
 - URL only: `/compose?url=<encoded article URL>`
@@ -18,13 +20,13 @@ Create two separate shortcuts so a URL can still be shared if JavaScript access 
 3. Add `URL Encode` and pass it the first URL.
 4. Add a `Text` action containing `https://bookmark-app.example.invalid/compose?url=` followed by the encoded result.
 5. Pass that text to a `URL` action, then open its result with `Open URLs`.
-6. Replace `bookmark-app.example.invalid` with the deployed Bookmarker host.
+6. Replace `bookmark-app.example.invalid` with `b.fohte.net`.
 
 ### Safari article shortcut
 
 1. Create another shortcut, turn on `Show in Share Sheet`, and accept only `Safari Web Pages`.
 2. Add `Run JavaScript on Web Page` and paste the contents of [`safari-shortcut.txt`](./safari-shortcut.txt) into the action.
-3. Replace `bookmark-app.example.invalid` in the script with the deployed Bookmarker host.
+3. Replace `bookmark-app.example.invalid` in the script with `b.fohte.net`.
 4. Read `clipboardText`, `editorUrl`, and `requiresPaste` from the returned dictionary.
 5. Add `Copy to Clipboard` for `clipboardText`.
 6. If `requiresPaste` is true, show an alert that the complete article text is on the clipboard and must be pasted manually.
@@ -37,7 +39,7 @@ If Bookmarker requires sign-in, sign in before opening a shared link. An authent
 ## macOS browser bookmarklet
 
 1. Create a bookmark in Safari or Chrome and edit its address to the contents of [`mac-bookmarklet.txt`](./mac-bookmarklet.txt).
-2. Replace `bookmark-app.example.invalid` with the deployed Bookmarker host.
+2. Replace `bookmark-app.example.invalid` with `b.fohte.net`.
 3. Open an article and select the bookmark to open its URL-only compose link in a new tab. If the browser blocks the new tab, copy the URL from the prompt into the address bar.
 
 The compose page receives the article URL. Paste article text manually if you want to include it. The bookmarklet does not depend on clipboard access.

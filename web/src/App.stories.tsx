@@ -32,7 +32,7 @@ export const Preview: Story = {
         }}
         sourceUrl=""
         onSourceUrlChange={() => undefined}
-        onOpenSource={() => undefined}
+        onOpenSource={() => Promise.resolve(true)}
         onSelectDraft={() => undefined}
         onTitleChange={() => undefined}
         onArticleTextChange={() => undefined}

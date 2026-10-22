@@ -226,11 +226,29 @@ describe('ComposeRoute publishing in a browser', () => {
     act(() => {
       root.render(<ComposeRoute />)
     })
+    await waitFor(() =>
+      document.body.textContent.includes(extractedArticle.title),
+    )
+    await act(async () => {
+      await userEvent.click(button('button[aria-label="Open article details"]'))
+    })
     await waitFor(
       () =>
         document.querySelector<HTMLInputElement>('#article-title')?.value ===
         extractedArticle.title,
     )
+    await act(async () => {
+      const closeButton = document.querySelector<HTMLButtonElement>(
+        '[data-slot="dialog-close"]',
+      )
+      if (closeButton === null) {
+        throw new Error(
+          'The article details dialog close button was not found.',
+        )
+      }
+      await userEvent.click(closeButton)
+    })
+    await waitFor(() => document.querySelector('#article-title') === null)
     await waitFor(
       () =>
         document.body.textContent.includes(summary.summary) &&
