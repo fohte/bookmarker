@@ -12,10 +12,11 @@ import {
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { page, userEvent } from 'vitest/browser'
+import { userEvent } from 'vitest/browser'
 
 import { createIndexedDbDraftStore } from '#features/drafts/draft-store'
 import { ComposeRoute } from '#routes/compose'
+import { selectOption } from '#test-utils/select-option'
 
 const databaseName = 'bookmarker-local-drafts'
 const shareInput: ShareInput = {
@@ -266,34 +267,12 @@ describe('ComposeRoute publishing in a browser', () => {
         button('button[aria-label="Open Hatena Bookmark settings"]'),
       )
     })
-    const settingsDialog = page.getByRole('dialog', {
-      exact: true,
-      name: 'Hatena Bookmark settings',
+    await selectOption({
+      settingsDialogName: 'Hatena Bookmark settings',
+      comboboxName: 'Hatena Bookmark comment mode',
+      optionName: 'Use individual comment',
     })
-    await act(async () => expect.element(settingsDialog).toBeVisible())
-
-    const trigger = button('#hatena-comment-mode')
-    const triggerLabel = trigger.getAttribute('aria-label')
-    if (triggerLabel === null) {
-      throw new Error('The comment mode select has no accessible name.')
-    }
-    const commentMode = page.getByRole('combobox', {
-      exact: true,
-      name: triggerLabel,
-    })
-    await act(async () => expect.element(commentMode).toBeVisible())
-    await act(async () => commentMode.click())
-    await act(async () =>
-      expect.element(commentMode).toHaveAttribute('aria-expanded', 'true'),
-    )
-
-    const individualCommentOption = page.getByRole('option', {
-      exact: true,
-      name: 'Use individual comment',
-    })
-    await act(async () => expect.element(individualCommentOption).toBeVisible())
     await act(async () => {
-      await individualCommentOption.click()
       await userEvent.fill(
         textarea('#hatena-custom-comment'),
         'A separate individual comment 😀 ',
