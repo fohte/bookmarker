@@ -12,8 +12,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   type AnalysisClientError,
+  type AnalysisOperations,
   extractArticle as requestExtractArticle,
-  useArticleAnalysis,
   verifyComment as requestVerifyComment,
 } from '#features/analysis/index'
 import type { ComposeAnalysisSaveCommand } from '#features/editor/compose-analysis-command'
@@ -122,7 +122,6 @@ const deferred = <T,>() => {
 const captureOutput = <T,>(value: T): T => value
 
 type HookProps = Parameters<typeof useComposeAnalysis>[0]
-type AnalysisOperations = NonNullable<Parameters<typeof useArticleAnalysis>[1]>
 
 let root: Root | undefined
 let current!: ReturnType<typeof useComposeAnalysis>
@@ -133,7 +132,7 @@ const Harness = ({
   operations,
 }: {
   value: HookProps
-  operations?: AnalysisOperations
+  operations: AnalysisOperations | undefined
 }) => {
   current = useComposeAnalysis(value, operations)
   return null
@@ -144,12 +143,7 @@ const mount = async (props: HookProps, operations?: AnalysisOperations) => {
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(
-      <Harness
-        value={props}
-        {...(operations === undefined ? {} : { operations })}
-      />,
-    )
+    root?.render(<Harness value={props} operations={operations} />)
     await Promise.resolve()
   })
 }

@@ -6,6 +6,7 @@ export {
   verifyComment,
 } from '#features/analysis/client'
 export {
+  type AnalysisOperations,
   type AnalysisState,
   type ArticleAnalysisOptions,
   useArticleAnalysis,

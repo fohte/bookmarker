@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   type AnalysisClientError,
+  type AnalysisOperations,
   type AnalysisState,
   type ArticleAnalysisOptions,
   createManualArticle,
@@ -38,8 +39,6 @@ const analysisOperations = {
   summarizeArticle: summarizeArticleRequest,
   verifyComment: verifyCommentRequest,
 }
-type AnalysisOperations = NonNullable<Parameters<typeof useArticleAnalysis>[1]>
-
 const displayState = <T>(state: AnalysisState<T>): AnalysisDisplayState => {
   switch (state.status) {
     case 'idle':

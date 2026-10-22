@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   type AnalysisClientError,
+  type AnalysisOperations,
   type ArticleAnalysisOptions,
   createManualArticle,
   extractArticle as requestExtractArticle,
@@ -70,8 +71,6 @@ const deferred = <T,>() => {
   }
 }
 
-type AnalysisOperations = NonNullable<Parameters<typeof useArticleAnalysis>[1]>
-
 let root: Root | undefined
 let current!: ReturnType<typeof useArticleAnalysis>
 let container: HTMLDivElement | undefined
@@ -81,7 +80,7 @@ const Harness = ({
   operations,
 }: {
   value: ArticleAnalysisOptions
-  operations?: AnalysisOperations
+  operations: AnalysisOperations | undefined
 }) => {
   current = useArticleAnalysis(value, operations)
   return null
@@ -92,12 +91,7 @@ const render = (
   operations?: AnalysisOperations,
 ) => {
   act(() => {
-    root?.render(
-      <Harness
-        value={value}
-        {...(operations === undefined ? {} : { operations })}
-      />,
-    )
+    root?.render(<Harness value={value} operations={operations} />)
   })
 }
 

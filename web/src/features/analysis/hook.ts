@@ -44,7 +44,7 @@ type Operation = {
 
 type StateSetter<T> = Dispatch<SetStateAction<StoredState<T> | null>>
 
-type AnalysisOperations = {
+export type AnalysisOperations = {
   extractArticle: typeof extractArticle
   summarizeArticle: typeof summarizeArticle
   verifyComment: typeof verifyComment
