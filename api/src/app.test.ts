@@ -106,7 +106,7 @@ const summarizeResponse = async (response: Response) => {
       response.body === null
         ? ''
         : contentType !== null && contentType.includes('application/json')
-          ? await response.json()
+          ? ((await response.json()) as unknown)
           : await response.text(),
   }
 }
@@ -143,6 +143,15 @@ describe('Access JWT middleware', () => {
       status: 404,
       body: '404 Not Found',
     })
+  })
+
+  it('rejects an unauthenticated article extraction request', async () => {
+    const response = await createTestApp().request('/api/articles/extract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+    expect(await summarizeResponse(response)).toEqual(unauthorizedResponse)
   })
 
   it('rejects missing, forged, expired, wrong-issuer, wrong-audience, and exp-less tokens', async () => {

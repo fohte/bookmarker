@@ -100,7 +100,7 @@ const send = (
 
 const summarizeResponse = async (response: Response) => ({
   status: response.status,
-  body: await response.json(),
+  body: (await response.json()) as unknown,
 })
 
 const summarizePublication = async (response: Response, calls: unknown) => ({
