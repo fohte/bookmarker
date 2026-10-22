@@ -4,8 +4,6 @@ import type {
   DestinationId,
 } from 'api/contracts'
 
-import { clearDraftVerification } from '#features/editor/compose-draft'
-
 export const destinationIds: DestinationId[] = [
   'hatena',
   'mastodon',
@@ -83,39 +81,14 @@ export function effectiveDestinationComment(
     : destination.customComment
 }
 
-function preserveVerificationUnlessCommentChanges(
-  draft: BookmarkDraft,
-  previousComment: string,
-  nextComment: string,
-): BookmarkDraft {
-  return previousComment === nextComment ? draft : clearDraftVerification(draft)
-}
-
 export function updateDestinationDraft(
   draft: BookmarkDraft,
   destination: DestinationDraft,
 ): BookmarkDraft {
-  const previous = getDestinationDraft(
-    draft.destinations,
-    destination.destination,
-  )
-  const previousComment = effectiveDestinationComment(
-    draft.commonComment,
-    previous,
-  )
-  const nextComment = effectiveDestinationComment(
-    draft.commonComment,
-    destination,
-  )
-  const updated = {
+  return {
     ...draft,
     destinations: replaceDestinationDraft(draft.destinations, destination),
   }
-  return preserveVerificationUnlessCommentChanges(
-    updated,
-    previousComment,
-    nextComment,
-  )
 }
 
 export function copyCommonCommentDraft(
@@ -123,10 +96,6 @@ export function copyCommonCommentDraft(
   destinationId: DestinationId,
 ): BookmarkDraft {
   const destination = getDestinationDraft(draft.destinations, destinationId)
-  const previousComment = effectiveDestinationComment(
-    draft.commonComment,
-    destination,
-  )
   const copiedDestination = {
     ...destination,
     commentMode: 'custom' as const,
@@ -139,13 +108,5 @@ export function copyCommonCommentDraft(
       copiedDestination,
     ),
   }
-  const nextComment = effectiveDestinationComment(
-    draft.commonComment,
-    copiedDestination,
-  )
-  return preserveVerificationUnlessCommentChanges(
-    updated,
-    previousComment,
-    nextComment,
-  )
+  return updated
 }

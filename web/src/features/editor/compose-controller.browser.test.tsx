@@ -319,6 +319,38 @@ describe('ComposeController in a browser', () => {
     expect(captureOutput(actual)).toEqual(expected)
   })
 
+  it('clears saved analysis when a title change is restored after reload', async () => {
+    const store = createIndexedDbDraftStore()
+    const initialDraft = draft()
+    valueOrThrow(await store.addDraft(initialDraft))
+
+    const editing = new ComposeController(store)
+    await editing.start(initialDraft.id)
+    editing.updateTitle('Updated article title')
+    await editing.dispose()
+
+    const restoring = new ComposeController(store)
+    await restoring.start(initialDraft.id)
+    const restored = restoring.state.activeDraft
+    await restoring.dispose()
+
+    const actual =
+      restored === null ? null : { ...restored, updatedAt: '<saved timestamp>' }
+    const expected = {
+      ...omitAnalysis(initialDraft),
+      article: {
+        url: 'https://example.test/article',
+        title: 'Updated article title',
+        text: 'Original article text',
+        source: 'manual',
+        partial: true,
+      },
+      updatedAt: '<saved timestamp>',
+    }
+
+    expect(captureOutput(actual)).toEqual(expected)
+  })
+
   it('restores every destination setting and unfinished tag input', async () => {
     const store = createIndexedDbDraftStore()
     const initialDraft = draft()
@@ -416,7 +448,7 @@ describe('ComposeController in a browser', () => {
     expect(captureOutput(actual)).toEqual(expected)
   })
 
-  it('copies and restores a destination comment while clearing stale verification', async () => {
+  it('copies and restores a destination comment while preserving common verification', async () => {
     const store = createIndexedDbDraftStore()
     const sourceDraft = draft()
     const initialDraft: BookmarkDraft = {
@@ -459,9 +491,50 @@ describe('ComposeController in a browser', () => {
         commentMode: 'custom',
         customComment: 'Original comment',
       },
-      analysis: {
-        summary: { summary: 'A short summary', partial: false },
-      },
+      analysis: initialDraft.analysis ?? null,
+    }
+
+    expect(captureOutput(actual)).toEqual(expected)
+  })
+
+  it('preserves common verification after editing a custom destination comment', async () => {
+    const store = createIndexedDbDraftStore()
+    const initialDraft = draft()
+    valueOrThrow(await store.addDraft(initialDraft))
+
+    const editing = new ComposeController(store)
+    await editing.start(initialDraft.id)
+    const hatena = initialDraft.destinations.find(
+      (destination) => destination.destination === 'hatena',
+    )
+    if (hatena === undefined) {
+      throw new Error('The test draft is missing its Hatena destination.')
+    }
+    const updatedDestination: DestinationDraft = {
+      ...hatena,
+      customComment: 'A revised individual note.',
+    }
+    editing.updateDestination(updatedDestination)
+    await editing.dispose()
+
+    const restoring = new ComposeController(store)
+    await restoring.start(initialDraft.id)
+    const restored = restoring.state.activeDraft
+    const actual =
+      restored === null
+        ? null
+        : {
+            destination:
+              restored.destinations.find(
+                (destination) => destination.destination === 'hatena',
+              ) ?? null,
+            analysis: restored.analysis ?? null,
+          }
+    await restoring.dispose()
+
+    const expected = {
+      destination: updatedDestination,
+      analysis: initialDraft.analysis ?? null,
     }
 
     expect(captureOutput(actual)).toEqual(expected)
