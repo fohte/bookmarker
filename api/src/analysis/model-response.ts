@@ -19,7 +19,7 @@ const InsufficientSchema = z
   .object({ status: z.literal('insufficient') })
   .strict()
 
-export const SummaryModelResponseSchema = z.discriminatedUnion('status', [
+const SummaryModelResponseSchema = z.discriminatedUnion('status', [
   SummarySuccessSchema,
   InsufficientSchema,
 ])
@@ -66,7 +66,7 @@ const VerificationSuccessSchema = z
   })
   .strict()
 
-export const VerificationModelResponseSchema = z.discriminatedUnion('status', [
+const VerificationModelResponseSchema = z.discriminatedUnion('status', [
   VerificationSuccessSchema,
   InsufficientSchema,
 ])
