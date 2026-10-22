@@ -233,18 +233,18 @@ async function readRawDraft(id: string): Promise<unknown> {
     }
   })
 
-  const value = await new Promise<unknown>((resolve, reject) => {
+  return new Promise<unknown>((resolve, reject) => {
     const transaction = database.transaction('drafts', 'readonly')
     const request = transaction.objectStore('drafts').get(id)
-    request.onsuccess = () => {
+    transaction.oncomplete = () => {
+      database.close()
       resolve(request.result)
     }
-    request.onerror = () => {
-      reject(request.error ?? new Error('The test read failed.'))
+    transaction.onabort = () => {
+      database.close()
+      reject(transaction.error ?? new Error('The test read was aborted.'))
     }
   })
-  database.close()
-  return value
 }
 
 function normalizeCreatedDraft(value: BookmarkDraft): BookmarkDraft {
