@@ -192,7 +192,7 @@ jobs:
 
       # Install only the matrix package and its workspace dependencies, not the
       # whole workspace, so each parallel leg skips unrelated packages' installs.
-      - run: pnpm install --filter ./${{ matrix.package }}... --frozen-lockfile
+      - run: pnpm install --filter "{./${{ matrix.package }}}..." --frozen-lockfile
 
       # Story tests run through @storybook/addon-vitest's browser project, which
       # needs a devDependency on `playwright` — only spa packages declare one.
