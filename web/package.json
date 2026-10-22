@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./features/analysis": "./src/features/analysis/index.ts",
     "./features/publish": "./src/features/publish/index.ts"
   },
   "imports": {
