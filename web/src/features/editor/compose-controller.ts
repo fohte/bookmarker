@@ -145,7 +145,9 @@ export class ComposeController {
   }
 
   updateArticleText(text: string): void {
-    this.#updateDraft((draft) => updateDraftArticle(draft, { text }))
+    this.#updateDraft((draft) =>
+      updateDraftArticle(draft, { text, source: 'manual', partial: true }),
+    )
   }
 
   updateCommonComment(commonComment: string): void {

@@ -325,6 +325,50 @@ describe('ComposeController in a browser', () => {
     expect(captureOutput(actual)).toEqual(expected)
   })
 
+  it.each(['shared', 'fetched'] as const)(
+    'marks pasted text from a %s article as manual and clears analysis in one saved snapshot',
+    async (source) => {
+      const store = createIndexedDbDraftStore()
+      const initialSnapshot = draft()
+      const originalArticle = initialSnapshot.article
+      if (originalArticle === undefined) {
+        throw new Error('The test draft is missing its article.')
+      }
+      const initialDraft: BookmarkDraft = {
+        ...initialSnapshot,
+        article: { ...originalArticle, source, partial: false },
+      }
+      valueOrThrow(await store.addDraft(initialDraft))
+
+      const editing = new ComposeController(store)
+      await editing.start(initialDraft.id)
+      editing.updateArticleText('Pasted fictional article text.')
+      await editing.dispose()
+
+      const restoring = new ComposeController(store)
+      await restoring.start(initialDraft.id)
+      const restored = restoring.state.activeDraft
+      await restoring.dispose()
+
+      const actual =
+        restored === null
+          ? null
+          : { ...restored, updatedAt: '<saved timestamp>' }
+      const expected = {
+        ...omitAnalysis(initialDraft),
+        article: {
+          ...originalArticle,
+          text: 'Pasted fictional article text.',
+          source: 'manual',
+          partial: true,
+        },
+        updatedAt: '<saved timestamp>',
+      }
+
+      expect(captureOutput(actual)).toEqual(expected)
+    },
+  )
+
   it('clears saved analysis when a title change is restored after reload', async () => {
     const store = createIndexedDbDraftStore()
     const initialDraft = draft()
