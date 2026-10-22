@@ -15,6 +15,7 @@ import type { DraftStore } from '#features/drafts/draft-store'
 import { createNewDraft } from '#features/editor/compose-draft'
 import {
   cleanupDraftNavigation,
+  type ImportNavigation,
   prepareImportNavigation,
 } from '#features/editor/compose-history'
 import type { ComposeState } from '#features/editor/compose-state'
@@ -29,6 +30,14 @@ type ComposeIntakePort = {
   showError: (error: DraftError) => void
   setState: (patch: Partial<ComposeState>) => void
   refreshDraftList: () => Promise<void>
+  setFailedImportCleanup: (
+    draftId: string,
+    cleanup: {
+      cleanupUrl: string
+      importId: string
+      sourceUrl: string
+    } | null,
+  ) => void
 }
 
 export class ComposeIntake {
@@ -66,22 +75,22 @@ export class ComposeIntake {
       )
     }
 
-    let importId: string | null = null
+    let importNavigation: ImportNavigation | null = null
     if (options.intake === 'share') {
       const navigation = prepareImportNavigation()
       if (navigation.isErr()) {
         return Promise.resolve(err<BookmarkDraft, DraftError>(navigation.error))
       }
-      importId = navigation.value
+      importNavigation = navigation.value
 
-      const inFlight = this.#importsInFlight.get(importId)
+      const inFlight = this.#importsInFlight.get(importNavigation.importId)
       if (inFlight !== undefined) return inFlight
     }
 
     const operation = this.#openPreparedSource(
       parsedInput.data,
       options,
-      importId,
+      importNavigation,
     ).catch((cause: unknown) => {
       console.error('Unexpected local draft intake failure', cause)
       return err<BookmarkDraft, DraftError>(
@@ -92,20 +101,21 @@ export class ComposeIntake {
         ),
       )
     })
-    if (importId === null) return operation
+    if (importNavigation === null) return operation
 
     const trackedOperation = operation.finally(() =>
-      this.#importsInFlight.delete(importId),
+      this.#importsInFlight.delete(importNavigation.importId),
     )
-    this.#importsInFlight.set(importId, trackedOperation)
+    this.#importsInFlight.set(importNavigation.importId, trackedOperation)
     return trackedOperation
   }
 
   async #openPreparedSource(
     input: ShareInput,
     options: { cleanupUrl: string; intake: 'manual' | 'share' },
-    importId: string | null,
+    importNavigation: ImportNavigation | null,
   ): Promise<Result<BookmarkDraft, DraftError>> {
+    const importId = importNavigation?.importId ?? null
     this.port.pauseCurrentDraft()
     const currentFlush = await this.port.flushCurrentDraft()
     if (currentFlush.isErr()) {
@@ -139,6 +149,20 @@ export class ComposeIntake {
         : await this.port.store.commitImport(importId, candidate.value)
     if (saved.isErr()) {
       this.port.resumeCurrentDraft()
+      if (saved.error.code === 'draft-discarded' && importNavigation !== null) {
+        const cleaned = cleanupDraftNavigation(
+          options.cleanupUrl,
+          null,
+          importNavigation.importId,
+          importNavigation.sourceUrl,
+        )
+        if (cleaned.isErr()) return err(cleaned.error)
+
+        const cleared = await this.port.store.clearDiscardedImport(
+          importNavigation.importId,
+        )
+        if (cleared.isErr()) return err(cleared.error)
+      }
       return err(saved.error)
     }
 
@@ -149,10 +173,22 @@ export class ComposeIntake {
       options.cleanupUrl,
       activated.value.id,
       importId,
+      importNavigation?.sourceUrl ?? null,
     )
     if (cleaned.isErr()) {
+      if (importNavigation !== null) {
+        this.port.setFailedImportCleanup(activated.value.id, {
+          cleanupUrl: options.cleanupUrl,
+          importId: importNavigation.importId,
+          sourceUrl: importNavigation.sourceUrl,
+        })
+      }
       this.port.showError(cleaned.error)
       return err(cleaned.error)
+    }
+
+    if (importNavigation !== null) {
+      this.port.setFailedImportCleanup(activated.value.id, null)
     }
 
     this.port.setState({ intakeError: null, errorMessage: null })

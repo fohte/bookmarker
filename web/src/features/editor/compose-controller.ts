@@ -22,6 +22,7 @@ import {
 import {
   cleanupDraftNavigation,
   currentUrlWithoutDraft,
+  type FailedImportCleanup,
 } from '#features/editor/compose-history'
 import { ComposeIntake } from '#features/editor/compose-intake'
 import { loadComposeDraftList } from '#features/editor/compose-list'
@@ -42,6 +43,7 @@ export class ComposeController {
   #lease: DraftLockLease | null = null
   #queue: DraftSaveQueue | null = null
   #intake: ComposeIntake
+  #failedImportCleanups = new Map<string, FailedImportCleanup>()
   #activationPromise: Promise<Result<BookmarkDraft, DraftError>> | null = null
   #disposed = false
   #disposePromise: Promise<void> | null = null
@@ -67,6 +69,13 @@ export class ComposeController {
         this.#setState(patch)
       },
       refreshDraftList: () => this.#refreshDraftList(),
+      setFailedImportCleanup: (draftId, cleanup) => {
+        if (cleanup === null) {
+          this.#failedImportCleanups.delete(draftId)
+        } else {
+          this.#failedImportCleanups.set(draftId, cleanup)
+        }
+      },
     })
   }
 
@@ -171,16 +180,38 @@ export class ComposeController {
       return
     }
 
-    const deleted = await this.store.deleteDraft(draft.id)
+    const failedImportCleanup = this.#failedImportCleanups.get(draft.id)
+    const cleaned = cleanupDraftNavigation(
+      failedImportCleanup?.cleanupUrl ?? currentUrlWithoutDraft(),
+      null,
+      failedImportCleanup?.importId ?? null,
+      failedImportCleanup?.sourceUrl ?? null,
+    )
+    if (cleaned.isErr() && failedImportCleanup === undefined) {
+      this.#resumeCurrentDraft()
+      this.#showError(cleaned.error)
+      return
+    }
+    if (cleaned.isOk()) this.#failedImportCleanups.delete(draft.id)
+
+    const deleted = await this.store.deleteDraft(draft.id, {
+      preserveImportReceipts: cleaned.isErr(),
+    })
     if (deleted.isErr()) {
+      if (cleaned.isOk()) {
+        cleanupDraftNavigation(currentUrlWithoutDraft(), draft.id, null).match(
+          () => undefined,
+          (error) => {
+            this.#showError(error)
+          },
+        )
+      }
       this.#resumeCurrentDraft()
       this.#showError(deleted.error)
       return
     }
 
-    const cleaned = cleanupDraftNavigation(currentUrlWithoutDraft(), null, null)
-    if (cleaned.isErr()) this.#showError(cleaned.error)
-
+    this.#failedImportCleanups.delete(draft.id)
     this.#draft = null
     this.#queue = null
     this.#lease = null

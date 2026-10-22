@@ -6,6 +6,17 @@ const importStateKey = '__bookmarkerDraftImportId'
 const previousStateKey = '__bookmarkerPreviousHistoryState'
 const wrappedStateKey = '__bookmarkerWrappedHistoryState'
 
+export type ImportNavigation = {
+  importId: string
+  sourceUrl: string
+}
+
+export type FailedImportCleanup = {
+  cleanupUrl: string
+  importId: string
+  sourceUrl: string
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -42,7 +53,10 @@ export function currentUrlWithoutDraft(): string {
   return `${url.pathname}${url.search}${url.hash}`
 }
 
-export function prepareImportNavigation(): Result<string, DraftError> {
+export function prepareImportNavigation(): Result<
+  ImportNavigation,
+  DraftError
+> {
   if (
     typeof window === 'undefined' ||
     typeof crypto.randomUUID !== 'function'
@@ -56,10 +70,11 @@ export function prepareImportNavigation(): Result<string, DraftError> {
   }
 
   const currentState: unknown = window.history.state
+  const sourceUrl = window.location.href
   if (isRecord(currentState)) {
     const existingId = currentState[importStateKey]
     if (typeof existingId === 'string' && existingId.length > 0) {
-      return ok(existingId)
+      return ok({ importId: existingId, sourceUrl })
     }
   }
 
@@ -79,13 +94,14 @@ export function prepareImportNavigation(): Result<string, DraftError> {
       ),
   )()
 
-  return result.map(() => importId)
+  return result.map(() => ({ importId, sourceUrl }))
 }
 
 export function cleanupDraftNavigation(
   cleanupUrl: string,
   draftId: string | null,
   importId: string | null,
+  sourceUrl: string | null = null,
 ): Result<undefined, DraftError> {
   if (typeof window === 'undefined') {
     return err(
@@ -109,6 +125,20 @@ export function cleanupDraftNavigation(
       new DraftError(
         'history-update-failed',
         'The draft URL could not be updated.',
+      ),
+    )
+  }
+
+  if (
+    (importId !== null &&
+      (!isRecord(window.history.state) ||
+        window.history.state[importStateKey] !== importId)) ||
+    (sourceUrl !== null && window.location.href !== sourceUrl)
+  ) {
+    return err(
+      new DraftError(
+        'history-update-failed',
+        'The shared URL changed before the draft could be updated.',
       ),
     )
   }

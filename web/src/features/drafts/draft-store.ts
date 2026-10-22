@@ -18,7 +18,7 @@ const importsByDraftIndex = 'by-draft-id'
 
 type ImportReceipt = {
   importId: string
-  draftId: string
+  draftId: string | null
 }
 
 export type DraftListing = {
@@ -35,7 +35,11 @@ export interface DraftStore {
     importId: string,
     draft: BookmarkDraft,
   ): ResultAsync<BookmarkDraft, DraftError>
-  deleteDraft(id: string): ResultAsync<void, DraftError>
+  deleteDraft(
+    id: string,
+    options?: { preserveImportReceipts?: boolean },
+  ): ResultAsync<void, DraftError>
+  clearDiscardedImport(importId: string): ResultAsync<void, DraftError>
 }
 
 function openDatabase(): Promise<IDBDatabase> {
@@ -148,7 +152,7 @@ function isImportReceipt(value: unknown): value is ImportReceipt {
     'importId' in value &&
     typeof value.importId === 'string' &&
     'draftId' in value &&
-    typeof value.draftId === 'string'
+    (typeof value.draftId === 'string' || value.draftId === null)
   )
 }
 
@@ -261,6 +265,11 @@ export function createIndexedDbDraftStore(): DraftStore {
                 return
               }
 
+              if (receiptRequest.result.draftId === null) {
+                setResult(receiptRequest.result)
+                return
+              }
+
               const existingDraftRequest = drafts.get(
                 receiptRequest.result.draftId,
               )
@@ -280,6 +289,15 @@ export function createIndexedDbDraftStore(): DraftStore {
           }
         },
       ).andThen((value) => {
+        if (isImportReceipt(value) && value.draftId === null) {
+          return errAsync(
+            new DraftError(
+              'draft-discarded',
+              'This shared source was already discarded and was not imported again.',
+            ),
+          )
+        }
+
         if (value === undefined) {
           return errAsync(
             new DraftError(
@@ -294,7 +312,8 @@ export function createIndexedDbDraftStore(): DraftStore {
       })
     },
 
-    deleteDraft(id) {
+    deleteDraft(id, options) {
+      const preserveImportReceipts = options?.preserveImportReceipts === true
       return transactionResult<undefined>(
         [draftsStoreName, importsStoreName],
         'readwrite',
@@ -305,9 +324,34 @@ export function createIndexedDbDraftStore(): DraftStore {
 
           receipts.onsuccess = () => {
             for (const receiptKey of receipts.result) {
-              imports.delete(receiptKey)
+              if (preserveImportReceipts && typeof receiptKey === 'string') {
+                imports.put({ importId: receiptKey, draftId: null })
+              } else {
+                imports.delete(receiptKey)
+              }
             }
             drafts.delete(id)
+            setResult(undefined)
+          }
+        },
+      )
+    },
+
+    clearDiscardedImport(importId) {
+      return transactionResult<undefined>(
+        importsStoreName,
+        'readwrite',
+        (transaction, setResult) => {
+          const imports = transaction.objectStore(importsStoreName)
+          const request = imports.get(importId)
+
+          request.onsuccess = () => {
+            if (
+              isImportReceipt(request.result) &&
+              request.result.draftId === null
+            ) {
+              imports.delete(importId)
+            }
             setResult(undefined)
           }
         },
