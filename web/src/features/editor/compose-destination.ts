@@ -101,12 +101,11 @@ export function copyCommonCommentDraft(
     commentMode: 'custom' as const,
     customComment: draft.commonComment,
   }
-  const updated = {
+  return {
     ...draft,
     destinations: replaceDestinationDraft(
       draft.destinations,
       copiedDestination,
     ),
   }
-  return updated
 }

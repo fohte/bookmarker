@@ -70,13 +70,6 @@ export function clearDraftVerification(draft: BookmarkDraft): BookmarkDraft {
   return { ...draft, analysis: { summary: analysis.summary } }
 }
 
-export function updateDraftArticleText(
-  draft: BookmarkDraft,
-  text: string,
-): BookmarkDraft {
-  return updateDraftArticle(draft, { text })
-}
-
 export function createNewDraft(source: ShareInput, intake: 'manual' | 'share') {
   if (
     typeof crypto === 'undefined' ||

@@ -28,7 +28,6 @@ import {
   clearDraftVerification,
   recoverPendingDeliveries,
   updateDraftArticle,
-  updateDraftArticleText,
 } from '#features/editor/compose-draft'
 import {
   cleanupDraftNavigation,
@@ -141,7 +140,7 @@ export class ComposeController {
   }
 
   updateArticleText(text: string): void {
-    this.#updateDraft((draft) => updateDraftArticleText(draft, text))
+    this.#updateDraft((draft) => updateDraftArticle(draft, { text }))
   }
 
   updateCommonComment(commonComment: string): void {
