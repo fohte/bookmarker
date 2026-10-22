@@ -28,10 +28,7 @@ import {
   copyCommonCommentDraft,
   updateDestinationDraft,
 } from '#features/editor/compose-destination'
-import {
-  cleanupBeforeDiscard,
-  restoreDraftUrl,
-} from '#features/editor/compose-discard'
+import { discardComposeDraft } from '#features/editor/compose-discard-command'
 import {
   clearDraftVerification,
   updateDraftArticle,
@@ -205,64 +202,34 @@ export class ComposeController {
     this.#setState({ discardOpen: false })
   }
 
-  async discardDraft(): Promise<void> {
-    if (this.state.isLoading) return
-    const draft = this.#draft
-    const lease = this.#lease
-    if (draft === null || lease === null) return
-
-    this.#pauseCurrentDraft()
-    const flushed = await this.#flushCurrentDraft()
-    if (flushed.isErr()) {
-      this.#resumeCurrentDraft()
-      this.#showError(flushed.error)
-      return
-    }
-
-    const cleanup = cleanupBeforeDiscard(
-      this.#failedImportCleanups.get(draft.id),
-      () => {
-        this.#failedImportCleanups.delete(draft.id)
+  discardDraft(): Promise<void> {
+    return discardComposeDraft({
+      isLoading: this.state.isLoading,
+      draft: this.#draft,
+      lease: this.#lease,
+      store: this.store,
+      failedImportCleanups: this.#failedImportCleanups,
+      pauseCurrentDraft: () => {
+        this.#pauseCurrentDraft()
       },
-    )
-    if (cleanup.isErr()) {
-      this.#resumeCurrentDraft()
-      this.#showError(cleanup.error)
-      return
-    }
-
-    const deleted = await this.store.deleteDraft(draft.id, {
-      preserveImportReceipts: cleanup.value.preserveImportReceipts,
+      resumeCurrentDraft: () => {
+        this.#resumeCurrentDraft()
+      },
+      flushCurrentDraft: () => this.#flushCurrentDraft(),
+      clearActiveDraft: () => {
+        this.#draft = null
+        this.#queue = null
+        this.#lease = null
+      },
+      refreshDraftList: () => this.#refreshDraftList(),
+      getLockState: () => (hasDraftLockSupport() ? 'available' : 'unsupported'),
+      showError: (error) => {
+        this.#showError(error)
+      },
+      setState: (patch) => {
+        this.#setState(patch)
+      },
     })
-    if (deleted.isErr()) {
-      if (!cleanup.value.preserveImportReceipts) {
-        restoreDraftUrl(draft).match(
-          () => undefined,
-          (error) => {
-            this.#showError(error)
-          },
-        )
-      }
-      this.#resumeCurrentDraft()
-      this.#showError(deleted.error)
-      return
-    }
-
-    this.#failedImportCleanups.delete(draft.id)
-    this.#draft = null
-    this.#queue = null
-    this.#lease = null
-    await lease.release()
-    this.#setState({
-      activeDraft: null,
-      canEdit: false,
-      lockState: hasDraftLockSupport() ? 'available' : 'unsupported',
-      saveState: 'saved',
-      errorMessage: cleanup.value.errorMessage,
-      discardOpen: false,
-      isLoading: false,
-    })
-    await this.#refreshDraftList()
   }
 
   dispose(): Promise<void> {
