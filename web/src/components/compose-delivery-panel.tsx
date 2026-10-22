@@ -51,7 +51,9 @@ function deliveryStatus(
     }
     return {
       label: 'Outcome not recorded',
-      details: ['Check the service before retrying.'],
+      details: [
+        'Check the result directly at the service. This editor cannot resend an unconfirmed attempt.',
+      ],
     }
   }
   if (result.status === 'succeeded') {
@@ -65,7 +67,7 @@ function deliveryStatus(
       label: 'Outcome unknown',
       details: [
         ...(result.message === undefined ? [] : [result.message]),
-        'Check the service before retrying. Automatic retry is disabled.',
+        'Check the result directly at the service. This editor cannot resend an unknown outcome.',
       ],
     }
   }
@@ -210,8 +212,8 @@ export function ComposeDeliveryPanel({
       {authenticationRequired && (
         <div className="space-y-2 rounded-md border border-border p-3">
           <p className="text-sm" role="alert">
-            Sign in again to continue. Check any unknown delivery result at the
-            service before retrying.
+            Sign in again to continue. Check unknown results directly at the
+            service; this editor cannot resend those attempts.
           </p>
           {signInHref === null ? (
             <p className="text-sm text-muted-foreground" role="status">

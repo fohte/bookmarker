@@ -20,6 +20,7 @@ const secondDraftId = '00000000-0000-4000-8000-000000000102'
 const successfulOperationId = '00000000-0000-4000-8000-000000000111'
 const failedOperationId = '00000000-0000-4000-8000-000000000112'
 const unknownOperationId = '00000000-0000-4000-8000-000000000113'
+const secondOperationId = '00000000-0000-4000-8000-000000000114'
 
 const metadata: DestinationMetadata = {
   destinations: {
@@ -139,6 +140,20 @@ function normalizeRequest(request: PublishRequest): PublishRequest {
   }
 }
 
+function normalizeRequestWithOriginal(
+  request: PublishRequest,
+  originalOperationId: string,
+): PublishRequest {
+  return {
+    article: request.article,
+    targets: request.targets.map((target) => ({
+      ...target,
+      operationId:
+        target.operationId === originalOperationId ? '<original>' : '<new>',
+    })),
+  }
+}
+
 function normalizeDelivery(
   delivery: BookmarkDraft['delivery'],
 ): BookmarkDraft['delivery'] {
@@ -149,6 +164,25 @@ function normalizeDelivery(
       ? {}
       : { result: { ...snapshot.result, operationId: '<operation>' } }),
   }))
+}
+
+function normalizeDeliveryWithOriginal(
+  delivery: BookmarkDraft['delivery'],
+  originalOperationId: string,
+): BookmarkDraft['delivery'] {
+  return delivery.map((snapshot) => {
+    const operationId =
+      snapshot.target.operationId === originalOperationId
+        ? '<original>'
+        : '<new>'
+    return {
+      article: snapshot.article,
+      target: { ...snapshot.target, operationId },
+      ...(snapshot.result === undefined
+        ? {}
+        : { result: { ...snapshot.result, operationId } }),
+    }
+  })
 }
 
 async function deleteDatabase(): Promise<void> {
@@ -691,6 +725,495 @@ describe('ComposeController delivery', () => {
     })
   })
 
+  it('creates a new attempt only after a nonretryable failure payload changes', async () => {
+    const base = createIndexedDbDraftStore()
+    const initialDraft: BookmarkDraft = {
+      ...draft(),
+      delivery: [
+        {
+          article: {
+            url: 'https://fictional.example.invalid/article',
+            title: 'A fictional article',
+          },
+          target: {
+            destination: 'hatena',
+            operationId: failedOperationId,
+            comment: 'An unfinished common comment',
+            options: { tags: ['fictional tag'], private: false },
+          },
+          result: {
+            destination: 'hatena',
+            operationId: failedOperationId,
+            status: 'failed',
+            retryable: false,
+          },
+        },
+      ],
+    }
+    valueOrThrow(await base.addDraft(initialDraft))
+    const requests: PublishRequest[] = []
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      const request = parseRequest(init)
+      requests.push(request)
+      return Promise.resolve(
+        response({
+          results: request.targets.map((target) => ({
+            destination: target.destination,
+            operationId: target.operationId,
+            status: 'succeeded',
+            retryable: false,
+          })),
+        }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const controller = new ComposeController(base)
+    await controller.start(initialDraft.id)
+    await controller.publishSelectedDestinations(metadata)
+    const samePayload = {
+      callCount: fetchMock.mock.calls.length,
+      errorMessage: controller.state.deliveryErrorMessage,
+    }
+
+    controller.updateTitle('An edited article title')
+    controller.updateCommonComment('An edited common comment')
+    const hatena = controller.state.activeDraft?.destinations.find(
+      (destination) => destination.destination === 'hatena',
+    )
+    if (hatena?.destination === 'hatena') {
+      controller.updateDestination({
+        ...hatena,
+        options: { ...hatena.options, tags: ['an edited tag'] },
+      })
+    }
+    await controller.publishSelectedDestinations(metadata)
+    await controller.retryFailedDeliveries(metadata)
+
+    const persisted = valueOrThrow(await base.getDraft(initialDraft.id))
+    const actual = {
+      samePayload,
+      requestCount: fetchMock.mock.calls.length,
+      request:
+        requests[0] === undefined
+          ? null
+          : normalizeRequestWithOriginal(requests[0], failedOperationId),
+      draft: {
+        article: persisted?.article ?? null,
+        commonComment: persisted?.commonComment ?? null,
+        delivery: normalizeDeliveryWithOriginal(
+          persisted?.delivery ?? [],
+          failedOperationId,
+        ),
+      },
+      retryErrorMessage: controller.state.deliveryErrorMessage,
+    }
+    await controller.dispose()
+
+    expect(captureOutput(actual)).toEqual({
+      samePayload: {
+        callCount: 0,
+        errorMessage:
+          'No selected destination has a new publishable snapshot. Retry eligible failures separately.',
+      },
+      requestCount: 1,
+      request: {
+        article: {
+          url: 'https://fictional.example.invalid/article',
+          title: 'An edited article title',
+        },
+        targets: [
+          {
+            destination: 'hatena',
+            operationId: '<new>',
+            comment: 'An edited common comment',
+            options: { tags: ['an edited tag'], private: false },
+          },
+        ],
+      },
+      draft: {
+        article: {
+          url: 'https://fictional.example.invalid/article',
+          title: 'An edited article title',
+          text: 'A fictional passage.',
+          source: 'shared',
+          partial: true,
+        },
+        commonComment: 'An edited common comment',
+        delivery: [
+          {
+            article: {
+              url: 'https://fictional.example.invalid/article',
+              title: 'A fictional article',
+            },
+            target: {
+              destination: 'hatena',
+              operationId: '<original>',
+              comment: 'An unfinished common comment',
+              options: { tags: ['fictional tag'], private: false },
+            },
+            result: {
+              destination: 'hatena',
+              operationId: '<original>',
+              status: 'failed',
+              retryable: false,
+            },
+          },
+          {
+            article: {
+              url: 'https://fictional.example.invalid/article',
+              title: 'An edited article title',
+            },
+            target: {
+              destination: 'hatena',
+              operationId: '<new>',
+              comment: 'An edited common comment',
+              options: { tags: ['an edited tag'], private: false },
+            },
+            result: {
+              destination: 'hatena',
+              operationId: '<new>',
+              status: 'succeeded',
+              retryable: false,
+            },
+          },
+        ],
+      },
+      retryErrorMessage:
+        'There are no connected failed destinations that can be retried.',
+    })
+  })
+
+  it('blocks older retries and new attempts after a destination succeeds or becomes unknown', async () => {
+    const base = createIndexedDbDraftStore()
+    const initialDraft: BookmarkDraft = {
+      ...draft(),
+      article: {
+        url: 'https://fictional.example.invalid/edited-article',
+        title: 'An edited article title',
+        text: 'An edited article body.',
+        source: 'manual',
+        partial: true,
+      },
+      commonComment: 'An edited common comment',
+      destinations: [
+        {
+          destination: 'hatena',
+          selected: true,
+          commentMode: 'common',
+          customComment: '',
+          options: { tags: ['fictional tag'], private: false },
+        },
+        {
+          destination: 'mastodon',
+          selected: true,
+          commentMode: 'common',
+          customComment: '',
+          options: {
+            visibility: 'public',
+            spoilerText: '',
+            sensitive: false,
+          },
+        },
+      ],
+      delivery: [
+        {
+          article: { url: 'https://fictional.example.invalid/older-hatena' },
+          target: {
+            destination: 'hatena',
+            operationId: failedOperationId,
+            comment: 'An older Hatena comment',
+            options: { tags: ['older'], private: false },
+          },
+          result: {
+            destination: 'hatena',
+            operationId: failedOperationId,
+            status: 'failed',
+            retryable: true,
+          },
+        },
+        {
+          article: { url: 'https://fictional.example.invalid/newer-hatena' },
+          target: {
+            destination: 'hatena',
+            operationId: successfulOperationId,
+            comment: 'A newer Hatena comment',
+            options: { tags: ['newer'], private: false },
+          },
+          result: {
+            destination: 'hatena',
+            operationId: successfulOperationId,
+            status: 'succeeded',
+            retryable: false,
+          },
+        },
+        {
+          article: { url: 'https://fictional.example.invalid/older-mastodon' },
+          target: {
+            destination: 'mastodon',
+            operationId: unknownOperationId,
+            comment: 'An older Mastodon comment',
+            options: {
+              visibility: 'unlisted',
+              spoilerText: '',
+              sensitive: false,
+            },
+          },
+          result: {
+            destination: 'mastodon',
+            operationId: unknownOperationId,
+            status: 'failed',
+            retryable: true,
+          },
+        },
+        {
+          article: { url: 'https://fictional.example.invalid/newer-mastodon' },
+          target: {
+            destination: 'mastodon',
+            operationId: secondOperationId,
+            comment: 'A newer Mastodon comment',
+            options: {
+              visibility: 'private',
+              spoilerText: '',
+              sensitive: true,
+            },
+          },
+          result: {
+            destination: 'mastodon',
+            operationId: secondOperationId,
+            status: 'unknown',
+            retryable: false,
+          },
+        },
+      ],
+    }
+    valueOrThrow(await base.addDraft(initialDraft))
+    const fetchMock = vi.fn(() => Promise.resolve(response({ results: [] })))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const controller = new ComposeController(base)
+    await controller.start(initialDraft.id)
+    await controller.retryFailedDeliveries(metadata)
+    const afterRetry = {
+      requestCount: fetchMock.mock.calls.length,
+      errorMessage: controller.state.deliveryErrorMessage,
+    }
+    await controller.publishSelectedDestinations(metadata)
+
+    const actual = {
+      afterRetry,
+      afterPublish: {
+        requestCount: fetchMock.mock.calls.length,
+        errorMessage: controller.state.deliveryErrorMessage,
+      },
+      delivery: normalizeDelivery(controller.state.activeDraft?.delivery ?? []),
+    }
+    await controller.dispose()
+
+    expect(captureOutput(actual)).toEqual({
+      afterRetry: {
+        requestCount: 0,
+        errorMessage:
+          'There are no connected failed destinations that can be retried.',
+      },
+      afterPublish: {
+        requestCount: 0,
+        errorMessage:
+          'No selected destination has a new publishable snapshot. Retry eligible failures separately.',
+      },
+      delivery: [
+        {
+          article: { url: 'https://fictional.example.invalid/older-hatena' },
+          target: {
+            destination: 'hatena',
+            operationId: '<operation>',
+            comment: 'An older Hatena comment',
+            options: { tags: ['older'], private: false },
+          },
+          result: {
+            destination: 'hatena',
+            operationId: '<operation>',
+            status: 'failed',
+            retryable: true,
+          },
+        },
+        {
+          article: { url: 'https://fictional.example.invalid/newer-hatena' },
+          target: {
+            destination: 'hatena',
+            operationId: '<operation>',
+            comment: 'A newer Hatena comment',
+            options: { tags: ['newer'], private: false },
+          },
+          result: {
+            destination: 'hatena',
+            operationId: '<operation>',
+            status: 'succeeded',
+            retryable: false,
+          },
+        },
+        {
+          article: { url: 'https://fictional.example.invalid/older-mastodon' },
+          target: {
+            destination: 'mastodon',
+            operationId: '<operation>',
+            comment: 'An older Mastodon comment',
+            options: {
+              visibility: 'unlisted',
+              spoilerText: '',
+              sensitive: false,
+            },
+          },
+          result: {
+            destination: 'mastodon',
+            operationId: '<operation>',
+            status: 'failed',
+            retryable: true,
+          },
+        },
+        {
+          article: { url: 'https://fictional.example.invalid/newer-mastodon' },
+          target: {
+            destination: 'mastodon',
+            operationId: '<operation>',
+            comment: 'A newer Mastodon comment',
+            options: {
+              visibility: 'private',
+              spoilerText: '',
+              sensitive: true,
+            },
+          },
+          result: {
+            destination: 'mastodon',
+            operationId: '<operation>',
+            status: 'unknown',
+            retryable: false,
+          },
+        },
+      ],
+    })
+  })
+
+  it('stops retrying the destination after one attempt succeeds', async () => {
+    const base = createIndexedDbDraftStore()
+    const initialDraft: BookmarkDraft = {
+      ...draft(),
+      delivery: [
+        {
+          article: { url: 'https://fictional.example.invalid/first-retry' },
+          target: {
+            destination: 'hatena',
+            operationId: failedOperationId,
+            comment: 'The first failed comment',
+            options: { tags: ['first'], private: false },
+          },
+          result: {
+            destination: 'hatena',
+            operationId: failedOperationId,
+            status: 'failed',
+            retryable: true,
+          },
+        },
+        {
+          article: { url: 'https://fictional.example.invalid/second-retry' },
+          target: {
+            destination: 'hatena',
+            operationId: secondOperationId,
+            comment: 'The second failed comment',
+            options: { tags: ['second'], private: false },
+          },
+          result: {
+            destination: 'hatena',
+            operationId: secondOperationId,
+            status: 'failed',
+            retryable: true,
+          },
+        },
+      ],
+    }
+    valueOrThrow(await base.addDraft(initialDraft))
+    const requests: PublishRequest[] = []
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      const request = parseRequest(init)
+      requests.push(request)
+      return Promise.resolve(
+        response({
+          results: request.targets.map((target) => ({
+            destination: target.destination,
+            operationId: target.operationId,
+            status: 'succeeded',
+            retryable: false,
+          })),
+        }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const controller = new ComposeController(base)
+    await controller.start(initialDraft.id)
+    await controller.retryFailedDeliveries(metadata)
+
+    const persisted = valueOrThrow(await base.getDraft(initialDraft.id))
+    const actual = {
+      requestCount: fetchMock.mock.calls.length,
+      request:
+        requests[0] === undefined
+          ? null
+          : normalizeRequestWithOriginal(requests[0], failedOperationId),
+      delivery: normalizeDelivery(persisted?.delivery ?? []),
+      deliveryState: controller.state.deliveryState,
+    }
+    await controller.dispose()
+
+    expect(captureOutput(actual)).toEqual({
+      requestCount: 1,
+      request: {
+        article: { url: 'https://fictional.example.invalid/first-retry' },
+        targets: [
+          {
+            destination: 'hatena',
+            operationId: '<original>',
+            comment: 'The first failed comment',
+            options: { tags: ['first'], private: false },
+          },
+        ],
+      },
+      delivery: [
+        {
+          article: { url: 'https://fictional.example.invalid/first-retry' },
+          target: {
+            destination: 'hatena',
+            operationId: '<operation>',
+            comment: 'The first failed comment',
+            options: { tags: ['first'], private: false },
+          },
+          result: {
+            destination: 'hatena',
+            operationId: '<operation>',
+            status: 'succeeded',
+            retryable: false,
+          },
+        },
+        {
+          article: { url: 'https://fictional.example.invalid/second-retry' },
+          target: {
+            destination: 'hatena',
+            operationId: '<operation>',
+            comment: 'The second failed comment',
+            options: { tags: ['second'], private: false },
+          },
+          result: {
+            destination: 'hatena',
+            operationId: '<operation>',
+            status: 'failed',
+            retryable: true,
+          },
+        },
+      ],
+      deliveryState: 'idle',
+    })
+  })
+
   it('retries only the original retryable failure and never resends other attempts', async () => {
     const base = createIndexedDbDraftStore()
     const initialDraft: BookmarkDraft = {
@@ -960,7 +1483,7 @@ describe('ComposeController delivery', () => {
         },
       ],
       deliveryErrorMessage:
-        'Every selected API destination already has a delivery attempt. Retry eligible failures separately.',
+        'No selected destination has a new publishable snapshot. Retry eligible failures separately.',
     })
   })
 
@@ -1183,7 +1706,7 @@ describe('ComposeController delivery', () => {
       saveState: 'saved',
       authenticationRequired: true,
       deliveryErrorMessage:
-        'Every selected API destination already has a delivery attempt. Retry eligible failures separately.',
+        'No selected destination has a new publishable snapshot. Retry eligible failures separately.',
       memoryComment: 'Keep this exact comment after sign-in.  ',
       memoryDelivery: [
         {

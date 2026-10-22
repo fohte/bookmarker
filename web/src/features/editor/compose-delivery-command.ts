@@ -24,6 +24,62 @@ const operationKey = (
   target: Pick<PublishTarget, 'destination' | 'operationId'>,
 ) => `${target.destination}:${target.operationId}`
 
+type NewPublishTarget =
+  | Omit<Extract<PublishTarget, { destination: 'hatena' }>, 'operationId'>
+  | Omit<Extract<PublishTarget, { destination: 'mastodon' }>, 'operationId'>
+  | Omit<Extract<PublishTarget, { destination: 'raindrop' }>, 'operationId'>
+
+function createNewPublishTarget(
+  destination: Exclude<
+    BookmarkDraft['destinations'][number],
+    { destination: 'x' }
+  >,
+  comment: string,
+): NewPublishTarget {
+  switch (destination.destination) {
+    case 'hatena':
+      return {
+        destination: 'hatena',
+        comment,
+        options: destination.options,
+      }
+    case 'mastodon':
+      return {
+        destination: 'mastodon',
+        comment,
+        options: destination.options,
+      }
+    case 'raindrop':
+      return {
+        destination: 'raindrop',
+        comment,
+        options: destination.options,
+      }
+  }
+}
+
+function optionsKey(options: PublishTarget['options']): string {
+  return JSON.stringify(
+    Object.entries(options).sort(([left], [right]) =>
+      left.localeCompare(right),
+    ),
+  )
+}
+
+function hasSamePayload(
+  article: PublishArticle,
+  target: NewPublishTarget,
+  snapshot: BookmarkDraft['delivery'][number],
+): boolean {
+  return (
+    article.url === snapshot.article.url &&
+    article.title === snapshot.article.title &&
+    target.destination === snapshot.target.destination &&
+    target.comment === snapshot.target.comment &&
+    optionsKey(target.options) === optionsKey(snapshot.target.options)
+  )
+}
+
 const isSelectedPublishDestination = (
   destination: BookmarkDraft['destinations'][number],
 ): destination is Extract<
@@ -84,15 +140,8 @@ export function createNewDeliveryPlan(
   }
 
   const targets: PublishTarget[] = []
+  const article = publishArticle(draft)
   for (const destination of selected) {
-    if (
-      draft.delivery.some(
-        (item) => item.target.destination === destination.destination,
-      )
-    ) {
-      continue
-    }
-
     if (!isConfigured(destination.destination, metadata)) {
       return err(destinationError(destination.destination))
     }
@@ -113,6 +162,24 @@ export function createNewDeliveryPlan(
       }
     }
 
+    const comment = effectiveDestinationComment(
+      draft.commonComment,
+      destination,
+    )
+    const target = createNewPublishTarget(destination, comment)
+    const history = draft.delivery.filter(
+      (snapshot) => snapshot.target.destination === destination.destination,
+    )
+    if (
+      history.some(
+        (snapshot) =>
+          snapshot.result === undefined || snapshot.result.status !== 'failed',
+      ) ||
+      history.some((snapshot) => hasSamePayload(article, target, snapshot))
+    ) {
+      continue
+    }
+
     if (
       typeof crypto === 'undefined' ||
       typeof crypto.randomUUID !== 'function'
@@ -121,51 +188,34 @@ export function createNewDeliveryPlan(
     }
 
     const operationId = crypto.randomUUID()
-    const comment = effectiveDestinationComment(
-      draft.commonComment,
-      destination,
-    )
-    switch (destination.destination) {
-      case 'hatena':
-        targets.push({
-          destination: 'hatena',
-          operationId,
-          comment,
-          options: destination.options,
-        })
-        break
-      case 'mastodon':
-        targets.push({
-          destination: 'mastodon',
-          operationId,
-          comment,
-          options: destination.options,
-        })
-        break
-      case 'raindrop':
-        targets.push({
-          destination: 'raindrop',
-          operationId,
-          comment,
-          options: destination.options,
-        })
-        break
-    }
+    targets.push({ ...target, operationId })
   }
 
   if (targets.length === 0) {
     return err(
-      'Every selected API destination already has a delivery attempt. Retry eligible failures separately.',
+      'No selected destination has a new publishable snapshot. Retry eligible failures separately.',
     )
   }
 
-  return parsePlan(publishArticle(draft), targets)
+  return parsePlan(article, targets)
 }
 
 export function getRetryDeliveryTargets(draft: BookmarkDraft): PublishTarget[] {
+  const blockedDestinations = new Set(
+    draft.delivery
+      .filter(
+        (snapshot) =>
+          snapshot.result === undefined || snapshot.result.status !== 'failed',
+      )
+      .map((snapshot) => snapshot.target.destination),
+  )
+  const retryableHistory = draft.delivery.filter(
+    (snapshot) => !blockedDestinations.has(snapshot.target.destination),
+  )
+
   return selectRetryTargets(
-    draft.delivery.map((snapshot) => snapshot.target),
-    draft.delivery.flatMap((snapshot) =>
+    retryableHistory.map((snapshot) => snapshot.target),
+    retryableHistory.flatMap((snapshot) =>
       snapshot.result === undefined ? [] : [snapshot.result],
     ),
   )

@@ -12,6 +12,7 @@ import {
   type ComposeDeliveryPlan,
   createNewDeliveryPlan,
   createRetryDeliveryPlans,
+  getRetryDeliveryTargets,
   makeRetryPending,
 } from '#features/editor/compose-delivery-command'
 import type { ComposeState } from '#features/editor/compose-state'
@@ -196,6 +197,15 @@ export class ComposeDeliveryCoordinator {
         this.#finish('The active draft changed before retry could start.')
         return
       }
+      if (
+        !getRetryDeliveryTargets(current).some(
+          (candidate) =>
+            candidate.destination === target.destination &&
+            candidate.operationId === target.operationId,
+        )
+      ) {
+        continue
+      }
 
       const pending = makeRetryPending(current, target)
       const result = await this.#sendPlan(
@@ -207,6 +217,8 @@ export class ComposeDeliveryCoordinator {
       )
       if (!result.saved || result.authenticationRequired) return
     }
+
+    if (this.#busy) this.#finish(null)
   }
 
   async #restoreBeforeSend(draft: BookmarkDraft): Promise<void> {
