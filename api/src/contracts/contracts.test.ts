@@ -518,6 +518,40 @@ describe('BookmarkDraft and API errors', () => {
     })
   })
 
+  it('rejects a delivery snapshot without its sent article', () => {
+    expect(
+      summarizeParse(
+        BookmarkDraftSchema.safeParse({
+          version: 1,
+          id: '9fcb8334-cd5c-4375-8a41-caecc57def69',
+          source: { version: 1, url: 'https://example.com/story' },
+          commonComment: '',
+          delivery: [
+            {
+              target: {
+                destination: 'hatena',
+                operationId: 'a813a5ad-d795-42fb-a2a0-c08b305d7684',
+                comment: 'Sent comment',
+                options: { tags: ['sample'], private: false },
+              },
+            },
+          ],
+          updatedAt: '2000-01-01T00:00:00.000Z',
+        }),
+      ),
+    ).toEqual({
+      success: false,
+      issues: [
+        {
+          code: 'invalid_type',
+          expected: 'object',
+          message: 'Invalid input: expected object, received undefined',
+          path: ['delivery', 0, 'article'],
+        },
+      ],
+    })
+  })
+
   it('validates the shared API error envelope', () => {
     expect(
       ApiErrorEnvelopeSchema.safeParse({
