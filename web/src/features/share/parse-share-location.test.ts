@@ -39,25 +39,39 @@ const parseLink = (link: string) => {
   return parseShareLocation(url.pathname, url.search, url.hash)
 }
 
-const macBookmarkletOpenOutput = (
-  openedUrl: string,
-  openedTarget: string,
-  fallback: { message: string; url: string } | null,
-) => ({
-  openedUrl,
-  openedTarget,
-  fallback,
-  parsed: parseLink(openedUrl),
-})
+const runMacBookmarklet = (
+  pageUrl: string,
+  { blocked }: { blocked: boolean },
+) => {
+  let openedUrl = ''
+  let openedTarget = ''
+  let prompt: { message: string; url: string } | null = null
 
-const macBookmarkletFallbackOutput = (
-  openedUrl: string,
-  prompt: { message: string; url: string } | null,
-) => ({
-  openedUrl,
-  prompt,
-  parsed: parseLink(openedUrl),
-})
+  runInNewContext(
+    macBookmarklet.replace(/^javascript:/, '').replace(/[\t\n\r]/g, ''),
+    {
+      URL,
+      window: {
+        location: { href: pageUrl },
+        open: (url: string, target: string) => {
+          openedUrl = url
+          openedTarget = target
+          return blocked ? null : {}
+        },
+        prompt: (message: string, url: string) => {
+          prompt = { message, url }
+        },
+      },
+    },
+  )
+
+  return {
+    openedUrl,
+    openedTarget,
+    prompt,
+    parsed: parseLink(openedUrl),
+  }
+}
 
 const safariResult = (output: SafariOutput | undefined) => ({
   output,
@@ -453,71 +467,37 @@ describe('Safari shortcut distribution', () => {
   })
 
   it('opens a URL-only link in a new tab from the Mac bookmarklet', () => {
-    let openedUrl = ''
-    let openedTarget = ''
-    let fallback: { message: string; url: string } | null = null
-    runInNewContext(
-      macBookmarklet.replace(/^javascript:/, '').replace(/[\t\n\r]/g, ''),
-      {
-        URL,
-        window: {
-          location: {
-            href: 'https://articles.example.invalid/story?q=a%2Bb#chapter',
-          },
-          open: (url: string, target: string) => {
-            openedUrl = url
-            openedTarget = target
-            return {}
-          },
-          prompt: (message: string, url: string) => {
-            fallback = { message, url }
-          },
-        },
-      },
+    const output = runMacBookmarklet(
+      'https://articles.example.invalid/story?q=a%2Bb#chapter',
+      { blocked: false },
     )
 
-    expect(macBookmarkletOpenOutput(openedUrl, openedTarget, fallback)).toEqual(
-      {
-        openedUrl:
-          'https://bookmark-app.example.invalid/compose?url=https%3A%2F%2Farticles.example.invalid%2Fstory%3Fq%3Da%252Bb%23chapter',
-        openedTarget: '_blank',
-        fallback: null,
-        parsed: {
-          type: 'valid',
-          input: {
-            version: 1,
-            url: 'https://articles.example.invalid/story?q=a%2Bb#chapter',
-            partial: false,
-          },
-          cleanupUrl: '/compose',
+    expect(output).toEqual({
+      openedUrl:
+        'https://bookmark-app.example.invalid/compose?url=https%3A%2F%2Farticles.example.invalid%2Fstory%3Fq%3Da%252Bb%23chapter',
+      openedTarget: '_blank',
+      prompt: null,
+      parsed: {
+        type: 'valid',
+        input: {
+          version: 1,
+          url: 'https://articles.example.invalid/story?q=a%2Bb#chapter',
+          partial: false,
         },
+        cleanupUrl: '/compose',
       },
-    )
+    })
   })
 
   it('prompts with the URL if the Mac browser blocks the new tab', () => {
-    let openedUrl = ''
-    let prompt: { message: string; url: string } | null = null
-    runInNewContext(
-      macBookmarklet.replace(/^javascript:/, '').replace(/[\t\n\r]/g, ''),
-      {
-        URL,
-        window: {
-          location: { href: 'https://articles.example.invalid/story' },
-          open: (url: string) => {
-            openedUrl = url
-            return null
-          },
-          prompt: (message: string, url: string) => {
-            prompt = { message, url }
-          },
-        },
-      },
-    )
+    const output = runMacBookmarklet('https://articles.example.invalid/story', {
+      blocked: true,
+    })
 
-    expect(macBookmarkletFallbackOutput(openedUrl, prompt)).toEqual({
+    expect(output).toEqual({
       openedUrl:
         'https://bookmark-app.example.invalid/compose?url=https%3A%2F%2Farticles.example.invalid%2Fstory',
+      openedTarget: '_blank',
       prompt: {
         message: 'Copy this URL to open Bookmarker',
         url: 'https://bookmark-app.example.invalid/compose?url=https%3A%2F%2Farticles.example.invalid%2Fstory',
