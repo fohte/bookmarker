@@ -182,5 +182,3 @@ export const createAnalysisRoute = (
 
   return route
 }
-
-export const analysisRoute = createAnalysisRoute()
