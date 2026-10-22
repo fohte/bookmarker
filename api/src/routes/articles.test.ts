@@ -132,4 +132,23 @@ describe('POST /api/articles/extract', () => {
       0,
     ])
   })
+
+  it('rejects malformed JSON with the complete error envelope', async () => {
+    const response = await app.request('/api/articles/extract', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{',
+    })
+
+    const body = JSON.parse(await response.text()) as unknown
+    expect(observe(response.status, body)).toEqual([
+      400,
+      {
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'The request body is invalid.',
+        },
+      },
+    ])
+  })
 })

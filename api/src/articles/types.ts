@@ -8,7 +8,7 @@ import type { Article, ShareInput } from '#contracts/index'
 
 export const ARTICLE_TEXT_LIMIT = 100_000
 export const HTML_RESPONSE_LIMIT = 2 * 1024 * 1024
-export const ARTICLE_FETCH_TIMEOUT = 10_000
+export const ARTICLE_FETCH_TIMEOUT_MS = 10_000
 export const ARTICLE_REDIRECT_LIMIT = 5
 export const READABILITY_ELEMENT_LIMIT = 50_000
 

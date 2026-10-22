@@ -25,6 +25,7 @@ import {
 } from '#articles/types'
 import {
   createPinnedLookup,
+  hostnameFor,
   resolvePublicAddress,
   validateArticleUrl,
 } from '#articles/url-policy'
@@ -36,11 +37,6 @@ export type DownloadedHtml = {
   contentType: string
   finalUrl: URL
 }
-
-const hostnameFor = (url: URL): string =>
-  url.hostname.startsWith('[') && url.hostname.endsWith(']')
-    ? url.hostname.slice(1, -1)
-    : url.hostname
 
 const getHeader = (
   response: ArticleHttpResponse,

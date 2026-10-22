@@ -440,6 +440,79 @@ describe('article extraction route', () => {
     ])
   })
 
+  it('aborts a stalled HTTP request when the total deadline expires', async () => {
+    let abortObserved = false
+    const extraction = await createArticleExtractor({
+      timeoutMs: 50,
+      createResolver: () => createResolver(),
+      request: (options) =>
+        new Promise((_resolve, reject) => {
+          const observeAbort = () => {
+            abortObserved = true
+            reject(new Error('Request aborted'))
+          }
+          if (options.signal.aborted) {
+            observeAbort()
+            return
+          }
+          options.signal.addEventListener('abort', observeAbort, {
+            once: true,
+          })
+        }),
+    })(
+      {
+        version: 1,
+        url: 'https://stalled.example.invalid/read',
+        partial: false,
+      },
+      new AbortController().signal,
+    )
+    const result = extraction.isErr() ? extraction.error.kind : 'success'
+
+    expect(observe(result, abortObserved)).toEqual(['timeout', true])
+  })
+
+  it('aborts a stalled response body when the total deadline expires', async () => {
+    let abortObserved = false
+    const extraction = await createArticleExtractor({
+      timeoutMs: 50,
+      createResolver: () => createResolver(),
+      request: (options) =>
+        Promise.resolve({
+          statusCode: 200,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+          body: {
+            async *[Symbol.asyncIterator]() {
+              await new Promise<void>((_resolve, reject) => {
+                const observeAbort = () => {
+                  abortObserved = true
+                  reject(new Error('Response body aborted'))
+                }
+                if (options.signal.aborted) {
+                  observeAbort()
+                  return
+                }
+                options.signal.addEventListener('abort', observeAbort, {
+                  once: true,
+                })
+              })
+            },
+          },
+          destroy: () => undefined,
+        }),
+    })(
+      {
+        version: 1,
+        url: 'https://stalled-body.example.invalid/read',
+        partial: false,
+      },
+      new AbortController().signal,
+    )
+    const result = extraction.isErr() ? extraction.error.kind : 'success'
+
+    expect(observe(result, abortObserved)).toEqual(['timeout', true])
+  })
+
   it('counts streamed bytes and rejects HTML above two mebibytes', async () => {
     let destroyed = false
     const result = await sendExtract(
@@ -475,40 +548,108 @@ describe('article extraction route', () => {
     ])
   })
 
-  it('rejects compressed and non-HTML responses', async () => {
-    const cases = [
+  it('rejects an HTML response that ends before the HTTP message completes', async () => {
+    const result = await sendExtract(
       {
-        name: 'compressed',
-        headers: {
-          'content-type': 'text/html; charset=utf-8',
-          'content-encoding': 'gzip',
-        },
+        createResolver: () => createResolver(),
+        request: () =>
+          Promise.resolve(
+            makeResponse(
+              200,
+              { 'content-type': 'text/html; charset=utf-8' },
+              [Buffer.from(storyHtml)],
+              false,
+            ),
+          ),
       },
-      { name: 'non-html', headers: { 'content-type': 'application/json' } },
-    ]
-    const results = await Promise.all(
-      cases.map(async ({ headers }) =>
-        sendExtract(
-          {
-            createResolver: () => createResolver(),
-            request: () => Promise.resolve(makeResponse(200, headers)),
-          },
-          articleInput('https://format.example.invalid/read'),
-        ),
-      ),
+      articleInput('https://truncated.example.invalid/read'),
     )
 
-    expect(results).toEqual(
-      cases.map(() => ({
-        status: 422,
-        body: {
-          error: {
-            code: 'ARTICLE_UNAVAILABLE',
-            message: 'The article could not be extracted.',
-          },
+    expect(result).toEqual({
+      status: 422,
+      body: {
+        error: {
+          code: 'ARTICLE_UNAVAILABLE',
+          message: 'The article could not be extracted.',
         },
-      })),
+      },
+    })
+  })
+
+  it('does not execute embedded scripts while parsing fetched HTML', async () => {
+    const html = `<!doctype html><html><head><title>Imaginary notes</title></head><body><img src="https://pixel.example.invalid/image"><article><p>${storyParagraph}</p></article><script>document.querySelector('article p').textContent = 'unexpected mutation'</script></body></html>`
+    const result = await sendExtract(
+      {
+        createResolver: () => createResolver(),
+        request: () =>
+          Promise.resolve(
+            makeResponse(200, { 'content-type': 'text/html; charset=utf-8' }, [
+              Buffer.from(html),
+            ]),
+          ),
+      },
+      articleInput('https://scripted.example.invalid/read'),
     )
+
+    expect(result).toEqual({
+      status: 200,
+      body: {
+        url: 'https://scripted.example.invalid/read',
+        title: 'Imaginary notes',
+        text: storyParagraph,
+        source: 'fetched',
+        partial: false,
+      },
+    })
+  })
+
+  it('rejects compressed HTML responses', async () => {
+    const result = await sendExtract(
+      {
+        createResolver: () => createResolver(),
+        request: () =>
+          Promise.resolve(
+            makeResponse(200, {
+              'content-type': 'text/html; charset=utf-8',
+              'content-encoding': 'gzip',
+            }),
+          ),
+      },
+      articleInput('https://compressed.example.invalid/read'),
+    )
+
+    expect(result).toEqual({
+      status: 422,
+      body: {
+        error: {
+          code: 'ARTICLE_UNAVAILABLE',
+          message: 'The article could not be extracted.',
+        },
+      },
+    })
+  })
+
+  it('rejects non-HTML responses', async () => {
+    const result = await sendExtract(
+      {
+        createResolver: () => createResolver(),
+        request: () =>
+          Promise.resolve(
+            makeResponse(200, { 'content-type': 'application/json' }),
+          ),
+      },
+      articleInput('https://format.example.invalid/read'),
+    )
+
+    expect(result).toEqual({
+      status: 422,
+      body: {
+        error: {
+          code: 'ARTICLE_UNAVAILABLE',
+          message: 'The article could not be extracted.',
+        },
+      },
+    })
   })
 
   it('marks extracted text partial when it exceeds the Article limit', async () => {

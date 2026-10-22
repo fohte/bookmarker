@@ -4,13 +4,12 @@ import {
   ARTICLE_FETCH_FAILED,
   ARTICLE_FETCH_TIMEOUT,
   ARTICLE_INVALID_INPUT,
-  ARTICLE_UNSAFE_URL,
   type ArticleExtractionError,
 } from '#articles/errors'
 import { fetchArticleHtml, nodeArticleRequest } from '#articles/fetch-html'
 import { createFetchedArticle } from '#articles/parse-html'
 import {
-  ARTICLE_FETCH_TIMEOUT as DEFAULT_TIMEOUT,
+  ARTICLE_FETCH_TIMEOUT_MS,
   type ArticleExtractor,
   type ArticleExtractorOptions,
   HTML_RESPONSE_LIMIT,
@@ -49,7 +48,7 @@ const fetchArticle = (
   const timeout = setTimeout(() => {
     timedOut = true
     cancel()
-  }, options.timeoutMs ?? DEFAULT_TIMEOUT)
+  }, options.timeoutMs ?? ARTICLE_FETCH_TIMEOUT_MS)
   signal.addEventListener('abort', handleCallerAbort, { once: true })
   if (signal.aborted) handleCallerAbort()
 
@@ -118,13 +117,7 @@ export const createArticleExtractor =
       return createSharedArticle(shareInput)
 
     const url = validateArticleUrl(shareInput.url)
-    if (url.isErr()) {
-      return errAsync(
-        url.error.kind === 'unsafe-url'
-          ? ARTICLE_UNSAFE_URL
-          : ARTICLE_INVALID_INPUT,
-      )
-    }
+    if (url.isErr()) return errAsync(url.error)
 
     return fetchArticle(shareInput, url.value, signal, options)
   }

@@ -18,7 +18,7 @@ const getErrorCode = (error: unknown): unknown =>
     ? error.code
     : undefined
 
-const hostnameFor = (url: URL): string =>
+export const hostnameFor = (url: URL): string =>
   url.hostname.startsWith('[') && url.hostname.endsWith(']')
     ? url.hostname.slice(1, -1)
     : url.hostname
@@ -36,7 +36,7 @@ const isPublicUnicast = (address: string): boolean => {
 
 export const validateArticleUrl = (
   value: string,
-): Result<URL, ArticleExtractionError> => {
+): Result<URL, typeof ARTICLE_UNSAFE_URL> => {
   const parsed = Result.fromThrowable(
     (url: string) => new URL(url),
     () => ARTICLE_UNSAFE_URL,
@@ -93,19 +93,12 @@ export const resolvePublicAddress = (
         ...ipv6.map((address) => ({ address, family: 6 as const })),
       ]
 
-      if (
-        addresses.length === 0 ||
-        addresses.some(({ address }) => !isPublicUnicast(address))
-      ) {
-        return errAsync(
-          addresses.length === 0 ? ARTICLE_FETCH_FAILED : ARTICLE_UNSAFE_URL,
-        )
-      }
-
       const firstAddress = addresses[0]
-      return firstAddress === undefined
-        ? errAsync(ARTICLE_FETCH_FAILED)
-        : okAsync(firstAddress)
+      if (firstAddress === undefined) return errAsync(ARTICLE_FETCH_FAILED)
+      if (addresses.some(({ address }) => !isPublicUnicast(address))) {
+        return errAsync(ARTICLE_UNSAFE_URL)
+      }
+      return okAsync(firstAddress)
     }),
   )
 }
