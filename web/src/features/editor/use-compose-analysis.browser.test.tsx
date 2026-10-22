@@ -94,9 +94,9 @@ const draft = (
   updatedAt: '2026-10-22T00:00:00.000Z',
 })
 
-const jsonResponse = (body: unknown): Response =>
+const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
-    status: 200,
+    status,
     headers: { 'content-type': 'application/json' },
   })
 
@@ -145,6 +145,34 @@ afterEach(() => {
 })
 
 describe('useComposeAnalysis', () => {
+  it('shows authentication-required when the analysis API asks the user to sign in', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          jsonResponse(
+            { error: { code: 'unauthorized', message: 'Sign in required.' } },
+            401,
+          ),
+        ),
+      ),
+    )
+
+    await mount({
+      draft: draft(undefined),
+      canEdit: true,
+      autoAnalyzeDraftId: null,
+      saveAnalysisResult: () => true,
+    })
+    await act(async () => {
+      await current.onSummarizeArticle()
+    })
+
+    expect(captureOutput({ summaryState: current.summaryState })).toEqual({
+      summaryState: 'authentication-required',
+    })
+  })
+
   it('keeps custom verification session-only and restores only common verification', async () => {
     const savedCommands: ComposeAnalysisSaveCommand[] = []
     const saveAnalysisResult = vi.fn((command: ComposeAnalysisSaveCommand) => {

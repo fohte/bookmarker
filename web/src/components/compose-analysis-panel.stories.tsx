@@ -67,6 +67,14 @@ export const Unavailable: Story = {
   name: 'The editor explains that the analysis service is temporarily unavailable.',
 }
 
+export const AuthenticationRequired: Story = {
+  args: {
+    summaryState: 'authentication-required',
+    verificationState: 'not-requested',
+  },
+  name: 'The editor asks the user to sign in before running analysis.',
+}
+
 export const Loading: Story = {
   args: { summaryState: 'loading', verificationState: 'loading' },
   name: 'The editor distinguishes analysis that is still in progress.',

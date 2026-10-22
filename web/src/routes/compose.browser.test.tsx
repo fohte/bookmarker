@@ -208,7 +208,7 @@ describe('ComposeRoute share intake', () => {
     })
   })
 
-  it('reports oversized manual text without sending it to the controller', async () => {
+  it('rejects oversized manual text and accepts the exact limit', async () => {
     controllerMocks.state.current = {
       ...initialComposeState,
       drafts: [manualDraft],
@@ -239,6 +239,25 @@ describe('ComposeRoute share intake', () => {
     ).toEqual({
       error: 'Article text must be 100,000 UTF-16 code units or fewer.',
       updateCalls: [],
+    })
+
+    const exactLimitText = 'x'.repeat(100_000)
+    act(() => {
+      updatedProps.onArticleTextChange(exactLimitText)
+    })
+
+    const acceptedProps = controllerMocks.screenProps.current
+    if (acceptedProps === null) {
+      throw new Error('ComposeRoute did not render the compose screen.')
+    }
+    expect(
+      captureOutput({
+        error: acceptedProps.articleTextError,
+        updateCalls: controllerMocks.updateArticleText.mock.calls,
+      }),
+    ).toEqual({
+      error: null,
+      updateCalls: [[exactLimitText]],
     })
   })
 })

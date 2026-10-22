@@ -2,8 +2,7 @@ import { Button } from '@fohte/ui/button'
 import { Panel } from '@fohte/ui/panel'
 import type { Article, Summary, Verification } from 'api/contracts'
 
-type AnalysisDisplayState =
-  'not-requested' | 'loading' | 'success' | 'failed' | 'stale' | 'unavailable'
+import type { AnalysisDisplayState } from '#features/editor/compose-analysis-state'
 
 function stateMessage(
   state: AnalysisDisplayState,
@@ -23,6 +22,8 @@ function stateMessage(
       return `The previous ${subject.toLowerCase()} is out of date. Run it again.`
     case 'unavailable':
       return 'The analysis service is temporarily unavailable.'
+    case 'authentication-required':
+      return 'Sign in to use article analysis, then try again.'
     case 'success':
       return null
   }
@@ -94,7 +95,9 @@ export function ComposeAnalysisPanel({
               size="sm"
               variant="outline"
             >
-              {extractionState === 'failed' || extractionState === 'unavailable'
+              {extractionState === 'failed' ||
+              extractionState === 'unavailable' ||
+              extractionState === 'authentication-required'
                 ? 'Retry article extraction'
                 : 'Extract article text'}
             </Button>
@@ -116,7 +119,9 @@ export function ComposeAnalysisPanel({
             size="sm"
             variant="outline"
           >
-            {summaryState === 'failed' || summaryState === 'unavailable'
+            {summaryState === 'failed' ||
+            summaryState === 'unavailable' ||
+            summaryState === 'authentication-required'
               ? 'Retry summary'
               : 'Generate summary'}
           </Button>
@@ -156,7 +161,11 @@ export function ComposeAnalysisPanel({
             size="sm"
             variant="outline"
           >
-            Check comment
+            {verificationState === 'failed' ||
+            verificationState === 'unavailable' ||
+            verificationState === 'authentication-required'
+              ? 'Retry comment check'
+              : 'Check comment'}
           </Button>
         </div>
         {verificationTargets.length > 1 && (

@@ -30,7 +30,7 @@ export type ComposeAnalysisSaveCommand =
       verification: Verification
     }
 
-const sameArticle = (left: Article, right: Article): boolean =>
+export const sameArticle = (left: Article, right: Article): boolean =>
   left.url === right.url &&
   left.title === right.title &&
   left.text === right.text &&

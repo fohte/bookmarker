@@ -6,12 +6,16 @@ import {
   type AnalysisState,
   type ArticleAnalysisOptions,
   createManualArticle,
-  extractArticle,
-  summarizeArticle,
+  extractArticle as extractArticleRequest,
+  summarizeArticle as summarizeArticleRequest,
   useArticleAnalysis,
-  verifyComment,
+  verifyComment as verifyCommentRequest,
 } from '#features/analysis/index'
-import type { ComposeAnalysisSaveCommand } from '#features/editor/compose-analysis-command'
+import {
+  type ComposeAnalysisSaveCommand,
+  sameArticle,
+} from '#features/editor/compose-analysis-command'
+import type { AnalysisDisplayState } from '#features/editor/compose-analysis-state'
 import { effectiveDestinationComment } from '#features/editor/compose-destination'
 
 type VerificationTarget =
@@ -30,20 +34,10 @@ type PendingSummary = {
 }
 
 const analysisOperations = {
-  extractArticle,
-  summarizeArticle,
-  verifyComment,
+  extractArticle: extractArticleRequest,
+  summarizeArticle: summarizeArticleRequest,
+  verifyComment: verifyCommentRequest,
 }
-
-type AnalysisDisplayState =
-  'not-requested' | 'loading' | 'success' | 'failed' | 'stale' | 'unavailable'
-
-const sameArticle = (left: Article, right: Article): boolean =>
-  left.url === right.url &&
-  left.title === right.title &&
-  left.text === right.text &&
-  left.source === right.source &&
-  left.partial === right.partial
 
 const displayState = <T>(state: AnalysisState<T>): AnalysisDisplayState => {
   switch (state.status) {
@@ -60,8 +54,15 @@ const displayState = <T>(state: AnalysisState<T>): AnalysisDisplayState => {
   }
 }
 
-const displayErrorState = (error: AnalysisClientError): AnalysisDisplayState =>
-  error.kind === 'http' && error.status === 503 ? 'unavailable' : 'failed'
+const displayErrorState = (
+  error: AnalysisClientError,
+): AnalysisDisplayState => {
+  if (error.kind === 'http' && error.status === 503) return 'unavailable'
+  if (error.kind === 'authentication-required') {
+    return 'authentication-required'
+  }
+  return 'failed'
+}
 
 const displayStoredState = <T>(
   state: AnalysisState<T>,
