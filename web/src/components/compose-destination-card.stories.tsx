@@ -98,6 +98,7 @@ export const Raindrop: Story = {
 
 export const UnavailableRaindropCollection: Story = {
   args: {
+    settingsOpen: true,
     destination: {
       ...raindrop,
       options: { ...raindrop.options, collectionId: 999 },
