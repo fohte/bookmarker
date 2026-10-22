@@ -11,7 +11,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
 
 import { ComposeDestinationCard } from '#components/compose-destination-card'
-import { selectOption } from '#test-utils/select-option'
 
 const existingDestination: DestinationDraft = {
   destination: 'hatena',
@@ -34,6 +33,36 @@ let mounted: { container: HTMLDivElement; root: Root } | null = null
 
 function captureOutput<T>(value: T): T {
   return value
+}
+
+type SelectOptionInput = {
+  settingsDialogName: string
+  comboboxName: string
+  optionName: string
+}
+
+async function selectOption({
+  settingsDialogName,
+  comboboxName,
+  optionName,
+}: SelectOptionInput): Promise<void> {
+  const dialog = page.getByRole('dialog', {
+    exact: true,
+    name: settingsDialogName,
+  })
+  await expect.element(dialog).toBeVisible()
+
+  const combobox = page.getByRole('combobox', {
+    exact: true,
+    name: comboboxName,
+  })
+  await expect.element(combobox).toBeVisible()
+  await act(async () => combobox.click())
+  await expect.element(combobox).toHaveAttribute('aria-expanded', 'true')
+
+  const option = page.getByRole('option', { exact: true, name: optionName })
+  await expect.element(option).toBeVisible()
+  await act(async () => option.click())
 }
 
 function mount(component: ReactNode): HTMLDivElement {

@@ -12,11 +12,10 @@ import {
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { userEvent } from 'vitest/browser'
+import { page, userEvent } from 'vitest/browser'
 
 import { createIndexedDbDraftStore } from '#features/drafts/draft-store'
 import { ComposeRoute } from '#routes/compose'
-import { selectOption } from '#test-utils/select-option'
 
 const databaseName = 'bookmarker-local-drafts'
 const shareInput: ShareInput = {
@@ -58,6 +57,36 @@ const metadata: DestinationMetadata = {
 let mounted: { container: HTMLDivElement; root: Root } | null = null
 
 const captureOutput = <T,>(value: T): T => value
+
+type SelectOptionInput = {
+  settingsDialogName: string
+  comboboxName: string
+  optionName: string
+}
+
+async function selectOption({
+  settingsDialogName,
+  comboboxName,
+  optionName,
+}: SelectOptionInput): Promise<void> {
+  const dialog = page.getByRole('dialog', {
+    exact: true,
+    name: settingsDialogName,
+  })
+  await expect.element(dialog).toBeVisible()
+
+  const combobox = page.getByRole('combobox', {
+    exact: true,
+    name: comboboxName,
+  })
+  await expect.element(combobox).toBeVisible()
+  await act(async () => combobox.click())
+  await expect.element(combobox).toHaveAttribute('aria-expanded', 'true')
+
+  const option = page.getByRole('option', { exact: true, name: optionName })
+  await expect.element(option).toBeVisible()
+  await act(async () => option.click())
+}
 
 function response(body: unknown): Response {
   return new Response(JSON.stringify(body), {
