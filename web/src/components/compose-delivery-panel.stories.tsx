@@ -121,6 +121,45 @@ export const MixedResults: Story = {
   name: 'The editor distinguishes in-progress, failed, and unknown results.',
 }
 
+export const EarlierFailureBlockedByUnknown: Story = {
+  args: {
+    delivery: [
+      {
+        article: { url: 'https://example.test/earlier-article' },
+        target: {
+          destination: 'hatena',
+          operationId: operationIds.first,
+          comment: 'The earlier fictional comment.',
+          options: { tags: ['earlier'], private: false },
+        },
+        result: {
+          destination: 'hatena',
+          operationId: operationIds.first,
+          status: 'failed',
+          retryable: true,
+        },
+      },
+      {
+        article: { url: 'https://example.test/later-article' },
+        target: {
+          destination: 'hatena',
+          operationId: operationIds.second,
+          comment: 'The later fictional comment.',
+          options: { tags: ['later'], private: false },
+        },
+        result: {
+          destination: 'hatena',
+          operationId: operationIds.second,
+          status: 'unknown',
+          retryable: false,
+        },
+      },
+    ],
+    hasRetryableTargets: false,
+  },
+  name: 'The editor explains why an older failure cannot be retried after an unknown outcome.',
+}
+
 export const Succeeded: Story = {
   args: {
     delivery: [

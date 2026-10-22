@@ -6,6 +6,7 @@ import type {
   PublishDestinationId,
 } from 'api/contracts'
 
+import { getRetryDeliveryTargetsFromHistory } from '#features/editor/compose-delivery-command'
 import type { ComposeDeliveryState } from '#features/editor/compose-state'
 
 const destinationNames: Record<PublishDestinationId, string> = {
@@ -17,6 +18,7 @@ const destinationNames: Record<PublishDestinationId, string> = {
 function deliveryStatus(
   snapshot: BookmarkDraft['delivery'][number],
   deliveryState: ComposeDeliveryState,
+  retryEligible: boolean,
 ): {
   label: string
   details: string[]
@@ -44,9 +46,7 @@ function deliveryStatus(
     if (deliveryState === 'result-save-failed') {
       return {
         label: 'Result not saved',
-        details: [
-          'The response is held in memory. Save it before deciding whether to retry.',
-        ],
+        details: ['The response is held in memory. Save it before continuing.'],
       }
     }
     return {
@@ -76,7 +76,9 @@ function deliveryStatus(
     details: [
       ...(result.message === undefined ? [] : [result.message]),
       result.retryable
-        ? 'This failure can be retried when the destination is connected.'
+        ? retryEligible
+          ? 'This failure can be retried when the destination is connected.'
+          : 'Another recorded outcome for this destination prevents retrying this failure.'
         : 'This result cannot be retried.',
     ],
   }
@@ -130,6 +132,12 @@ export function ComposeDeliveryPanel({
   onRetryDeliverySave,
   onRetryMetadata,
 }: ComposeDeliveryPanelProps) {
+  const retryableOperationKeys = new Set(
+    getRetryDeliveryTargetsFromHistory(delivery).map(
+      (target) => `${target.destination}:${target.operationId}`,
+    ),
+  )
+
   return (
     <Panel padding="md" className="space-y-4 rounded-lg p-5 sm:p-6">
       <div>
@@ -212,8 +220,8 @@ export function ComposeDeliveryPanel({
       {authenticationRequired && (
         <div className="space-y-2 rounded-md border border-border p-3">
           <p className="text-sm" role="alert">
-            Sign in again to continue. Check unknown results directly at the
-            service; this editor cannot resend those attempts.
+            Sign in again to continue. Unknown outcomes can only be checked at
+            the service and cannot be resent from this editor.
           </p>
           {signInHref === null ? (
             <p className="text-sm text-muted-foreground" role="status">
@@ -245,7 +253,13 @@ export function ComposeDeliveryPanel({
               ) : (
                 <ul className="mt-1 space-y-2">
                   {snapshots.map((snapshot) => {
-                    const status = deliveryStatus(snapshot, deliveryState)
+                    const status = deliveryStatus(
+                      snapshot,
+                      deliveryState,
+                      retryableOperationKeys.has(
+                        `${snapshot.target.destination}:${snapshot.target.operationId}`,
+                      ),
+                    )
                     return (
                       <li key={snapshot.target.operationId} className="text-sm">
                         <p className="font-medium" role="status">

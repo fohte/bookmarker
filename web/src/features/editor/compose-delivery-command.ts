@@ -80,6 +80,12 @@ function hasSamePayload(
   )
 }
 
+function blocksDestination(
+  snapshot: BookmarkDraft['delivery'][number],
+): boolean {
+  return snapshot.result === undefined || snapshot.result.status !== 'failed'
+}
+
 const isSelectedPublishDestination = (
   destination: BookmarkDraft['destinations'][number],
 ): destination is Extract<
@@ -142,6 +148,21 @@ export function createNewDeliveryPlan(
   const targets: PublishTarget[] = []
   const article = publishArticle(draft)
   for (const destination of selected) {
+    const comment = effectiveDestinationComment(
+      draft.commonComment,
+      destination,
+    )
+    const target = createNewPublishTarget(destination, comment)
+    const history = draft.delivery.filter(
+      (snapshot) => snapshot.target.destination === destination.destination,
+    )
+    if (
+      history.some(blocksDestination) ||
+      history.some((snapshot) => hasSamePayload(article, target, snapshot))
+    ) {
+      continue
+    }
+
     if (!isConfigured(destination.destination, metadata)) {
       return err(destinationError(destination.destination))
     }
@@ -162,24 +183,6 @@ export function createNewDeliveryPlan(
       }
     }
 
-    const comment = effectiveDestinationComment(
-      draft.commonComment,
-      destination,
-    )
-    const target = createNewPublishTarget(destination, comment)
-    const history = draft.delivery.filter(
-      (snapshot) => snapshot.target.destination === destination.destination,
-    )
-    if (
-      history.some(
-        (snapshot) =>
-          snapshot.result === undefined || snapshot.result.status !== 'failed',
-      ) ||
-      history.some((snapshot) => hasSamePayload(article, target, snapshot))
-    ) {
-      continue
-    }
-
     if (
       typeof crypto === 'undefined' ||
       typeof crypto.randomUUID !== 'function'
@@ -192,24 +195,46 @@ export function createNewDeliveryPlan(
   }
 
   if (targets.length === 0) {
+    const history = selected.flatMap((destination) =>
+      draft.delivery.filter(
+        (snapshot) => snapshot.target.destination === destination.destination,
+      ),
+    )
+    if (
+      history.some(
+        (snapshot) =>
+          snapshot.result === undefined || snapshot.result.status === 'unknown',
+      )
+    ) {
+      return err(
+        'A selected destination has an unconfirmed outcome. Check it directly at the service; this editor cannot resend it.',
+      )
+    }
+    if (history.some((snapshot) => snapshot.result?.status === 'succeeded')) {
+      return err(
+        'A selected destination already has a successful delivery and cannot be sent again.',
+      )
+    }
+    if (getRetryDeliveryTargetsFromHistory(history).length > 0) {
+      return err('Retry eligible failed attempts using their saved content.')
+    }
     return err(
-      'No selected destination has a new publishable snapshot. Retry eligible failures separately.',
+      'Edit the content before starting a new attempt. This failed result cannot be retried.',
     )
   }
 
   return parsePlan(article, targets)
 }
 
-export function getRetryDeliveryTargets(draft: BookmarkDraft): PublishTarget[] {
+export function getRetryDeliveryTargetsFromHistory(
+  delivery: readonly BookmarkDraft['delivery'][number][],
+): PublishTarget[] {
   const blockedDestinations = new Set(
-    draft.delivery
-      .filter(
-        (snapshot) =>
-          snapshot.result === undefined || snapshot.result.status !== 'failed',
-      )
+    delivery
+      .filter(blocksDestination)
       .map((snapshot) => snapshot.target.destination),
   )
-  const retryableHistory = draft.delivery.filter(
+  const retryableHistory = delivery.filter(
     (snapshot) => !blockedDestinations.has(snapshot.target.destination),
   )
 
@@ -219,6 +244,10 @@ export function getRetryDeliveryTargets(draft: BookmarkDraft): PublishTarget[] {
       snapshot.result === undefined ? [] : [snapshot.result],
     ),
   )
+}
+
+export function getRetryDeliveryTargets(draft: BookmarkDraft): PublishTarget[] {
+  return getRetryDeliveryTargetsFromHistory(draft.delivery)
 }
 
 export function createRetryDeliveryPlans(

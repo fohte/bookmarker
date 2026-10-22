@@ -39,6 +39,16 @@ const metadata: DestinationMetadata = {
 }
 
 const captureOutput = <T,>(value: T): T => value
+const nonretryableFailureEdits: Array<{
+  field: string
+  title?: string
+  comment?: string
+  tags?: string[]
+}> = [
+  { field: 'article title', title: 'An edited article title' },
+  { field: 'comment', comment: 'An edited common comment' },
+  { field: 'destination options', tags: ['an edited tag'] },
+]
 
 function parseRequest(init: RequestInit | undefined): PublishRequest {
   const body = init?.body
@@ -130,51 +140,39 @@ function deliveryStore(
   }
 }
 
-function normalizeRequest(request: PublishRequest): PublishRequest {
-  return {
-    article: request.article,
-    targets: request.targets.map((target) => ({
-      ...target,
-      operationId: '<operation>',
-    })),
-  }
+function normalizeOperationId(
+  operationId: string,
+  originalOperationId?: string,
+): string {
+  if (originalOperationId === undefined) return '<operation>'
+  return operationId === originalOperationId ? '<original>' : '<new>'
 }
 
-function normalizeRequestWithOriginal(
+function normalizeRequest(
   request: PublishRequest,
-  originalOperationId: string,
+  originalOperationId?: string,
 ): PublishRequest {
   return {
     article: request.article,
     targets: request.targets.map((target) => ({
       ...target,
-      operationId:
-        target.operationId === originalOperationId ? '<original>' : '<new>',
+      operationId: normalizeOperationId(
+        target.operationId,
+        originalOperationId,
+      ),
     })),
   }
 }
 
 function normalizeDelivery(
   delivery: BookmarkDraft['delivery'],
-): BookmarkDraft['delivery'] {
-  return delivery.map((snapshot) => ({
-    article: snapshot.article,
-    target: { ...snapshot.target, operationId: '<operation>' },
-    ...(snapshot.result === undefined
-      ? {}
-      : { result: { ...snapshot.result, operationId: '<operation>' } }),
-  }))
-}
-
-function normalizeDeliveryWithOriginal(
-  delivery: BookmarkDraft['delivery'],
-  originalOperationId: string,
+  originalOperationId?: string,
 ): BookmarkDraft['delivery'] {
   return delivery.map((snapshot) => {
-    const operationId =
-      snapshot.target.operationId === originalOperationId
-        ? '<original>'
-        : '<new>'
+    const operationId = normalizeOperationId(
+      snapshot.target.operationId,
+      originalOperationId,
+    )
     return {
       article: snapshot.article,
       target: { ...snapshot.target, operationId },
@@ -253,6 +251,192 @@ describe('ComposeController delivery', () => {
         options: { tags: ['fictional tag'], private: false },
       },
       delivery: [],
+    })
+  })
+
+  it('ignores settings for destinations whose delivery history blocks sending', async () => {
+    const base = createIndexedDbDraftStore()
+    const initialDraft: BookmarkDraft = {
+      ...draft(),
+      destinations: [
+        {
+          destination: 'hatena',
+          selected: true,
+          commentMode: 'common',
+          customComment: '',
+          options: { tags: ['current'], private: false },
+        },
+        {
+          destination: 'raindrop',
+          selected: true,
+          commentMode: 'common',
+          customComment: '',
+          options: { collectionId: 901, tags: [] },
+        },
+        {
+          destination: 'mastodon',
+          selected: true,
+          commentMode: 'common',
+          customComment: '',
+          options: {
+            visibility: 'public',
+            spoilerText: '',
+            sensitive: false,
+          },
+        },
+      ],
+      delivery: [
+        {
+          article: { url: 'https://fictional.example.invalid/hatena' },
+          target: {
+            destination: 'hatena',
+            operationId: successfulOperationId,
+            comment: 'An earlier Hatena comment',
+            options: { tags: ['earlier'], private: false },
+          },
+          result: {
+            destination: 'hatena',
+            operationId: successfulOperationId,
+            status: 'succeeded',
+            retryable: false,
+          },
+        },
+        {
+          article: { url: 'https://fictional.example.invalid/raindrop' },
+          target: {
+            destination: 'raindrop',
+            operationId: failedOperationId,
+            comment: 'An earlier Raindrop comment',
+            options: { collectionId: 71, tags: [] },
+          },
+          result: {
+            destination: 'raindrop',
+            operationId: failedOperationId,
+            status: 'succeeded',
+            retryable: false,
+          },
+        },
+      ],
+    }
+    valueOrThrow(await base.addDraft(initialDraft))
+    const requests: PublishRequest[] = []
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      const request = parseRequest(init)
+      requests.push(request)
+      return Promise.resolve(
+        response({
+          results: request.targets.map((target) => ({
+            destination: target.destination,
+            operationId: target.operationId,
+            status: 'succeeded',
+            retryable: false,
+          })),
+        }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const unavailableMetadata: DestinationMetadata = {
+      destinations: {
+        ...metadata.destinations,
+        hatena: { configured: false },
+        raindrop: {
+          configured: true,
+          metadataError: {
+            code: 'unavailable',
+            message: 'Collection details are unavailable.',
+          },
+        },
+      },
+    }
+
+    const controller = new ComposeController(base)
+    await controller.start(initialDraft.id)
+    await controller.publishSelectedDestinations(unavailableMetadata)
+
+    const persisted = valueOrThrow(await base.getDraft(initialDraft.id))
+    const actual = {
+      requestCount: fetchMock.mock.calls.length,
+      request: requests[0] === undefined ? null : normalizeRequest(requests[0]),
+      delivery: normalizeDelivery(persisted?.delivery ?? []),
+      errorMessage: controller.state.deliveryErrorMessage,
+    }
+    await controller.dispose()
+
+    expect(captureOutput(actual)).toEqual({
+      requestCount: 1,
+      request: {
+        article: {
+          url: 'https://fictional.example.invalid/article',
+          title: 'A fictional article',
+        },
+        targets: [
+          {
+            destination: 'mastodon',
+            operationId: '<operation>',
+            comment: 'An unfinished common comment',
+            options: {
+              visibility: 'public',
+              spoilerText: '',
+              sensitive: false,
+            },
+          },
+        ],
+      },
+      delivery: [
+        {
+          article: { url: 'https://fictional.example.invalid/hatena' },
+          target: {
+            destination: 'hatena',
+            operationId: '<operation>',
+            comment: 'An earlier Hatena comment',
+            options: { tags: ['earlier'], private: false },
+          },
+          result: {
+            destination: 'hatena',
+            operationId: '<operation>',
+            status: 'succeeded',
+            retryable: false,
+          },
+        },
+        {
+          article: { url: 'https://fictional.example.invalid/raindrop' },
+          target: {
+            destination: 'raindrop',
+            operationId: '<operation>',
+            comment: 'An earlier Raindrop comment',
+            options: { collectionId: 71, tags: [] },
+          },
+          result: {
+            destination: 'raindrop',
+            operationId: '<operation>',
+            status: 'succeeded',
+            retryable: false,
+          },
+        },
+        {
+          article: {
+            url: 'https://fictional.example.invalid/article',
+            title: 'A fictional article',
+          },
+          target: {
+            destination: 'mastodon',
+            operationId: '<operation>',
+            comment: 'An unfinished common comment',
+            options: {
+              visibility: 'public',
+              spoilerText: '',
+              sensitive: false,
+            },
+          },
+          result: {
+            destination: 'mastodon',
+            operationId: '<operation>',
+            status: 'succeeded',
+            retryable: false,
+          },
+        },
+      ],
+      errorMessage: null,
     })
   })
 
@@ -725,121 +909,15 @@ describe('ComposeController delivery', () => {
     })
   })
 
-  it('creates a new attempt only after a nonretryable failure payload changes', async () => {
-    const base = createIndexedDbDraftStore()
-    const initialDraft: BookmarkDraft = {
-      ...draft(),
-      delivery: [
-        {
-          article: {
-            url: 'https://fictional.example.invalid/article',
-            title: 'A fictional article',
-          },
-          target: {
-            destination: 'hatena',
-            operationId: failedOperationId,
-            comment: 'An unfinished common comment',
-            options: { tags: ['fictional tag'], private: false },
-          },
-          result: {
-            destination: 'hatena',
-            operationId: failedOperationId,
-            status: 'failed',
-            retryable: false,
-          },
-        },
-      ],
-    }
-    valueOrThrow(await base.addDraft(initialDraft))
-    const requests: PublishRequest[] = []
-    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
-      const request = parseRequest(init)
-      requests.push(request)
-      return Promise.resolve(
-        response({
-          results: request.targets.map((target) => ({
-            destination: target.destination,
-            operationId: target.operationId,
-            status: 'succeeded',
-            retryable: false,
-          })),
-        }),
-      )
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    const controller = new ComposeController(base)
-    await controller.start(initialDraft.id)
-    await controller.publishSelectedDestinations(metadata)
-    const samePayload = {
-      callCount: fetchMock.mock.calls.length,
-      errorMessage: controller.state.deliveryErrorMessage,
-    }
-
-    controller.updateTitle('An edited article title')
-    controller.updateCommonComment('An edited common comment')
-    const hatena = controller.state.activeDraft?.destinations.find(
-      (destination) => destination.destination === 'hatena',
-    )
-    if (hatena?.destination === 'hatena') {
-      controller.updateDestination({
-        ...hatena,
-        options: { ...hatena.options, tags: ['an edited tag'] },
-      })
-    }
-    await controller.publishSelectedDestinations(metadata)
-    await controller.retryFailedDeliveries(metadata)
-
-    const persisted = valueOrThrow(await base.getDraft(initialDraft.id))
-    const actual = {
-      samePayload,
-      requestCount: fetchMock.mock.calls.length,
-      request:
-        requests[0] === undefined
-          ? null
-          : normalizeRequestWithOriginal(requests[0], failedOperationId),
-      draft: {
-        article: persisted?.article ?? null,
-        commonComment: persisted?.commonComment ?? null,
-        delivery: normalizeDeliveryWithOriginal(
-          persisted?.delivery ?? [],
-          failedOperationId,
-        ),
-      },
-      retryErrorMessage: controller.state.deliveryErrorMessage,
-    }
-    await controller.dispose()
-
-    expect(captureOutput(actual)).toEqual({
-      samePayload: {
-        callCount: 0,
-        errorMessage:
-          'No selected destination has a new publishable snapshot. Retry eligible failures separately.',
-      },
-      requestCount: 1,
-      request: {
-        article: {
-          url: 'https://fictional.example.invalid/article',
-          title: 'An edited article title',
-        },
-        targets: [
-          {
-            destination: 'hatena',
-            operationId: '<new>',
-            comment: 'An edited common comment',
-            options: { tags: ['an edited tag'], private: false },
-          },
-        ],
-      },
-      draft: {
-        article: {
-          url: 'https://fictional.example.invalid/article',
-          title: 'An edited article title',
-          text: 'A fictional passage.',
-          source: 'shared',
-          partial: true,
-        },
-        commonComment: 'An edited common comment',
+  it.each(nonretryableFailureEdits)(
+    'creates a new attempt when only the $field changes after a nonretryable failure',
+    async (edit) => {
+      const base = createIndexedDbDraftStore()
+      const editedTitle = edit.title ?? 'A fictional article'
+      const editedComment = edit.comment ?? 'An unfinished common comment'
+      const editedTags = edit.tags ?? ['fictional tag']
+      const initialDraft: BookmarkDraft = {
+        ...draft(),
         delivery: [
           {
             article: {
@@ -848,41 +926,157 @@ describe('ComposeController delivery', () => {
             },
             target: {
               destination: 'hatena',
-              operationId: '<original>',
+              operationId: failedOperationId,
               comment: 'An unfinished common comment',
               options: { tags: ['fictional tag'], private: false },
             },
             result: {
               destination: 'hatena',
-              operationId: '<original>',
+              operationId: failedOperationId,
               status: 'failed',
               retryable: false,
             },
           },
-          {
-            article: {
-              url: 'https://fictional.example.invalid/article',
-              title: 'An edited article title',
-            },
-            target: {
-              destination: 'hatena',
-              operationId: '<new>',
-              comment: 'An edited common comment',
-              options: { tags: ['an edited tag'], private: false },
-            },
-            result: {
-              destination: 'hatena',
-              operationId: '<new>',
-              status: 'succeeded',
-              retryable: false,
-            },
-          },
         ],
-      },
-      retryErrorMessage:
-        'There are no connected failed destinations that can be retried.',
-    })
-  })
+      }
+      valueOrThrow(await base.addDraft(initialDraft))
+      const requests: PublishRequest[] = []
+      const fetchMock = vi.fn(
+        (_input: RequestInfo | URL, init?: RequestInit) => {
+          const request = parseRequest(init)
+          requests.push(request)
+          return Promise.resolve(
+            response({
+              results: request.targets.map((target) => ({
+                destination: target.destination,
+                operationId: target.operationId,
+                status: 'succeeded',
+                retryable: false,
+              })),
+            }),
+          )
+        },
+      )
+      vi.stubGlobal('fetch', fetchMock)
+
+      const controller = new ComposeController(base)
+      await controller.start(initialDraft.id)
+      await controller.publishSelectedDestinations(metadata)
+      const samePayload = {
+        callCount: fetchMock.mock.calls.length,
+        errorMessage: controller.state.deliveryErrorMessage,
+      }
+
+      if (edit.title !== undefined) controller.updateTitle(edit.title)
+      if (edit.comment !== undefined) {
+        controller.updateCommonComment(edit.comment)
+      }
+      const hatena = controller.state.activeDraft?.destinations.find(
+        (destination) => destination.destination === 'hatena',
+      )
+      if (edit.tags !== undefined && hatena?.destination === 'hatena') {
+        controller.updateDestination({
+          ...hatena,
+          options: { ...hatena.options, tags: edit.tags },
+        })
+      }
+      await controller.publishSelectedDestinations(metadata)
+      await controller.retryFailedDeliveries(metadata)
+
+      const persisted = valueOrThrow(await base.getDraft(initialDraft.id))
+      const actual = {
+        samePayload,
+        requestCount: fetchMock.mock.calls.length,
+        request:
+          requests[0] === undefined
+            ? null
+            : normalizeRequest(requests[0], failedOperationId),
+        draft: {
+          article: persisted?.article ?? null,
+          commonComment: persisted?.commonComment ?? null,
+          delivery: normalizeDelivery(
+            persisted?.delivery ?? [],
+            failedOperationId,
+          ),
+        },
+        retryErrorMessage: controller.state.deliveryErrorMessage,
+      }
+      await controller.dispose()
+
+      expect(captureOutput(actual)).toEqual({
+        samePayload: {
+          callCount: 0,
+          errorMessage:
+            'Edit the content before starting a new attempt. This failed result cannot be retried.',
+        },
+        requestCount: 1,
+        request: {
+          article: {
+            url: 'https://fictional.example.invalid/article',
+            title: editedTitle,
+          },
+          targets: [
+            {
+              destination: 'hatena',
+              operationId: '<new>',
+              comment: editedComment,
+              options: { tags: editedTags, private: false },
+            },
+          ],
+        },
+        draft: {
+          article: {
+            url: 'https://fictional.example.invalid/article',
+            title: editedTitle,
+            text: 'A fictional passage.',
+            source: 'shared',
+            partial: true,
+          },
+          commonComment: editedComment,
+          delivery: [
+            {
+              article: {
+                url: 'https://fictional.example.invalid/article',
+                title: 'A fictional article',
+              },
+              target: {
+                destination: 'hatena',
+                operationId: '<original>',
+                comment: 'An unfinished common comment',
+                options: { tags: ['fictional tag'], private: false },
+              },
+              result: {
+                destination: 'hatena',
+                operationId: '<original>',
+                status: 'failed',
+                retryable: false,
+              },
+            },
+            {
+              article: {
+                url: 'https://fictional.example.invalid/article',
+                title: editedTitle,
+              },
+              target: {
+                destination: 'hatena',
+                operationId: '<new>',
+                comment: editedComment,
+                options: { tags: editedTags, private: false },
+              },
+              result: {
+                destination: 'hatena',
+                operationId: '<new>',
+                status: 'succeeded',
+                retryable: false,
+              },
+            },
+          ],
+        },
+        retryErrorMessage:
+          'There are no connected failed destinations that can be retried.',
+      })
+    },
+  )
 
   it('blocks older retries and new attempts after a destination succeeds or becomes unknown', async () => {
     const base = createIndexedDbDraftStore()
@@ -1019,7 +1213,7 @@ describe('ComposeController delivery', () => {
       afterPublish: {
         requestCount: 0,
         errorMessage:
-          'No selected destination has a new publishable snapshot. Retry eligible failures separately.',
+          'A selected destination has an unconfirmed outcome. Check it directly at the service; this editor cannot resend it.',
       },
       delivery: [
         {
@@ -1159,7 +1353,7 @@ describe('ComposeController delivery', () => {
       request:
         requests[0] === undefined
           ? null
-          : normalizeRequestWithOriginal(requests[0], failedOperationId),
+          : normalizeRequest(requests[0], failedOperationId),
       delivery: normalizeDelivery(persisted?.delivery ?? []),
       deliveryState: controller.state.deliveryState,
     }
@@ -1483,7 +1677,7 @@ describe('ComposeController delivery', () => {
         },
       ],
       deliveryErrorMessage:
-        'No selected destination has a new publishable snapshot. Retry eligible failures separately.',
+        'A selected destination has an unconfirmed outcome. Check it directly at the service; this editor cannot resend it.',
     })
   })
 
@@ -1706,7 +1900,7 @@ describe('ComposeController delivery', () => {
       saveState: 'saved',
       authenticationRequired: true,
       deliveryErrorMessage:
-        'No selected destination has a new publishable snapshot. Retry eligible failures separately.',
+        'A selected destination has an unconfirmed outcome. Check it directly at the service; this editor cannot resend it.',
       memoryComment: 'Keep this exact comment after sign-in.  ',
       memoryDelivery: [
         {

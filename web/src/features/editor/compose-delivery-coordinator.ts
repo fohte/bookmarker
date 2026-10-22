@@ -190,7 +190,7 @@ export class ComposeDeliveryCoordinator {
       return
     }
 
-    for (const [index, plan] of plans.entries()) {
+    for (const plan of plans) {
       const current = this.port.getDraft()
       const target = plan.request.targets[0]
       if (current === null || target === undefined) {
@@ -208,17 +208,11 @@ export class ComposeDeliveryCoordinator {
       }
 
       const pending = makeRetryPending(current, target)
-      const result = await this.#sendPlan(
-        current,
-        pending,
-        plan,
-        'Retry',
-        index < plans.length - 1,
-      )
+      const result = await this.#sendPlan(current, pending, plan, 'Retry', true)
       if (!result.saved || result.authenticationRequired) return
     }
 
-    if (this.#busy) this.#finish(null)
+    this.#finish(null)
   }
 
   async #restoreBeforeSend(draft: BookmarkDraft): Promise<void> {
