@@ -245,6 +245,9 @@ importers:
       clsx:
         specifier: 2.1.1
         version: 2.1.1
+      neverthrow:
+        specifier: 8.2.0
+        version: 8.2.0
       react:
         specifier: 19.2.8
         version: 19.2.8

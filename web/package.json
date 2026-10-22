@@ -25,13 +25,13 @@
   },
   "dependencies": {
     "clsx": "2.1.1",
+    "neverthrow": "8.2.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "shadcn": "4.21.0",
     "tailwind-merge": "3.6.0"
   },
   "devDependencies": {
-    "api": "workspace:*",
     "@fohte/storybook-addon": "0.2.0",
     "@storybook/addon-docs": "10.6.0",
     "@storybook/addon-themes": "10.6.0",
@@ -44,6 +44,7 @@
     "@vitejs/plugin-react": "6.1.1",
     "@vitest/browser": "4.1.11",
     "@vitest/browser-playwright": "4.1.11",
+    "api": "workspace:*",
     "msw": "2.15.0",
     "msw-storybook-addon": "3.0.3",
     "playwright": "1.63.0",
