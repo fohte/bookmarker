@@ -67,9 +67,6 @@ const processEvent = (
     state.done = true
     return ok(undefined)
   }
-  if (state.finished) {
-    return err(invalidResponse())
-  }
 
   const parsed = parseChunk(event.data)
   if (parsed.isErr()) {
@@ -81,7 +78,12 @@ const processEvent = (
 
   const { choices } = parsed.value
   if (choices.length === 0) {
-    return ok(undefined)
+    return state.finished && !Object.hasOwn(parsed.value, 'usage')
+      ? err(invalidResponse())
+      : ok(undefined)
+  }
+  if (state.finished) {
+    return err(invalidResponse())
   }
 
   if (choices.length !== 1 || choices[0]?.index !== 0) {
