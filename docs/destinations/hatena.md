@@ -79,7 +79,7 @@ kubectl -n bookmarker rollout restart deployment/bookmarker-api
 kubectl -n bookmarker rollout status deployment/bookmarker-api
 ```
 
-ExternalSecret synchronization does not reload environment variables in an existing API Pod. Do not inspect the credential values with `kubectl get secret -o yaml` or Pod environment output.
+The API process reads environment variables at startup and does not pick up changes until it restarts. Do not print credential values to logs or terminals.
 
 ## Publishing behavior
 
