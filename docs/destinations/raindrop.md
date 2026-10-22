@@ -7,7 +7,8 @@ The API reads `RAINDROP_ACCESS_TOKEN` from the backend environment. The token is
 1. Sign in to Raindrop.io and open [Integrations](https://app.raindrop.io/settings/integrations).
 2. Create or open the application used by this deployment, then copy its Test token. Raindrop documents Test tokens as an option for accessing only your own account without completing the OAuth flow. See [Obtain access token](https://developer.raindrop.io/v1/authentication/token).
 3. In AWS Systems Manager Parameter Store, create a parameter named `/infra/bookmarker/raindrop-access-token` with type `SecureString`. Store the copied Test token as its value and save the parameter.
-4. Wait for the ExternalSecret to synchronize the parameter into the backend environment. Restart the API deployment if it does not pick up the updated secret automatically.
+4. Wait for the ExternalSecret to synchronize the parameter into the API Pod's `RAINDROP_ACCESS_TOKEN` environment variable, and confirm the synchronization is complete.
+5. After confirming synchronization, perform an API rollout restart. The adapter reads the environment when it is created, and a running Pod does not reload environment variables automatically.
 
 Do not put the token in source files, browser storage, or command history.
 
