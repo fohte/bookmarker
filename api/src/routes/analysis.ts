@@ -1,12 +1,12 @@
 import { type Context, Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
-import { ResultAsync } from 'neverthrow'
+import { err, ok, type Result as ResultType, ResultAsync } from 'neverthrow'
 import { z } from 'zod'
 
 import { readAnalysisConfig } from '#analysis/config'
 import { summarizeArticle, verifyComment } from '#analysis/service'
-import type { AnalysisFailure } from '#analysis/types'
-import { ArticleSchema } from '#contracts/article'
+import type { AnalysisConfig, AnalysisFailure } from '#analysis/types'
+import { type Article, ArticleSchema } from '#contracts/article'
 import type { ApiErrorEnvelope } from '#contracts/error'
 
 const SummaryRequestSchema = z.object({ article: ArticleSchema }).strict()
@@ -74,6 +74,40 @@ type AnalysisRouteOptions = {
 
 const MAX_REQUEST_BYTES = 1024 * 1024
 const DEFAULT_TIMEOUT_MS = 120_000
+type InvalidRequest = 'invalid-json' | 'invalid-contract'
+
+const readRequest = async <Schema extends z.ZodType>(
+  context: Context,
+  schema: Schema,
+): Promise<ResultType<z.infer<Schema>, InvalidRequest>> => {
+  const body = await ResultAsync.fromPromise(
+    Promise.resolve().then(() => context.req.json()),
+    (): InvalidRequest => 'invalid-json',
+  )
+  if (body.isErr()) {
+    return err(body.error)
+  }
+
+  const input = schema.safeParse(body.value)
+  return input.success ? ok(input.data) : err('invalid-contract')
+}
+
+const invalidRequestError = (context: Context, failure: InvalidRequest) =>
+  failure === 'invalid-json'
+    ? context.json(
+        bodyError(
+          'INVALID_ANALYSIS_REQUEST',
+          'The request body must be valid JSON.',
+        ),
+        400,
+      )
+    : context.json(
+        bodyError(
+          'INVALID_ANALYSIS_REQUEST',
+          'The request does not match the analysis contract.',
+        ),
+        400,
+      )
 
 export const createAnalysisRoute = (
   options: AnalysisRouteOptions = {},
@@ -82,6 +116,26 @@ export const createAnalysisRoute = (
   const getEnv = options.env ?? (() => process.env)
   const fetchImpl = options.fetchImpl ?? fetch
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+
+  const runAnalysis = <Output>(
+    context: Context,
+    article: Article,
+    analyze: (config: AnalysisConfig) => ResultAsync<Output, AnalysisFailure>,
+  ) => {
+    if (article.text.trim().length === 0) {
+      return jsonError(context, { kind: 'insufficient' })
+    }
+
+    const config = readAnalysisConfig(getEnv())
+    if (config.isErr()) {
+      return jsonError(context, config.error)
+    }
+
+    return analyze(config.value).match(
+      (result) => context.json(result),
+      (failure) => jsonError(context, failure),
+    )
+  }
 
   route.use(
     '*',
@@ -99,93 +153,30 @@ export const createAnalysisRoute = (
   )
 
   route.post('/summary', async (context) => {
-    const body = await ResultAsync.fromPromise(
-      Promise.resolve().then(() => context.req.json()),
-      () => 'invalid-request' as const,
-    )
-    if (body.isErr()) {
-      return context.json(
-        bodyError(
-          'INVALID_ANALYSIS_REQUEST',
-          'The request body must be valid JSON.',
-        ),
-        400,
-      )
+    const input = await readRequest(context, SummaryRequestSchema)
+    if (input.isErr()) {
+      return invalidRequestError(context, input.error)
     }
 
-    const input = SummaryRequestSchema.safeParse(body.value)
-    if (!input.success) {
-      return context.json(
-        bodyError(
-          'INVALID_ANALYSIS_REQUEST',
-          'The request does not match the analysis contract.',
-        ),
-        400,
-      )
-    }
-    if (input.data.article.text.trim().length === 0) {
-      return jsonError(context, { kind: 'insufficient' })
-    }
-
-    const config = readAnalysisConfig(getEnv())
-    if (config.isErr()) {
-      return jsonError(context, config.error)
-    }
-
-    return summarizeArticle(
-      input.data.article,
-      config.value,
-      fetchImpl,
-      timeoutMs,
-    ).match(
-      (summary) => context.json(summary),
-      (failure) => jsonError(context, failure),
+    return runAnalysis(context, input.value.article, (config) =>
+      summarizeArticle(input.value.article, config, fetchImpl, timeoutMs),
     )
   })
 
   route.post('/verify', async (context) => {
-    const body = await ResultAsync.fromPromise(
-      Promise.resolve().then(() => context.req.json()),
-      () => 'invalid-request' as const,
-    )
-    if (body.isErr()) {
-      return context.json(
-        bodyError(
-          'INVALID_ANALYSIS_REQUEST',
-          'The request body must be valid JSON.',
-        ),
-        400,
-      )
+    const input = await readRequest(context, VerificationRequestSchema)
+    if (input.isErr()) {
+      return invalidRequestError(context, input.error)
     }
 
-    const input = VerificationRequestSchema.safeParse(body.value)
-    if (!input.success) {
-      return context.json(
-        bodyError(
-          'INVALID_ANALYSIS_REQUEST',
-          'The request does not match the analysis contract.',
-        ),
-        400,
-      )
-    }
-    if (input.data.article.text.trim().length === 0) {
-      return jsonError(context, { kind: 'insufficient' })
-    }
-
-    const config = readAnalysisConfig(getEnv())
-    if (config.isErr()) {
-      return jsonError(context, config.error)
-    }
-
-    return verifyComment(
-      input.data.article,
-      input.data.comment,
-      config.value,
-      fetchImpl,
-      timeoutMs,
-    ).match(
-      (verification) => context.json(verification),
-      (failure) => jsonError(context, failure),
+    return runAnalysis(context, input.value.article, (config) =>
+      verifyComment(
+        input.value.article,
+        input.value.comment,
+        config,
+        fetchImpl,
+        timeoutMs,
+      ),
     )
   })
 

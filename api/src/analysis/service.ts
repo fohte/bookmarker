@@ -1,4 +1,4 @@
-import { err, errAsync, ok, ResultAsync } from 'neverthrow'
+import { err, ok, ResultAsync } from 'neverthrow'
 
 import {
   parseSummaryModelResponse,
@@ -12,18 +12,12 @@ import { requestCompletion } from '#analysis/provider'
 import type { AnalysisConfig, AnalysisFailure } from '#analysis/types'
 import type { Article, Summary, Verification } from '#contracts/article'
 
-const isBlank = (text: string): boolean => text.trim().length === 0
-
 export const summarizeArticle = (
   article: Article,
   config: AnalysisConfig,
   fetchImpl: typeof fetch,
   timeoutMs: number,
 ): ResultAsync<Summary, AnalysisFailure> => {
-  if (isBlank(article.text)) {
-    return errAsync({ kind: 'insufficient' } as const)
-  }
-
   return requestCompletion(
     config,
     createSummaryMessages(article),
@@ -49,10 +43,6 @@ export const verifyComment = (
   fetchImpl: typeof fetch,
   timeoutMs: number,
 ): ResultAsync<Verification, AnalysisFailure> => {
-  if (isBlank(article.text)) {
-    return errAsync({ kind: 'insufficient' } as const)
-  }
-
   return requestCompletion(
     config,
     createVerificationMessages(article, comment),

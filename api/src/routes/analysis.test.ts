@@ -118,6 +118,14 @@ const post = async (
   return { status: response.status, body: await response.json() }
 }
 
+const withCancellation = <Response>(
+  response: Response,
+  cancelled: boolean,
+) => ({
+  response,
+  cancelled,
+})
+
 describe('POST /api/analysis/summary', () => {
   it('aggregates split SSE chunks into a summary', async () => {
     const requests: Array<{ url: string; init: RequestInit }> = []
@@ -315,6 +323,80 @@ describe('POST /api/analysis/summary', () => {
           message: 'The analysis service returned an invalid response.',
         },
       },
+    })
+  })
+
+  it('returns an invalid response error for schema-invalid model JSON', async () => {
+    const fetchImpl: typeof fetch = () =>
+      Promise.resolve(completionResponse('{"status":"ok","summary":""}'))
+    const app = createTestApp(fetchImpl)
+    const result = await post(app, '/api/analysis/summary', { article })
+
+    expect(result).toEqual({
+      status: 502,
+      body: {
+        error: {
+          code: 'INVALID_ANALYSIS_RESPONSE',
+          message: 'The analysis service returned an invalid response.',
+        },
+      },
+    })
+  })
+
+  it.each([
+    [
+      'a rejected fetch',
+      () => Promise.reject(new Error('fictional gateway failure')),
+    ],
+    [
+      'a non-2xx response',
+      () =>
+        Promise.resolve(
+          new Response('fictional gateway response', { status: 503 }),
+        ),
+    ],
+  ])('returns an upstream failure for %s', async (_label, fetchImpl) => {
+    const app = createTestApp(fetchImpl)
+    const result = await post(app, '/api/analysis/summary', { article })
+
+    expect(result).toEqual({
+      status: 502,
+      body: {
+        error: {
+          code: 'ANALYSIS_UPSTREAM_FAILURE',
+          message: 'The analysis service could not complete the request.',
+        },
+      },
+    })
+  })
+
+  it('cancels a non-2xx upstream response body', async () => {
+    let bodyCancelled = false
+    const fetchImpl: typeof fetch = () =>
+      Promise.resolve(
+        new Response(
+          new ReadableStream<Uint8Array>({
+            cancel() {
+              bodyCancelled = true
+            },
+          }),
+          { status: 503 },
+        ),
+      )
+    const app = createTestApp(fetchImpl)
+    const result = await post(app, '/api/analysis/summary', { article })
+
+    expect(withCancellation(result, bodyCancelled)).toEqual({
+      response: {
+        status: 502,
+        body: {
+          error: {
+            code: 'ANALYSIS_UPSTREAM_FAILURE',
+            message: 'The analysis service could not complete the request.',
+          },
+        },
+      },
+      cancelled: true,
     })
   })
 
@@ -688,6 +770,49 @@ describe('POST /api/analysis/verify', () => {
           message: 'The analysis service returned an invalid response.',
         },
       },
+    })
+  })
+
+  it('cancels the stream after an invalid provider chunk', async () => {
+    let streamCancelled = false
+    const fetchImpl: typeof fetch = () =>
+      Promise.resolve(
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode(
+                  dataEvent({
+                    error: { message: 'fictional provider failure' },
+                    choices: [],
+                  }),
+                ),
+              )
+            },
+            cancel() {
+              streamCancelled = true
+            },
+          }),
+          { headers: { 'content-type': 'text/event-stream' } },
+        ),
+      )
+    const app = createTestApp(fetchImpl)
+    const result = await post(app, '/api/analysis/verify', {
+      article,
+      comment: '青い箱は毎日確認します。',
+    })
+
+    expect(withCancellation(result, streamCancelled)).toEqual({
+      response: {
+        status: 502,
+        body: {
+          error: {
+            code: 'INVALID_ANALYSIS_RESPONSE',
+            message: 'The analysis service returned an invalid response.',
+          },
+        },
+      },
+      cancelled: true,
     })
   })
 

@@ -140,6 +140,16 @@ const decodeChunk = (
 const readError = (signal: AbortSignal): AnalysisFailure =>
   signal.aborted ? { kind: 'timeout' } : { kind: 'upstream-failure' }
 
+const finalizeCompletion = (
+  state: CompletionState,
+  signal: AbortSignal,
+): ResultType<string, AnalysisFailure> =>
+  state.done && state.finished
+    ? signal.aborted
+      ? err({ kind: 'timeout' })
+      : ok(state.content)
+    : err(invalidResponse())
+
 export const collectCompletion = (
   response: Response,
   signal: AbortSignal,
@@ -181,6 +191,40 @@ export const collectCompletion = (
     },
   })
 
+  const feedParser = (text: string): ResultType<void, AnalysisFailure> => {
+    const feed = Result.fromThrowable(() => {
+      parser.feed(text)
+    }, invalidResponse)()
+    if (eventFailure !== undefined) {
+      return err(eventFailure)
+    }
+    if (feed.isErr() || parserFailure) {
+      return err(invalidResponse())
+    }
+    return ok(undefined)
+  }
+
+  const cancelReader = (): void => {
+    const cancellation = Result.fromThrowable(() => {
+      return reader.cancel()
+    }, invalidResponse)()
+    if (cancellation.isErr()) {
+      return
+    }
+
+    void ResultAsync.fromPromise(cancellation.value, invalidResponse).match(
+      () => undefined,
+      () => undefined,
+    )
+  }
+
+  const fail = (
+    failure: AnalysisFailure,
+  ): ResultType<string, AnalysisFailure> => {
+    cancelReader()
+    return err(failure)
+  }
+
   const readStream = async (): Promise<ResultType<string, AnalysisFailure>> => {
     for (;;) {
       const read = await ResultAsync.fromPromise(
@@ -188,7 +232,7 @@ export const collectCompletion = (
         () => readError(signal),
       )
       if (read.isErr()) {
-        return err(read.error)
+        return fail(read.error)
       }
       if (read.value.done) {
         break
@@ -196,26 +240,21 @@ export const collectCompletion = (
 
       const bytes: unknown = read.value.value
       if (!(bytes instanceof Uint8Array)) {
-        return err(invalidResponse())
+        return fail(invalidResponse())
       }
       receivedBytes += bytes.byteLength
       if (receivedBytes > MAX_RECEIVED_BYTES) {
-        return err(invalidResponse())
+        return fail(invalidResponse())
       }
 
       const decoded = decodeChunk(decoder, bytes)
       if (decoded.isErr()) {
-        return err(decoded.error)
+        return fail(decoded.error)
       }
 
-      const feed = Result.fromThrowable(() => {
-        parser.feed(decoded.value)
-      }, invalidResponse)()
-      if (eventFailure !== undefined) {
-        return err(eventFailure)
-      }
-      if (feed.isErr() || parserFailure) {
-        return err(invalidResponse())
+      const feed = feedParser(decoded.value)
+      if (feed.isErr()) {
+        return fail(feed.error)
       }
     }
 
@@ -224,24 +263,16 @@ export const collectCompletion = (
       invalidResponse,
     )()
     if (finalText.isErr()) {
-      return err(finalText.error)
+      return fail(finalText.error)
     }
 
-    const finalFeed = Result.fromThrowable(() => {
-      parser.feed(finalText.value)
-    }, invalidResponse)()
-    if (eventFailure !== undefined) {
-      return err(eventFailure)
-    }
-    if (finalFeed.isErr() || parserFailure) {
-      return err(invalidResponse())
+    const finalFeed = feedParser(finalText.value)
+    if (finalFeed.isErr()) {
+      return fail(finalFeed.error)
     }
 
-    return state.done && state.finished
-      ? signal.aborted
-        ? err({ kind: 'timeout' })
-        : ok(state.content)
-      : err(invalidResponse())
+    const completion = finalizeCompletion(state, signal)
+    return completion.isErr() ? fail(completion.error) : completion
   }
 
   return ResultAsync.fromPromise(readStream(), (): AnalysisFailure =>

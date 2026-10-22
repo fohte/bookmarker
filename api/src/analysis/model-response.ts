@@ -82,26 +82,25 @@ const parseJson = (content: string): ResultType<unknown, AnalysisFailure> =>
     (): AnalysisFailure => ({ kind: 'invalid-response' }),
   )()
 
-export const parseSummaryModelResponse = (
+const parseModelResponse = <Schema extends z.ZodType>(
+  schema: Schema,
   content: string,
-): ResultType<SummaryModelResponse, AnalysisFailure> => {
+): ResultType<z.infer<Schema>, AnalysisFailure> => {
   const json = parseJson(content)
   if (json.isErr()) {
     return err(json.error)
   }
 
-  const parsed = SummaryModelResponseSchema.safeParse(json.value)
+  const parsed = schema.safeParse(json.value)
   return parsed.success ? ok(parsed.data) : err({ kind: 'invalid-response' })
 }
+
+export const parseSummaryModelResponse = (
+  content: string,
+): ResultType<SummaryModelResponse, AnalysisFailure> =>
+  parseModelResponse(SummaryModelResponseSchema, content)
 
 export const parseVerificationModelResponse = (
   content: string,
-): ResultType<VerificationModelResponse, AnalysisFailure> => {
-  const json = parseJson(content)
-  if (json.isErr()) {
-    return err(json.error)
-  }
-
-  const parsed = VerificationModelResponseSchema.safeParse(json.value)
-  return parsed.success ? ok(parsed.data) : err({ kind: 'invalid-response' })
-}
+): ResultType<VerificationModelResponse, AnalysisFailure> =>
+  parseModelResponse(VerificationModelResponseSchema, content)
