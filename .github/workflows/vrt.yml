@@ -63,7 +63,7 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-pnpm-store-
 
-      - run: pnpm install --filter "web..." --frozen-lockfile
+      - run: pnpm install --filter "web..." --filter "api..." --frozen-lockfile
 
       # project must match the `name` passed to createStorybookProject() in
       # vitest.screenshot.config.ts, and stay unique across every vrt_pkgs
