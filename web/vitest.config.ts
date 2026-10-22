@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { BLOCK_EXTERNAL_REQUESTS_ARGS } from '@fohte/storybook-addon/vitest-plugin'
 import { storybookTest } from '@storybook/addon-vitest/vitest-plugin'
 import { playwright } from '@vitest/browser-playwright'
-import { defineConfig, mergeConfig } from 'vitest/config'
+import { configDefaults, defineConfig, mergeConfig } from 'vitest/config'
 
 import viteConfig from './vite.config'
 
@@ -19,6 +19,22 @@ export default mergeConfig(
           extends: true,
           test: {
             name: 'unit',
+            exclude: [...configDefaults.exclude, '**/*.browser.test.tsx'],
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: 'browser',
+            include: ['src/**/*.browser.test.tsx'],
+            browser: {
+              enabled: true,
+              provider: playwright({
+                launchOptions: { args: [...BLOCK_EXTERNAL_REQUESTS_ARGS] },
+              }),
+              headless: true,
+              instances: [{ browser: 'chromium' }],
+            },
           },
         },
         {
