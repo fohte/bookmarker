@@ -33,6 +33,13 @@ export function recoverPendingDeliveries(draft: BookmarkDraft): BookmarkDraft {
   return { ...draft, delivery, updatedAt: new Date().toISOString() }
 }
 
+function clearDraftAnalysis(draft: BookmarkDraft): BookmarkDraft {
+  if (draft.analysis === undefined) return draft
+  const updated = { ...draft }
+  delete updated.analysis
+  return updated
+}
+
 export function updateDraftArticle(
   draft: BookmarkDraft,
   patch: Partial<Article>,
@@ -46,7 +53,21 @@ export function updateDraftArticle(
   }
   const article = ArticleSchema.safeParse({ ...current, ...patch })
   if (!article.success) return draft
-  return { ...draft, article: article.data }
+  const updated = { ...draft, article: article.data }
+  const articleChanged =
+    article.data.url !== current.url ||
+    article.data.title !== current.title ||
+    article.data.text !== current.text ||
+    article.data.source !== current.source ||
+    article.data.partial !== current.partial
+  return articleChanged ? clearDraftAnalysis(updated) : updated
+}
+
+export function clearDraftVerification(draft: BookmarkDraft): BookmarkDraft {
+  const analysis = draft.analysis
+  if (analysis?.verification === undefined) return draft
+  if (analysis.summary === undefined) return clearDraftAnalysis(draft)
+  return { ...draft, analysis: { summary: analysis.summary } }
 }
 
 export function createNewDraft(source: ShareInput, intake: 'manual' | 'share') {
