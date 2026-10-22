@@ -1,0 +1,30 @@
+function createShareLink(composeUrl, input) {
+  const sharedText = input.sharedText
+  const shareFragment = `#share=${encodeURIComponent(JSON.stringify(input))}`
+  const requiresPaste =
+    sharedText.length > 8_192 || shareFragment.length > 16_384
+  const editorUrl = new URL(composeUrl)
+
+  if (sharedText.length === 0 || requiresPaste) {
+    editorUrl.searchParams.set('url', input.url)
+  } else {
+    editorUrl.hash = shareFragment
+  }
+
+  return {
+    clipboardText: sharedText,
+    editorUrl: editorUrl.toString(),
+    requiresPaste,
+  }
+}
+
+const composeUrl = 'https://bookmark-app.example.invalid/compose'
+const input = {
+  version: 1,
+  url: location.href,
+  title: document.title,
+  sharedText: document.body?.innerText ?? '',
+  partial: true,
+}
+
+completion(createShareLink(composeUrl, input))

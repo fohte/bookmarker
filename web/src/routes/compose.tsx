@@ -4,10 +4,12 @@ import { useState } from 'react'
 import { ComposeScreen } from '#components/compose-screen'
 import { currentUrlWithoutDraft } from '#features/editor/compose-history'
 import { useComposeController } from '#features/editor/use-compose-controller'
+import { useShareIntake } from '#features/share/use-share-intake'
 
 export function ComposeRoute() {
   const [sourceUrl, setSourceUrl] = useState('')
   const controller = useComposeController()
+  useShareIntake(controller)
 
   const openManualSource = async () => {
     const parsed = ShareInputSchema.safeParse({
