@@ -25,15 +25,15 @@ import {
   updateDestinationDraft,
 } from '#features/editor/compose-destination'
 import {
+  cleanupBeforeDiscard,
+  restoreDraftUrl,
+} from '#features/editor/compose-discard'
+import {
   clearDraftVerification,
   recoverPendingDeliveries,
   updateDraftArticle,
 } from '#features/editor/compose-draft'
-import {
-  cleanupDraftNavigation,
-  currentUrlWithoutDraft,
-  type FailedImportCleanup,
-} from '#features/editor/compose-history'
+import type { FailedImportCleanup } from '#features/editor/compose-history'
 import { ComposeIntake } from '#features/editor/compose-intake'
 import { loadComposeDraftList } from '#features/editor/compose-list'
 import {
@@ -196,7 +196,13 @@ export class ComposeController {
       return
     }
 
-    const cleanup = this.#cleanupBeforeDiscard(draft)
+    const cleanup = cleanupBeforeDiscard(
+      draft,
+      this.#failedImportCleanups.get(draft.id),
+      () => {
+        this.#failedImportCleanups.delete(draft.id)
+      },
+    )
     if (cleanup.isErr()) {
       this.#resumeCurrentDraft()
       this.#showError(cleanup.error)
@@ -208,7 +214,7 @@ export class ComposeController {
     })
     if (deleted.isErr()) {
       if (!cleanup.value.preserveImportReceipts) {
-        this.#restoreDraftUrl(draft).match(
+        restoreDraftUrl(draft).match(
           () => undefined,
           (error) => {
             this.#showError(error)
@@ -235,33 +241,6 @@ export class ComposeController {
       isLoading: false,
     })
     await this.#refreshDraftList()
-  }
-
-  #cleanupBeforeDiscard(
-    draft: BookmarkDraft,
-  ): Result<
-    { preserveImportReceipts: boolean; errorMessage: string | null },
-    DraftError
-  > {
-    const failedImportCleanup = this.#failedImportCleanups.get(draft.id)
-    const cleaned = cleanupDraftNavigation(
-      failedImportCleanup?.cleanupUrl ?? currentUrlWithoutDraft(),
-      null,
-      failedImportCleanup ?? null,
-    )
-    if (cleaned.isErr() && failedImportCleanup === undefined) {
-      return err(cleaned.error)
-    }
-    if (cleaned.isOk()) this.#failedImportCleanups.delete(draft.id)
-
-    return ok({
-      preserveImportReceipts: cleaned.isErr(),
-      errorMessage: cleaned.isErr() ? cleaned.error.message : null,
-    })
-  }
-
-  #restoreDraftUrl(draft: BookmarkDraft): Result<undefined, DraftError> {
-    return cleanupDraftNavigation(currentUrlWithoutDraft(), draft.id, null)
   }
 
   dispose(): Promise<void> {
