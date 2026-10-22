@@ -12,6 +12,7 @@
     "test": "conc pnpm:test:type pnpm:test:unit",
     "test:type": "tsc --noEmit",
     "test:unit": "vitest run",
+    "authorize:hatena": "tsx scripts/authorize-hatena.ts",
     "build": "tsup",
     "start": "node --import @fohte/service-kit/otel-register dist/index.js",
     "dev": "tsx watch --import @fohte/service-kit/otel-register src/index.ts"
