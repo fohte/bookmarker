@@ -518,6 +518,7 @@ describe('ComposeDestinationCard in a browser', () => {
     function Harness() {
       const [destination, setDestination] = useState(initialDestination)
       const [commonComment, setCommonComment] = useState('A shared comment.')
+      const [settingsOpen, setSettingsOpen] = useState(false)
       return (
         <>
           <ComposeDestinationCard
@@ -525,8 +526,8 @@ describe('ComposeDestinationCard in a browser', () => {
             commonComment={commonComment}
             copyConfirmationOpen={false}
             destination={destination}
-            settingsOpen
-            onSettingsOpenChange={() => undefined}
+            settingsOpen={settingsOpen}
+            onSettingsOpenChange={setSettingsOpen}
             onCancelCopyCommonComment={() => undefined}
             onCopyCommonComment={() => undefined}
             onDestinationChange={(next) => {
@@ -548,6 +549,9 @@ describe('ComposeDestinationCard in a browser', () => {
     }
 
     mount(createElement(Harness))
+    await act(async () =>
+      userEvent.click(buttonWithAriaLabel('Open Hatena Bookmark settings')),
+    )
     await selectOption('hatena-comment-mode', 'Use common comment')
     act(() => {
       buttonNamed('Change common comment').click()
