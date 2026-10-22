@@ -26,7 +26,7 @@ const metadataApp = (registry: DestinationRegistry) => {
 
 const summarizeResponse = async (response: Response) => ({
   status: response.status,
-  body: await response.json(),
+  body: (await response.json()) as unknown,
 })
 
 describe('GET /api/destinations', () => {

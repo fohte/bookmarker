@@ -106,7 +106,7 @@ const summarizeResponse = async (response: Response) => {
       response.body === null
         ? ''
         : contentType !== null && contentType.includes('application/json')
-          ? await response.json()
+          ? ((await response.json()) as unknown)
           : await response.text(),
   }
 }
@@ -143,6 +143,15 @@ describe('Access JWT middleware', () => {
       status: 404,
       body: '404 Not Found',
     })
+  })
+
+  it('rejects an unauthenticated article extraction request', async () => {
+    const response = await createTestApp().request('/api/articles/extract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+    expect(await summarizeResponse(response)).toEqual(unauthorizedResponse)
   })
 
   it('rejects missing, forged, expired, wrong-issuer, wrong-audience, and exp-less tokens', async () => {
@@ -509,6 +518,44 @@ describe('GET /health', () => {
     expect(await summarizeResponse(response)).toEqual({
       status: 200,
       body: { status: 'ok' },
+    })
+  })
+})
+describe('POST /api/analysis/summary', () => {
+  it('is registered on the Node API server', async () => {
+    const server = startApiServer({
+      hostname: '127.0.0.1',
+      port: 0,
+      env: testEnvironment,
+      jwks,
+    })
+    servers.push(server)
+    await once(server, 'listening')
+
+    const address = server.address()
+    const port =
+      address !== null && typeof address !== 'string'
+        ? String(address.port)
+        : '0'
+    const response = await fetch(
+      `http://127.0.0.1:${port}/api/analysis/summary`,
+      {
+        method: 'POST',
+        headers: await authenticatedHeaders({
+          Origin: appOrigin,
+          'Content-Type': 'application/json',
+        }),
+        body: '{invalid json',
+      },
+    )
+    expect(await summarizeResponse(response)).toEqual({
+      status: 400,
+      body: {
+        error: {
+          code: 'INVALID_ANALYSIS_REQUEST',
+          message: 'The request body must be valid JSON.',
+        },
+      },
     })
   })
 })
