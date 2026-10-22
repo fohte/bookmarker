@@ -32,10 +32,7 @@ import {
 } from '#features/editor/compose-state'
 import { ComposeStateStore } from '#features/editor/compose-state-store'
 
-export type {
-  ComposeLockState,
-  ComposeState,
-} from '#features/editor/compose-state'
+export type { ComposeState } from '#features/editor/compose-state'
 
 export class ComposeController {
   #view = new ComposeStateStore()
