@@ -11,9 +11,7 @@ export const destinationIds: DestinationId[] = [
   'x',
 ]
 
-export function createDestinationDraft(
-  destination: DestinationId,
-): DestinationDraft {
+function createDestinationDraft(destination: DestinationId): DestinationDraft {
   const common = {
     selected: false,
     commentMode: 'common' as const,
@@ -58,7 +56,7 @@ export function getDestinationDraft(
   )
 }
 
-export function replaceDestinationDraft(
+function replaceDestinationDraft(
   destinations: DestinationDraft[],
   updated: DestinationDraft,
 ): DestinationDraft[] {

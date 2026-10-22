@@ -33,7 +33,7 @@ export function recoverPendingDeliveries(draft: BookmarkDraft): BookmarkDraft {
   return { ...draft, delivery, updatedAt: new Date().toISOString() }
 }
 
-export function clearDraftAnalysis(draft: BookmarkDraft): BookmarkDraft {
+function clearDraftAnalysis(draft: BookmarkDraft): BookmarkDraft {
   if (draft.analysis === undefined) return draft
   const updated = { ...draft }
   delete updated.analysis
