@@ -20,7 +20,13 @@ type ShareLocation =
   | { type: 'valid'; input: ShareInput; cleanupUrl: string }
   | { type: 'invalid'; message: string }
 
-type QueryEntry = { raw: string; key: string }
+type QueryEntry = { raw: string; key: string | undefined; value: string }
+type QueryRead = { entries: QueryEntry[]; hasInvalidKeyEncoding: boolean }
+
+type ShareFragmentRead =
+  | { type: 'absent' }
+  | { type: 'malformed' }
+  | { type: 'found'; rawValue: string; segment: string }
 
 const invalid = (): ShareLocation => ({
   type: 'invalid',
@@ -30,9 +36,10 @@ const invalid = (): ShareLocation => ({
 
 const queryPart = (value: string) => decodeComponent(value.replaceAll('+', ' '))
 
-const readQueryEntries = (search: string): QueryEntry[] | undefined => {
+const readQueryEntries = (search: string): QueryRead => {
   const rawSearch = search.startsWith('?') ? search.slice(1) : search
   const entries: QueryEntry[] = []
+  let hasInvalidKeyEncoding = false
 
   for (const raw of rawSearch.split('&')) {
     if (raw === '') continue
@@ -40,23 +47,26 @@ const readQueryEntries = (search: string): QueryEntry[] | undefined => {
     const separator = raw.indexOf('=')
     const rawKey = separator < 0 ? raw : raw.slice(0, separator)
     const key = queryPart(rawKey)
-    if (key.isErr()) return undefined
+    if (key.isErr()) hasInvalidKeyEncoding = true
 
-    entries.push({ raw, key: key.value })
+    entries.push({
+      raw,
+      key: key.match(
+        (value) => value,
+        () => undefined,
+      ),
+      value: separator < 0 ? '' : raw.slice(separator + 1),
+    })
   }
 
-  return entries
+  return { entries, hasInvalidKeyEncoding }
 }
 
-const readShareFragment = (
-  hash: string,
-): { rawValue: string; shareSegment: string } | undefined | null => {
+const readShareFragment = (hash: string): ShareFragmentRead => {
   const rawHash = hash.startsWith('#') ? hash.slice(1) : hash
-  const segments = rawHash.split('&')
-  let rawValue: string | undefined
-  let shareSegment: string | undefined
+  let found: ShareFragmentRead | undefined
 
-  for (const segment of segments) {
+  for (const segment of rawHash.split('&')) {
     if (segment === '') continue
 
     const separator = segment.indexOf('=')
@@ -64,52 +74,46 @@ const readShareFragment = (
     const key = decodeComponent(rawKey)
 
     if (key.isErr()) {
-      if (rawKey.startsWith('share')) return null
+      if (rawKey.startsWith('share')) return { type: 'malformed' }
       continue
     }
     if (key.value !== 'share') continue
-    if (separator < 0 || rawValue !== undefined) return null
+    if (separator < 0 || found !== undefined) return { type: 'malformed' }
 
-    rawValue = segment.slice(separator + 1)
-    shareSegment = segment
+    found = {
+      type: 'found',
+      rawValue: segment.slice(separator + 1),
+      segment,
+    }
   }
 
-  if (rawValue === undefined || shareSegment === undefined) return undefined
-
-  return { rawValue, shareSegment }
+  return found ?? { type: 'absent' }
 }
 
-const removeShareParameters = (
+const createCleanupUrl = (
   pathname: string,
-  search: string,
   hash: string,
   queryEntries: QueryEntry[],
-  shareFragment: { rawValue: string; shareSegment: string } | undefined,
+  shareFragment: ShareFragmentRead,
 ) => {
-  const rawSearch = search.startsWith('?') ? search.slice(1) : search
-  const cleanedQuery = rawSearch
-    .split('&')
-    .filter((raw) => {
-      if (raw === '') return false
-      const entry = queryEntries.find((candidate) => candidate.raw === raw)
-      return entry?.key !== 'url' && entry?.key !== 'draft'
-    })
+  const cleanedQuery = queryEntries
+    .filter((entry) => entry.key !== 'url' && entry.key !== 'draft')
+    .map((entry) => entry.raw)
     .join('&')
 
   let cleanedHash = hash
 
-  if (shareFragment !== undefined) {
+  if (shareFragment.type === 'found') {
     const rawHash = hash.startsWith('#') ? hash.slice(1) : hash
     const cleanSegments = rawHash
       .split('&')
-      .filter(
-        (segment) => segment !== '' && segment !== shareFragment.shareSegment,
-      )
+      .filter((segment) => segment !== '' && segment !== shareFragment.segment)
     cleanedHash =
       cleanSegments.length === 0 ? '' : `#${cleanSegments.join('&')}`
   }
 
-  return `${pathname}${cleanedQuery === '' ? '' : `?${cleanedQuery}`}${cleanedHash}`
+  const hasQuery = cleanedQuery !== ''
+  return `${pathname}${hasQuery ? `?${cleanedQuery}` : ''}${cleanedHash}`
 }
 
 export const parseShareLocation = (
@@ -118,29 +122,20 @@ export const parseShareLocation = (
   hash: string,
 ): ShareLocation => {
   const shareFragment = readShareFragment(hash)
-  if (shareFragment === null) return invalid()
+  if (shareFragment.type === 'malformed') return invalid()
 
-  const urlSearchParams = new URLSearchParams(search)
-  const hasUrlQuery = urlSearchParams.has('url')
-  if (shareFragment === undefined && !hasUrlQuery) return { type: 'none' }
+  const query = readQueryEntries(search)
+  const hasUrlQuery = query.entries.some((entry) => entry.key === 'url')
+  if (shareFragment.type === 'absent' && !hasUrlQuery) return { type: 'none' }
+  if (query.hasInvalidKeyEncoding) return invalid()
 
-  const queryEntries = readQueryEntries(search)
-  if (queryEntries === undefined) return invalid()
-
-  const rawUrlValues = queryEntries
-    .filter((entry) => entry.key === 'url')
-    .map((entry) => {
-      const separator = entry.raw.indexOf('=')
-      return separator < 0 ? '' : entry.raw.slice(separator + 1)
-    })
-
-  if (rawUrlValues.length !== urlSearchParams.getAll('url').length)
-    return invalid()
-  if (rawUrlValues.length > 1) return invalid()
+  const urlEntries = query.entries.filter((entry) => entry.key === 'url')
+  if (urlEntries.length > 1) return invalid()
 
   const queryUrlResult =
-    rawUrlValues.length === 0 ? undefined : queryPart(rawUrlValues[0] ?? '')
+    urlEntries.length === 0 ? undefined : queryPart(urlEntries[0]?.value ?? '')
   if (queryUrlResult !== undefined && queryUrlResult.isErr()) return invalid()
+
   const queryUrl = queryUrlResult?.match(
     (value) => value,
     () => undefined,
@@ -148,7 +143,7 @@ export const parseShareLocation = (
 
   let input: ShareInput
 
-  if (shareFragment !== undefined) {
+  if (shareFragment.type === 'found') {
     if (new TextEncoder().encode(hash).length > maxShareFragmentBytes) {
       return invalid()
     }
@@ -180,12 +175,6 @@ export const parseShareLocation = (
   return {
     type: 'valid',
     input,
-    cleanupUrl: removeShareParameters(
-      pathname,
-      search,
-      hash,
-      queryEntries,
-      shareFragment,
-    ),
+    cleanupUrl: createCleanupUrl(pathname, hash, query.entries, shareFragment),
   }
 }

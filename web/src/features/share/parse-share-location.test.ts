@@ -6,11 +6,11 @@ import { describe, expect, it } from 'vitest'
 import { parseShareLocation } from '#features/share/parse-share-location'
 
 const safariShortcut = readFileSync(
-  new URL('../../../../docs/share/safari-shortcut.js', import.meta.url),
+  new URL('../../../../docs/share/safari-shortcut.txt', import.meta.url),
   'utf8',
 )
 const macBookmarklet = readFileSync(
-  new URL('../../../../docs/share/mac-bookmarklet.js', import.meta.url),
+  new URL('../../../../docs/share/mac-bookmarklet.txt', import.meta.url),
   'utf8',
 )
 
@@ -39,14 +39,29 @@ const parseLink = (link: string) => {
   return parseShareLocation(url.pathname, url.search, url.hash)
 }
 
+const macBookmarkletOpenOutput = (
+  openedUrl: string,
+  openedTarget: string,
+  fallback: { message: string; url: string } | null,
+) => ({
+  openedUrl,
+  openedTarget,
+  fallback,
+  parsed: parseLink(openedUrl),
+})
+
+const macBookmarkletFallbackOutput = (
+  openedUrl: string,
+  prompt: { message: string; url: string } | null,
+) => ({
+  openedUrl,
+  prompt,
+  parsed: parseLink(openedUrl),
+})
+
 const safariResult = (output: SafariOutput | undefined) => ({
   output,
   parsed: parseLink(output?.editorUrl ?? ''),
-})
-
-const bookmarkletResult = (openedUrl: string) => ({
-  openedUrl,
-  parsed: parseLink(openedUrl),
 })
 
 const shareFragment = (input: unknown) =>
@@ -106,6 +121,14 @@ describe('parseShareLocation', () => {
 
   it('rejects malformed fragment encoding without exposing the payload', () => {
     expect(parseShareLocation('/compose', '', '#share=%E0%A4%A')).toEqual({
+      type: 'invalid',
+      message:
+        'This shared link is invalid or too large. Copy the article URL and try again.',
+    })
+  })
+
+  it('rejects decoded fragment text that is not JSON', () => {
+    expect(parseShareLocation('/compose', '', '#share=%7B')).toEqual({
       type: 'invalid',
       message:
         'This shared link is invalid or too large. Copy the article URL and try again.',
@@ -367,6 +390,32 @@ describe('Safari shortcut distribution', () => {
     })
   })
 
+  it('opens the URL-only link when the Safari page has no text', () => {
+    const output = runSafariShortcut(
+      'https://articles.example.invalid/story',
+      'An article',
+      '',
+    )
+
+    expect(safariResult(output)).toEqual({
+      output: {
+        clipboardText: '',
+        editorUrl:
+          'https://bookmark-app.example.invalid/compose?url=https%3A%2F%2Farticles.example.invalid%2Fstory',
+        requiresPaste: false,
+      },
+      parsed: {
+        type: 'valid',
+        input: {
+          version: 1,
+          url: 'https://articles.example.invalid/story',
+          partial: false,
+        },
+        cleanupUrl: '/compose',
+      },
+    })
+  })
+
   it('accepts text at the share limit', () => {
     const text = 'a'.repeat(8_192)
     const output = runSafariShortcut(
@@ -403,28 +452,81 @@ describe('Safari shortcut distribution', () => {
     })
   })
 
-  it('creates a URL-only link from the Mac bookmarklet', () => {
+  it('opens a URL-only link in a new tab from the Mac bookmarklet', () => {
     let openedUrl = ''
-    runInNewContext(macBookmarklet.replace(/^javascript:/, ''), {
-      URL,
-      window: {
-        location: {
-          href: 'https://articles.example.invalid/story?q=a%2Bb#chapter',
-          assign: (url: string) => {
+    let openedTarget = ''
+    let fallback: { message: string; url: string } | null = null
+    runInNewContext(
+      macBookmarklet.replace(/^javascript:/, '').replace(/[\t\n\r]/g, ''),
+      {
+        URL,
+        window: {
+          location: {
+            href: 'https://articles.example.invalid/story?q=a%2Bb#chapter',
+          },
+          open: (url: string, target: string) => {
             openedUrl = url
+            openedTarget = target
+            return {}
+          },
+          prompt: (message: string, url: string) => {
+            fallback = { message, url }
           },
         },
       },
-    })
+    )
 
-    expect(bookmarkletResult(openedUrl)).toEqual({
+    expect(macBookmarkletOpenOutput(openedUrl, openedTarget, fallback)).toEqual(
+      {
+        openedUrl:
+          'https://bookmark-app.example.invalid/compose?url=https%3A%2F%2Farticles.example.invalid%2Fstory%3Fq%3Da%252Bb%23chapter',
+        openedTarget: '_blank',
+        fallback: null,
+        parsed: {
+          type: 'valid',
+          input: {
+            version: 1,
+            url: 'https://articles.example.invalid/story?q=a%2Bb#chapter',
+            partial: false,
+          },
+          cleanupUrl: '/compose',
+        },
+      },
+    )
+  })
+
+  it('prompts with the URL if the Mac browser blocks the new tab', () => {
+    let openedUrl = ''
+    let prompt: { message: string; url: string } | null = null
+    runInNewContext(
+      macBookmarklet.replace(/^javascript:/, '').replace(/[\t\n\r]/g, ''),
+      {
+        URL,
+        window: {
+          location: { href: 'https://articles.example.invalid/story' },
+          open: (url: string) => {
+            openedUrl = url
+            return null
+          },
+          prompt: (message: string, url: string) => {
+            prompt = { message, url }
+          },
+        },
+      },
+    )
+
+    expect(macBookmarkletFallbackOutput(openedUrl, prompt)).toEqual({
       openedUrl:
-        'https://bookmark-app.example.invalid/compose?url=https%3A%2F%2Farticles.example.invalid%2Fstory%3Fq%3Da%252Bb%23chapter',
+        'https://bookmark-app.example.invalid/compose?url=https%3A%2F%2Farticles.example.invalid%2Fstory',
+      prompt: {
+        message: 'Copy this URL to open Bookmarker',
+        url: 'https://bookmark-app.example.invalid/compose?url=https%3A%2F%2Farticles.example.invalid%2Fstory',
+      },
       parsed: {
         type: 'valid',
         input: {
           version: 1,
-          url: 'https://articles.example.invalid/story?q=a%2Bb#chapter',
+          url: 'https://articles.example.invalid/story',
           partial: false,
         },
         cleanupUrl: '/compose',

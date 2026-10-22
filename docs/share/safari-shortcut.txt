@@ -1,23 +1,14 @@
 function createShareLink(composeUrl, input) {
-  const sharedText = input.sharedText ?? input.title ?? ''
+  const sharedText = input.sharedText
   const shareFragment = `#share=${encodeURIComponent(JSON.stringify(input))}`
   const requiresPaste =
-    (input.sharedText?.length ?? 0) > 8_192 || shareFragment.length > 16_384
+    sharedText.length > 8_192 || shareFragment.length > 16_384
   const editorUrl = new URL(composeUrl)
 
-  editorUrl.search = ''
-  editorUrl.hash = ''
-
-  if (requiresPaste) {
+  if (sharedText.length === 0 || requiresPaste) {
     editorUrl.searchParams.set('url', input.url)
-  } else if (
-    input.sharedText !== undefined ||
-    input.title !== undefined ||
-    input.partial
-  ) {
-    editorUrl.hash = shareFragment
   } else {
-    editorUrl.searchParams.set('url', input.url)
+    editorUrl.hash = shareFragment
   }
 
   return {
