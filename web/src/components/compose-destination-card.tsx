@@ -83,9 +83,14 @@ export function ComposeDestinationCard({
       : undefined
   const name = destinationNames[destination.destination]
   const settingsSummary = getDestinationSettingsSummary(destination)
+  const settingsStatus = selectionUnavailable
+    ? 'Not connected'
+    : metadataError === undefined
+      ? settingsSummary
+      : 'Details unavailable'
 
   return (
-    <article className="flex min-w-0 items-center gap-3 border border-border px-3 py-2">
+    <article className="flex min-w-0 items-center gap-1.5 border border-border px-1.5 py-1">
       <label className="flex shrink-0 items-center">
         <input
           aria-label={`Select ${name}`}
@@ -102,24 +107,16 @@ export function ComposeDestinationCard({
         />
       </label>
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <h3 className="font-medium">{name}</h3>
-          {destination.selected && (
-            <span className="text-xs text-primary">Selected</span>
-          )}
-          {selectionUnavailable && (
-            <span className="text-xs text-muted-foreground" role="status">
-              Not connected
-            </span>
-          )}
-          {metadataError !== undefined && (
-            <span className="text-xs text-muted-foreground" role="status">
-              Details unavailable
-            </span>
-          )}
-        </div>
-        <p className="truncate text-xs text-muted-foreground">
-          {settingsSummary}
+        <h3 className="truncate text-xs font-medium">{name}</h3>
+        <p
+          className="truncate text-2xs text-muted-foreground"
+          role={
+            selectionUnavailable || metadataError !== undefined
+              ? 'status'
+              : undefined
+          }
+        >
+          {settingsStatus}
         </p>
       </div>
       <Button
@@ -127,10 +124,10 @@ export function ComposeDestinationCard({
         onClick={() => {
           onSettingsOpenChange(true)
         }}
-        size="sm"
-        variant="outline"
+        size="xs"
+        variant="ghost"
       >
-        Settings
+        Edit
       </Button>
       <ComposeDestinationSettings
         canEdit={canEdit}

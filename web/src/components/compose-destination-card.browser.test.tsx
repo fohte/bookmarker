@@ -723,16 +723,15 @@ describe('ComposeDestinationCard in a browser', () => {
       exact: true,
       name: 'Saved collection ID 918 (not in the available list)',
     })
+    await expect.element(unknownOption).toHaveAttribute('aria-disabled', 'true')
     const unknownOptionDisabled =
       unknownOption.element().getAttribute('aria-disabled') === 'true'
-    await act(async () =>
-      page
-        .getByRole('option', {
-          exact: true,
-          name: 'Fictional reading collection',
-        })
-        .click(),
-    )
+    const availableOption = page.getByRole('option', {
+      exact: true,
+      name: 'Fictional reading collection',
+    })
+    await expect.element(availableOption).toBeVisible()
+    await act(async () => availableOption.click())
 
     expect(
       captureOutput({

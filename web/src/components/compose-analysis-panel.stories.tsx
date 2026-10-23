@@ -94,7 +94,7 @@ export const NotRequested: Story = {
 }
 
 export const PartialIssues: Story = {
-  args: { summary, verification },
+  args: { summary, verification, defaultOpenDetail: 'verification' },
   name: 'The editor shows a partial summary and all three comment issue types.',
 }
 
@@ -118,6 +118,7 @@ export const CustomCommentUnverified: Story = {
     isCustomComment: true,
     verification: null,
     verificationState: 'not-requested',
+    defaultOpenDetail: 'verification',
   },
   name: 'The editor marks a custom comment as unchecked in this session.',
 }
@@ -125,7 +126,24 @@ export const CustomCommentUnverified: Story = {
 export const NoIssues: Story = {
   args: {
     verification: { issues: [], partial: false },
-    verificationState: 'not-requested',
+    verificationState: 'success',
+    defaultOpenDetail: 'verification',
   },
   name: 'The editor reports that no issue was found in the article text.',
+}
+
+export const LongSummary: Story = {
+  args: {
+    summary: {
+      summary: Array.from(
+        { length: 30 },
+        () =>
+          'A fictional summary explains an observation, the evidence behind it, and the limits of the conclusion for readers who need the full context.',
+      ).join('\n\n'),
+      partial: false,
+    },
+    summaryState: 'success',
+    defaultOpenDetail: 'summary',
+  },
+  name: 'The editor keeps a long summary readable inside its detail view.',
 }

@@ -83,61 +83,11 @@ export function ComposeScreen({
     state.lockState !== 'unsupported' && !state.isLoading && !deliveryBusy
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs font-medium tracking-wide text-muted-foreground">
-            BOOKMARKER
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold">Article drafts</h1>
-        </div>
-      </header>
-
-      {state.errorMessage !== null && (
-        <p
-          className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          role="alert"
-        >
-          {state.errorMessage}
-        </p>
-      )}
-      {state.intakeError !== null && (
-        <p
-          className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          role="alert"
-        >
-          {state.intakeError}
-        </p>
-      )}
-      {state.unreadableDraftCount > 0 && (
-        <p
-          className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground"
-          role="status"
-        >
-          {state.unreadableDraftCount} saved draft(s) could not be opened and
-          were left unchanged.
-        </p>
-      )}
-      {state.lockState === 'unsupported' && (
-        <p
-          className="rounded-md border border-border px-3 py-2 text-sm"
-          role="alert"
-        >
-          This browser does not support the locking required to edit drafts
-          safely. You can view saved drafts, but editing is unavailable.
-        </p>
-      )}
-      {state.lockState === 'locked' && activeDraft !== null && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm">
-          <p>
-            This draft is being edited in another tab. This view is read-only.
-          </p>
-          <Button onClick={onRetryLock} variant="outline" size="sm">
-            Try again
-          </Button>
-        </div>
-      )}
-
+    <main
+      data-compose-screen
+      className="mx-auto flex h-dvh min-h-0 w-full max-w-5xl flex-col gap-2 overflow-hidden px-3 py-2 sm:px-4"
+    >
+      <h1 className="sr-only">Article composer</h1>
       <ComposeDraftPanel
         activeDraft={activeDraft}
         articleTextError={articleTextError}
@@ -156,26 +106,80 @@ export function ComposeScreen({
         sourceUrl={sourceUrl}
       />
 
+      {(state.errorMessage !== null ||
+        state.intakeError !== null ||
+        state.unreadableDraftCount > 0 ||
+        state.lockState === 'unsupported' ||
+        (state.lockState === 'locked' && activeDraft !== null)) && (
+        <section
+          aria-label="Editor status"
+          className="shrink-0 space-y-1 text-xs"
+        >
+          {state.errorMessage !== null && (
+            <p
+              className="rounded-md border border-destructive/40 bg-destructive/5 px-2 py-1 text-destructive"
+              role="alert"
+            >
+              {state.errorMessage}
+            </p>
+          )}
+          {state.intakeError !== null && (
+            <p
+              className="rounded-md border border-destructive/40 bg-destructive/5 px-2 py-1 text-destructive"
+              role="alert"
+            >
+              {state.intakeError}
+            </p>
+          )}
+          {state.unreadableDraftCount > 0 && (
+            <p
+              className="rounded-md border border-border px-2 py-1 text-muted-foreground"
+              role="status"
+            >
+              {state.unreadableDraftCount} saved draft(s) could not be opened
+              and were left unchanged.
+            </p>
+          )}
+          {state.lockState === 'unsupported' && (
+            <p
+              className="rounded-md border border-border px-2 py-1"
+              role="alert"
+            >
+              This browser does not support safe editing. Saved drafts are
+              read-only.
+            </p>
+          )}
+          {state.lockState === 'locked' && activeDraft !== null && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-2 py-1">
+              <p role="status">
+                This draft is being edited in another tab. This view is
+                read-only.
+              </p>
+              <Button onClick={onRetryLock} size="xs" variant="outline">
+                Try again
+              </Button>
+            </div>
+          )}
+        </section>
+      )}
+
       {state.isLoading ? (
         <Panel
-          padding="md"
-          className="rounded-lg p-5 text-sm text-muted-foreground"
+          padding="sm"
+          className="min-h-0 flex-1 rounded-lg p-3 text-sm text-muted-foreground"
         >
           Loading drafts…
         </Panel>
       ) : (
-        <section className="grid items-start gap-6 lg:grid-cols-2">
-          <div className="space-y-6">
+        <div
+          data-compose-content
+          className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto md:overflow-y-hidden"
+        >
+          <section className="grid min-w-0 grid-cols-1 gap-2 md:min-h-0 md:flex-1 md:grid-cols-2">
             <ComposeAnalysisPanel
               {...analysis}
               canEdit={canEdit && !state.isLoading}
             />
-            <ComposeDeliveryPanel
-              delivery={activeDraft?.delivery ?? []}
-              {...deliveryControls}
-            />
-          </div>
-          <div className="space-y-6">
             <ComposeCommonCommentPanel
               activeDraft={activeDraft}
               canEdit={canEdit}
@@ -183,22 +187,33 @@ export function ComposeScreen({
               onRetrySave={onRetrySave}
               saveState={state.saveState}
             />
-            <ComposeDestinationsPanel
-              canEdit={canEdit}
-              commonComment={activeDraft?.commonComment ?? ''}
-              copyConfirmationDestination={copyConfirmationDestination}
-              destinations={activeDraft?.destinations ?? []}
-              {...(destinationMetadata === undefined
-                ? {}
-                : { metadata: destinationMetadata })}
-              onCancelCopyCommonComment={onCancelCopyCommonComment}
-              onCopyCommonComment={onCopyCommonComment}
-              onDestinationChange={onDestinationChange}
-              onRequestCopyCommonComment={onRequestCopyCommonComment}
-            />
-          </div>
-        </section>
+          </section>
+          <ComposeDestinationsPanel
+            canEdit={canEdit}
+            commonComment={activeDraft?.commonComment ?? ''}
+            copyConfirmationDestination={copyConfirmationDestination}
+            destinations={activeDraft?.destinations ?? []}
+            {...(destinationMetadata === undefined
+              ? {}
+              : { metadata: destinationMetadata })}
+            onCancelCopyCommonComment={onCancelCopyCommonComment}
+            onCopyCommonComment={onCopyCommonComment}
+            onDestinationChange={onDestinationChange}
+            onRequestCopyCommonComment={onRequestCopyCommonComment}
+          />
+        </div>
       )}
+
+      <ComposeDeliveryPanel
+        delivery={activeDraft?.delivery ?? []}
+        {...deliveryControls}
+        xSelected={
+          activeDraft?.destinations.some(
+            (destination) =>
+              destination.destination === 'x' && destination.selected,
+          ) ?? false
+        }
+      />
 
       <Dialog
         open={state.discardOpen}

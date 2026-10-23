@@ -1,6 +1,15 @@
 import { Button } from '@fohte/ui/button'
+import { Chip } from '@fohte/ui/chip'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@fohte/ui/dialog'
 import { Panel } from '@fohte/ui/panel'
 import type { Article, Summary, Verification } from 'api/contracts'
+import { useState } from 'react'
 
 import type { AnalysisDisplayState } from '#features/editor/compose-analysis-state'
 
@@ -29,6 +38,8 @@ function stateMessage(
   }
 }
 
+type AnalysisDetail = 'summary' | 'verification' | null
+
 export type ComposeAnalysisPanelProps = {
   article: Article | null
   canEdit: boolean
@@ -41,6 +52,7 @@ export type ComposeAnalysisPanelProps = {
   selectedVerificationTargetId: string
   isCustomComment: boolean
   canVerifyComment: boolean
+  defaultOpenDetail?: Exclude<AnalysisDetail, null>
   onExtractArticle: () => void
   onSummarizeArticle: () => void
   onVerifyComment: () => void
@@ -59,11 +71,15 @@ export function ComposeAnalysisPanel({
   selectedVerificationTargetId,
   isCustomComment,
   canVerifyComment,
+  defaultOpenDetail,
   onExtractArticle,
   onSummarizeArticle,
   onVerifyComment,
   onVerificationTargetChange,
 }: ComposeAnalysisPanelProps) {
+  const [openDetail, setOpenDetail] = useState<AnalysisDetail>(
+    defaultOpenDetail ?? null,
+  )
   const hasArticleText = (article?.text.trim().length ?? 0) > 0
   const extractionMessage = stateMessage(extractionState, 'Article extraction')
   const summaryMessage = stateMessage(summaryState, 'Summary')
@@ -72,180 +88,323 @@ export function ComposeAnalysisPanel({
     'Comment check',
     isCustomComment,
   )
+  const summaryIsRetryable =
+    summaryState === 'failed' ||
+    summaryState === 'unavailable' ||
+    summaryState === 'authentication-required'
+  const verificationIsRetryable =
+    verificationState === 'failed' ||
+    verificationState === 'unavailable' ||
+    verificationState === 'authentication-required'
 
   return (
-    <Panel padding="md" className="space-y-5 rounded-lg p-5 sm:p-6">
-      <div>
-        <h2 className="font-medium">Article analysis</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Summaries and comment checks use only the available article text.
-        </p>
-        {article?.partial === true && (
-          <p className="mt-2 text-sm text-muted-foreground" role="status">
-            The article text is partial.
+    <Panel
+      data-compose-section="analysis"
+      padding="sm"
+      className="min-w-0 space-y-2 rounded-lg p-2"
+    >
+      {!hasArticleText && (
+        <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
+          <p className="min-w-0 text-xs text-muted-foreground" role="status">
+            {extractionMessage}
           </p>
-        )}
-        {!hasArticleText && (
-          <div className="mt-3 space-y-2">
-            <Button
-              disabled={
-                !canEdit || article === null || extractionState === 'loading'
-              }
-              onClick={onExtractArticle}
-              size="sm"
-              variant="outline"
-            >
-              {extractionState === 'failed' ||
-              extractionState === 'unavailable' ||
-              extractionState === 'authentication-required'
-                ? 'Retry article extraction'
-                : 'Extract article text'}
-            </Button>
-            {extractionMessage !== null && (
-              <p className="text-sm text-muted-foreground" role="status">
-                {extractionMessage}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
+          <Button
+            disabled={
+              !canEdit || article === null || extractionState === 'loading'
+            }
+            onClick={onExtractArticle}
+            size="xs"
+            variant="outline"
+          >
+            {extractionState === 'failed' ||
+            extractionState === 'unavailable' ||
+            extractionState === 'authentication-required'
+              ? 'Retry extract'
+              : 'Extract text'}
+          </Button>
+        </div>
+      )}
 
-      <section className="space-y-2 border-t border-border pt-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-sm font-medium">Summary</h3>
+      <section className="space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1">
+            <h2 className="text-sm font-medium">Summary</h2>
+            {article?.partial === true && <Chip>Article partial</Chip>}
+          </div>
           <Button
             disabled={!canEdit || !hasArticleText || summaryState === 'loading'}
             onClick={onSummarizeArticle}
-            size="sm"
+            size="xs"
             variant="outline"
           >
-            {summaryState === 'failed' ||
-            summaryState === 'unavailable' ||
-            summaryState === 'authentication-required'
-              ? 'Retry summary'
-              : 'Generate summary'}
+            {summaryIsRetryable
+              ? 'Retry'
+              : summary === null
+                ? 'Generate'
+                : 'Refresh'}
           </Button>
         </div>
-        {summaryMessage !== null && summary !== null && (
-          <p className="text-sm text-muted-foreground" role="status">
-            {summaryMessage}
-          </p>
-        )}
         {summary === null ? (
-          <p className="text-sm text-muted-foreground" role="status">
+          <p className="text-xs text-muted-foreground" role="status">
             {summaryMessage}
           </p>
         ) : (
-          <div className="space-y-2 text-sm">
-            <p className="whitespace-pre-wrap">{summary.summary}</p>
-            {summary.partial && (
-              <p className="text-muted-foreground" role="status">
-                This summary is based on partial article text.
+          <>
+            <p className="line-clamp-2 break-words text-xs leading-4">
+              {summary.summary}
+            </p>
+            <div className="flex items-center justify-between gap-2">
+              {summary.partial ? (
+                <Chip>Summary partial</Chip>
+              ) : summaryMessage !== null ? (
+                <p
+                  className="min-w-0 truncate text-2xs text-muted-foreground"
+                  role="status"
+                >
+                  {summaryMessage}
+                </p>
+              ) : (
+                <span />
+              )}
+              <Button
+                aria-label="Read full summary"
+                onClick={() => {
+                  setOpenDetail('summary')
+                }}
+                size="xs"
+                variant="ghost"
+              >
+                Details
+              </Button>
+            </div>
+            {summary.partial && summaryMessage !== null && (
+              <p className="text-2xs text-muted-foreground" role="status">
+                {summaryMessage}
               </p>
             )}
-          </div>
+          </>
+        )}
+        {summary === null && (
+          <Button
+            aria-label="Read full summary"
+            onClick={() => {
+              setOpenDetail('summary')
+            }}
+            size="xs"
+            variant="ghost"
+          >
+            Details
+          </Button>
         )}
       </section>
 
-      <section className="space-y-2 border-t border-border pt-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <section className="space-y-1 border-t border-border pt-2">
+        <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-medium">Comment check</h3>
-          <Button
-            disabled={
-              !canEdit ||
-              !hasArticleText ||
-              !canVerifyComment ||
-              verificationState === 'loading'
-            }
-            onClick={onVerifyComment}
-            size="sm"
-            variant="outline"
-          >
-            {verificationState === 'failed' ||
-            verificationState === 'unavailable' ||
-            verificationState === 'authentication-required'
-              ? 'Retry comment check'
-              : 'Check comment'}
-          </Button>
-        </div>
-        {verificationTargets.length > 1 && (
-          <div className="space-y-1.5">
-            <label
-              className="text-sm font-medium"
-              htmlFor="analysis-comment-target"
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              disabled={
+                !canEdit ||
+                !hasArticleText ||
+                !canVerifyComment ||
+                verificationState === 'loading'
+              }
+              onClick={onVerifyComment}
+              size="xs"
+              variant="outline"
             >
-              Comment to check
-            </label>
-            <select
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
-              disabled={!canEdit}
-              id="analysis-comment-target"
-              onChange={(event) => {
-                onVerificationTargetChange(event.currentTarget.value)
+              {verificationIsRetryable ? 'Retry' : 'Check'}
+            </Button>
+            <Button
+              aria-label="Read comment check details"
+              onClick={() => {
+                setOpenDetail('verification')
               }}
-              value={selectedVerificationTargetId}
+              size="xs"
+              variant="ghost"
             >
-              {verificationTargets.map((target) => (
-                <option key={target.id} value={target.id}>
-                  {target.label}
-                </option>
-              ))}
-            </select>
+              Details
+            </Button>
           </div>
-        )}
-        {verificationMessage !== null && verification !== null && (
-          <p className="text-sm text-muted-foreground" role="status">
-            {verificationMessage}
+        </div>
+        <div
+          className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
+          data-compose-verification-status
+        >
+          <p role="status">
+            {verificationMessage ??
+              (verification?.issues.length === 0
+                ? 'No issues found in the available article text.'
+                : `${String(verification?.issues.length ?? 0)} item(s) to review.`)}
           </p>
-        )}
-        {verification === null ? (
-          <p className="text-sm text-muted-foreground" role="status">
-            {verificationMessage}
-          </p>
-        ) : (
-          <div className="space-y-3 text-sm">
-            {verification.partial && (
-              <p className="text-muted-foreground" role="status">
-                This check is based on partial article text.
-              </p>
-            )}
-            {verification.issues.length === 0 ? (
-              <p role="status">
-                No issues were found in the available article text.
-              </p>
-            ) : (
-              <ul className="space-y-3">
-                {verification.issues.map((issue, index) => (
-                  <li key={index} className="border-l-2 border-border pl-3">
-                    <p className="font-medium">
-                      {issue.kind === 'error'
-                        ? 'Contradicted by the article'
-                        : issue.kind === 'unsupported'
-                          ? 'Not supported by the article'
-                          : 'Cannot be confirmed from the article'}
+          {verification?.partial === true && <Chip>Based on partial text</Chip>}
+          {verification !== null && verification.issues.length > 0 && (
+            <Chip tone="strong">
+              {String(verification.issues.length)} item(s) to review
+            </Chip>
+          )}
+        </div>
+      </section>
+
+      <Dialog
+        open={openDetail !== null}
+        onOpenChange={(open) => {
+          if (!open) setOpenDetail(null)
+        }}
+      >
+        <DialogContent className="max-h-dvh w-full flex flex-col overflow-visible sm:max-w-lg">
+          <DialogHeader className="shrink-0 pr-8">
+            <DialogTitle>
+              {openDetail === 'summary' ? 'Article summary' : 'Comment check'}
+            </DialogTitle>
+            <DialogDescription>
+              Summaries and comment checks use only the available article text.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+            {openDetail === 'summary' ? (
+              <section className="space-y-3">
+                <Button
+                  disabled={
+                    !canEdit || !hasArticleText || summaryState === 'loading'
+                  }
+                  onClick={onSummarizeArticle}
+                  size="sm"
+                  variant="outline"
+                >
+                  {summaryIsRetryable
+                    ? 'Retry summary'
+                    : summary === null
+                      ? 'Generate summary'
+                      : 'Refresh summary'}
+                </Button>
+                {summaryMessage !== null && (
+                  <p className="text-sm text-muted-foreground" role="status">
+                    {summaryMessage}
+                  </p>
+                )}
+                {summary === null ? (
+                  <p className="text-sm text-muted-foreground" role="status">
+                    {summaryMessage}
+                  </p>
+                ) : (
+                  <>
+                    <p className="whitespace-pre-wrap break-words text-sm">
+                      {summary.summary}
                     </p>
-                    {issue.quote.length > 0 && (
-                      <blockquote className="mt-1 text-muted-foreground">
-                        {issue.quote}
-                      </blockquote>
-                    )}
-                    <p className="mt-1">{issue.reason}</p>
-                    {issue.evidence !== undefined && (
-                      <p className="mt-1 text-muted-foreground">
-                        Evidence: {issue.evidence}
+                    {summary.partial && (
+                      <p
+                        className="text-sm text-muted-foreground"
+                        role="status"
+                      >
+                        This summary is based on partial article text.
                       </p>
                     )}
-                  </li>
-                ))}
-              </ul>
+                  </>
+                )}
+              </section>
+            ) : (
+              <section className="space-y-3 text-sm">
+                {verificationTargets.length > 1 && (
+                  <div className="space-y-1.5">
+                    <label
+                      className="text-sm font-medium"
+                      htmlFor="analysis-comment-target"
+                    >
+                      Comment to check
+                    </label>
+                    <select
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+                      disabled={!canEdit}
+                      id="analysis-comment-target"
+                      onChange={(event) => {
+                        onVerificationTargetChange(event.currentTarget.value)
+                      }}
+                      value={selectedVerificationTargetId}
+                    >
+                      {verificationTargets.map((target) => (
+                        <option key={target.id} value={target.id}>
+                          {target.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <Button
+                  disabled={
+                    !canEdit ||
+                    !hasArticleText ||
+                    !canVerifyComment ||
+                    verificationState === 'loading'
+                  }
+                  onClick={onVerifyComment}
+                  size="sm"
+                  variant="outline"
+                >
+                  {verificationIsRetryable
+                    ? 'Retry comment check'
+                    : 'Check comment'}
+                </Button>
+                {verificationMessage !== null && (
+                  <p className="text-sm text-muted-foreground" role="status">
+                    {verificationMessage}
+                  </p>
+                )}
+                {verification === null ? (
+                  <p className="text-sm text-muted-foreground" role="status">
+                    {verificationMessage}
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {verification.partial && (
+                      <p className="text-muted-foreground" role="status">
+                        This check is based on partial article text.
+                      </p>
+                    )}
+                    {verification.issues.length === 0 ? (
+                      <p role="status">
+                        No issues were found in the available article text.
+                      </p>
+                    ) : (
+                      <ul className="space-y-3">
+                        {verification.issues.map((issue, index) => (
+                          <li
+                            key={index}
+                            className="border-l-2 border-border pl-3"
+                          >
+                            <p className="font-medium">
+                              {issue.kind === 'error'
+                                ? 'Contradicted by the article'
+                                : issue.kind === 'unsupported'
+                                  ? 'Not supported by the article'
+                                  : 'Cannot be confirmed from the article'}
+                            </p>
+                            {issue.quote.length > 0 && (
+                              <blockquote className="mt-1 text-muted-foreground">
+                                {issue.quote}
+                              </blockquote>
+                            )}
+                            <p className="mt-1">{issue.reason}</p>
+                            {issue.evidence !== undefined && (
+                              <p className="mt-1 text-muted-foreground">
+                                Evidence: {issue.evidence}
+                              </p>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  This checks the comment against the article, not against
+                  external facts.
+                </p>
+              </section>
             )}
           </div>
-        )}
-        <p className="text-xs text-muted-foreground">
-          This checks the comment against the article, not against external
-          facts.
-        </p>
-      </section>
+        </DialogContent>
+      </Dialog>
     </Panel>
   )
 }
