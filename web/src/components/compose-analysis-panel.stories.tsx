@@ -85,6 +85,33 @@ export const Failed: Story = {
   name: 'The editor preserves the draft after analysis fails.',
 }
 
+export const StaleAnalysis: Story = {
+  args: {
+    article: {
+      ...article,
+      text: 'A revised fictional article passage.',
+      partial: false,
+    },
+    summary: {
+      summary: 'A saved summary from before the article text changed.',
+      partial: false,
+    },
+    summaryState: 'stale',
+    verification: {
+      issues: [
+        {
+          kind: 'uncertain',
+          quote: 'A detail from the earlier article text.',
+          reason: 'The saved check should be rerun against the revised text.',
+        },
+      ],
+      partial: false,
+    },
+    verificationState: 'stale',
+  },
+  name: 'The editor keeps saved results visible while analysis is out of date.',
+}
+
 export const NotRequested: Story = {
   args: {
     summaryState: 'not-requested',

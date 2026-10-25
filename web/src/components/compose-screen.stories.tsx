@@ -317,6 +317,39 @@ const compactStoryArgs = {
   sourceUrl: '',
 }
 
+export const StaleAnalysis: Story = {
+  args: {
+    ...compactStoryArgs,
+    analysis: {
+      ...compactStoryArgs.analysis,
+      article: {
+        url: 'https://example.test/article',
+        title: 'A sample article title',
+        text: 'A revised fictional article passage.',
+        source: 'manual',
+        partial: false,
+      },
+      summary: {
+        summary: 'A saved summary from before the article text changed.',
+        partial: false,
+      },
+      summaryState: 'stale',
+      verification: {
+        issues: [
+          {
+            kind: 'uncertain',
+            quote: 'A detail from the earlier article text.',
+            reason: 'The saved check should be rerun against the revised text.',
+          },
+        ],
+        partial: false,
+      },
+      verificationState: 'stale',
+    },
+  },
+  name: 'The editor keeps saved results visible while analysis is out of date.',
+}
+
 function viewportStory(width: number, height: number) {
   const viewportName = `compose-${String(width)}x${String(height)}`
   return {
