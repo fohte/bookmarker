@@ -170,9 +170,7 @@ function deliveryStatusLabels(): string[] {
 async function waitFor(predicate: () => boolean): Promise<void> {
   for (let attempt = 0; attempt < 150; attempt += 1) {
     if (predicate()) return
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20))
-    })
+    await new Promise((resolve) => setTimeout(resolve, 20))
   }
   throw new Error('The expected compose screen state was not reached.')
 }
@@ -195,6 +193,7 @@ async function deleteDatabase(): Promise<void> {
 }
 
 beforeEach(async () => {
+  await page.viewport(1280, 800)
   await deleteDatabase()
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   const shareFragment = encodeURIComponent(JSON.stringify(shareInput))
@@ -214,6 +213,7 @@ afterEach(async () => {
   vi.unstubAllGlobals()
   await deleteDatabase()
   window.history.replaceState(null, '', '/compose')
+  await page.viewport(1280, 800)
 })
 
 describe('ComposeRoute publishing in a browser', () => {
@@ -279,11 +279,16 @@ describe('ComposeRoute publishing in a browser', () => {
       await userEvent.click(closeButton)
     })
     await waitFor(() => document.querySelector('#article-title') === null)
-    await waitFor(
-      () =>
+    await waitFor(() => {
+      const hatenaSelection = document.querySelector(
+        'input[aria-label="Select Hatena Bookmark"]',
+      )
+      return (
         document.body.textContent.includes(summary.summary) &&
-        document.body.textContent.includes('Destination details are loaded.'),
-    )
+        hatenaSelection instanceof HTMLInputElement &&
+        !hatenaSelection.disabled
+      )
+    })
 
     await act(async () => {
       await userEvent.fill(
@@ -323,6 +328,12 @@ describe('ComposeRoute publishing in a browser', () => {
         throw new Error('The publish button was not found.')
       }
       await userEvent.click(publishButton)
+    })
+    await waitFor(() => document.body.textContent.includes('2 succeeded'))
+    await act(async () => {
+      await userEvent.click(
+        button('button[aria-label="Open delivery details"]'),
+      )
     })
     await waitFor(() => {
       const labels = deliveryStatusLabels()
@@ -463,5 +474,124 @@ describe('ComposeRoute publishing in a browser', () => {
       },
       deliveryStatusLabels: ['Succeeded', 'Succeeded'],
     })
+  })
+
+  it('keeps the primary compose flow visible without document scrolling at mini sizes', async () => {
+    await page.viewport(420, 600)
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = requestPath(input)
+      if (path === '/api/destinations')
+        return Promise.resolve(response(metadata))
+      if (path === '/api/articles/extract') {
+        return Promise.resolve(response(extractedArticle))
+      }
+      if (path === '/api/analysis/summary') {
+        return Promise.resolve(response(summary))
+      }
+      throw new Error(`Unexpected request path: ${path}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    mounted = { container, root }
+    act(() => {
+      root.render(<ComposeRoute />)
+    })
+    await waitFor(
+      () =>
+        document.body.textContent.includes(extractedArticle.title) &&
+        document.body.textContent.includes(summary.summary),
+    )
+
+    const measureViewport = () => {
+      const scrollingElement =
+        document.scrollingElement ?? document.documentElement
+      const withinViewport = (selector: string) => {
+        const element = document.querySelector(selector)
+        if (!(element instanceof HTMLElement)) return false
+        const rect = element.getBoundingClientRect()
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.left >= 0 &&
+          rect.right <= window.innerWidth &&
+          rect.top >= 0 &&
+          rect.bottom <= window.innerHeight
+        )
+      }
+      const contentRect = document
+        .querySelector('[data-compose-content]')
+        ?.getBoundingClientRect()
+      const destinationChoices = Array.from(
+        document.querySelectorAll<HTMLInputElement>(
+          'input[aria-label^="Select "]',
+        ),
+      )
+
+      return {
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        documentHasVerticalScroll:
+          scrollingElement.scrollHeight > scrollingElement.clientHeight,
+        documentHasHorizontalScroll:
+          scrollingElement.scrollWidth > scrollingElement.clientWidth,
+        visible: {
+          article: withinViewport('[data-compose-article-header]'),
+          summary: withinViewport('[data-compose-section="analysis"]'),
+          comment: withinViewport('#common-comment'),
+          verification: withinViewport('[data-compose-verification-status]'),
+          destinations: withinViewport('[data-compose-section="destinations"]'),
+          destinationChoices:
+            contentRect !== undefined &&
+            destinationChoices.length === 4 &&
+            destinationChoices.every((element) => {
+              const rect = element.getBoundingClientRect()
+              return (
+                rect.top >= contentRect.top &&
+                rect.bottom <= contentRect.bottom &&
+                rect.left >= 0 &&
+                rect.right <= window.innerWidth
+              )
+            }),
+          publish: withinViewport('[data-compose-publish]'),
+        },
+      }
+    }
+
+    const actual = [measureViewport()]
+    await page.viewport(390, 600)
+    actual.push(measureViewport())
+
+    expect(captureOutput(actual)).toEqual([
+      {
+        viewport: { width: 420, height: 600 },
+        documentHasVerticalScroll: false,
+        documentHasHorizontalScroll: false,
+        visible: {
+          article: true,
+          summary: true,
+          comment: true,
+          verification: true,
+          destinations: true,
+          destinationChoices: true,
+          publish: true,
+        },
+      },
+      {
+        viewport: { width: 390, height: 600 },
+        documentHasVerticalScroll: false,
+        documentHasHorizontalScroll: false,
+        visible: {
+          article: true,
+          summary: true,
+          comment: true,
+          verification: true,
+          destinations: true,
+          destinationChoices: true,
+          publish: true,
+        },
+      },
+    ])
   })
 })

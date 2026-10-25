@@ -43,15 +43,19 @@ export function ComposeDestinationsPanel({
   ).length
 
   return (
-    <Panel padding="md" className="space-y-3 p-3 sm:p-4">
+    <Panel
+      data-compose-section="destinations"
+      padding="sm"
+      className="shrink-0 space-y-2 rounded-lg p-2"
+    >
       <header className="flex items-center justify-between gap-3">
-        <h2 className="font-medium">Destinations</h2>
+        <h2 className="text-sm font-medium">Destinations</h2>
         <p className="text-xs text-muted-foreground">
           {selectedCount} selected
         </p>
       </header>
 
-      <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         {destinationIds.map((destinationId) => (
           <ComposeDestinationCard
             key={destinationId}
@@ -70,13 +74,6 @@ export function ComposeDestinationsPanel({
             }}
           />
         ))}
-      </div>
-
-      <div className="border-t border-border pt-2">
-        <p className="text-xs text-muted-foreground" role="status">
-          Each delivery uses a saved snapshot of the article and destination
-          settings.
-        </p>
       </div>
     </Panel>
   )

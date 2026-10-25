@@ -27,7 +27,7 @@ export function ComposeArticleHeader({
           : 'Saved on this device'
 
   return (
-    <Panel padding="sm" className="rounded-lg p-3">
+    <Panel data-compose-article-header padding="sm" className="rounded-lg p-2">
       <div className="flex min-w-0 items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p
@@ -52,17 +52,17 @@ export function ComposeArticleHeader({
             {saveStatus}
           </p>
         </div>
-        <div className="flex shrink-0 flex-col gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           <Button
             aria-label="Open article details"
             disabled={activeDraft === null}
             onClick={onOpenDetails}
-            size="sm"
+            size="xs"
             variant="outline"
           >
             Article details
           </Button>
-          <Button onClick={onOpenDrafts} size="sm" variant="ghost">
+          <Button onClick={onOpenDrafts} size="xs" variant="ghost">
             Drafts ({draftCount})
           </Button>
         </div>

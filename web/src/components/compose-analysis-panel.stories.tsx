@@ -85,6 +85,33 @@ export const Failed: Story = {
   name: 'The editor preserves the draft after analysis fails.',
 }
 
+export const StaleAnalysis: Story = {
+  args: {
+    article: {
+      ...article,
+      text: 'A revised fictional article passage.',
+      partial: false,
+    },
+    summary: {
+      summary: 'A saved summary from before the article text changed.',
+      partial: false,
+    },
+    summaryState: 'stale',
+    verification: {
+      issues: [
+        {
+          kind: 'uncertain',
+          quote: 'A detail from the earlier article text.',
+          reason: 'The saved check should be rerun against the revised text.',
+        },
+      ],
+      partial: false,
+    },
+    verificationState: 'stale',
+  },
+  name: 'The editor keeps saved results visible while analysis is out of date.',
+}
+
 export const NotRequested: Story = {
   args: {
     summaryState: 'not-requested',
@@ -93,8 +120,16 @@ export const NotRequested: Story = {
   name: 'The editor distinguishes analysis that has not been requested.',
 }
 
+export const NotRequestedSummaryDetails: Story = {
+  args: {
+    summaryState: 'not-requested',
+    defaultOpenDetail: 'summary',
+  },
+  name: 'The summary detail view explains that analysis has not been requested.',
+}
+
 export const PartialIssues: Story = {
-  args: { summary, verification },
+  args: { summary, verification, defaultOpenDetail: 'verification' },
   name: 'The editor shows a partial summary and all three comment issue types.',
 }
 
@@ -118,6 +153,7 @@ export const CustomCommentUnverified: Story = {
     isCustomComment: true,
     verification: null,
     verificationState: 'not-requested',
+    defaultOpenDetail: 'verification',
   },
   name: 'The editor marks a custom comment as unchecked in this session.',
 }
@@ -125,7 +161,24 @@ export const CustomCommentUnverified: Story = {
 export const NoIssues: Story = {
   args: {
     verification: { issues: [], partial: false },
-    verificationState: 'not-requested',
+    verificationState: 'success',
+    defaultOpenDetail: 'verification',
   },
   name: 'The editor reports that no issue was found in the article text.',
+}
+
+export const LongSummary: Story = {
+  args: {
+    summary: {
+      summary: Array.from(
+        { length: 30 },
+        () =>
+          'A fictional summary explains an observation, the evidence behind it, and the limits of the conclusion for readers who need the full context.',
+      ).join('\n\n'),
+      partial: false,
+    },
+    summaryState: 'success',
+    defaultOpenDetail: 'summary',
+  },
+  name: 'The editor keeps a long summary readable inside its detail view.',
 }

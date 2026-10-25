@@ -71,6 +71,10 @@ const Harness = ({ draft: activeDraft, state, canEdit }: HarnessProps) => {
     <ComposeDeliveryPanel
       {...deliveryProps}
       delivery={activeDraft.delivery}
+      xSelected={activeDraft.destinations.some(
+        (destination) =>
+          destination.destination === 'x' && destination.selected,
+      )}
       onPublish={noop}
       onRetryDeliverySave={noop}
       onRetryFailed={noop}

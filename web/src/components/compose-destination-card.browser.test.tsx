@@ -35,6 +35,22 @@ function captureOutput<T>(value: T): T {
   return value
 }
 
+async function waitFor(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 150; attempt += 1) {
+    if (predicate()) return
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+  throw new Error('The Raindrop collection options were not ready.')
+}
+
+function optionNamed(name: string): HTMLElement | undefined {
+  const normalizedName = name.replace(/\s+/g, ' ').trim()
+  return [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+    (option) =>
+      option.textContent.replace(/\s+/g, ' ').trim() === normalizedName,
+  )
+}
+
 type SelectOptionInput = {
   settingsDialogName: string
   comboboxName: string
@@ -719,31 +735,40 @@ describe('ComposeDestinationCard in a browser', () => {
       throw new Error('Raindrop collection selector was not found.')
     }
     await act(async () => userEvent.click(trigger))
-    const unknownOption = page.getByRole('option', {
+    const unknownOptionName =
+      'Saved collection ID 918 (not in the available list)'
+    const availableOptionName = 'Fictional reading collection'
+    const availableOption = page.getByRole('option', {
       exact: true,
-      name: 'Saved collection ID 918 (not in the available list)',
+      name: availableOptionName,
+    })
+    await waitFor(() => {
+      const unknownOptionElement = optionNamed(unknownOptionName)
+      const availableOptionElement = optionNamed(availableOptionName)
+      return (
+        unknownOptionElement?.getAttribute('aria-disabled') === 'true' &&
+        availableOptionElement !== undefined &&
+        availableOptionElement.getClientRects().length > 0
+      )
     })
     const unknownOptionDisabled =
-      unknownOption.element().getAttribute('aria-disabled') === 'true'
-    await act(async () =>
-      page
-        .getByRole('option', {
-          exact: true,
-          name: 'Fictional reading collection',
-        })
-        .click(),
-    )
+      optionNamed(unknownOptionName)?.getAttribute('aria-disabled') === 'true'
+    const availableOptionVisible =
+      (optionNamed(availableOptionName)?.getClientRects().length ?? 0) > 0
+    await act(async () => availableOption.click())
 
     expect(
       captureOutput({
         status,
         unknownOptionDisabled,
+        availableOptionVisible,
         updates,
       }),
     ).toEqual({
       status:
         'Saved collection ID 918 is not available. Choose an available collection.',
       unknownOptionDisabled: true,
+      availableOptionVisible: true,
       updates: [
         {
           destination: 'raindrop',

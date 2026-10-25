@@ -63,23 +63,6 @@ const handlers: Omit<ComposeScreenProps, 'state' | 'sourceUrl'> = {
   onDestinationChange: () => undefined,
   deliveryControls: {
     isLoadingMetadata: false,
-    metadata: {
-      destinations: {
-        hatena: { configured: true },
-        mastodon: {
-          configured: true,
-          maxCharacters: 500,
-          charactersReservedPerUrl: 23,
-        },
-        raindrop: {
-          configured: true,
-          collections: [
-            { id: 187, title: 'Fictional reading list', public: false },
-          ],
-        },
-        x: { configured: true },
-      },
-    },
     metadataErrorMessage: null,
     canPublish: true,
     canRetryFailed: false,
@@ -277,4 +260,188 @@ export const ConfirmCopy: Story = {
     copyConfirmationDestination: 'mastodon',
   },
   name: 'The editor confirms before replacing a saved custom comment.',
+}
+
+const compactDraft: BookmarkDraft = {
+  ...exampleDraft,
+  destinations: [
+    {
+      destination: 'hatena',
+      selected: true,
+      commentMode: 'common',
+      customComment: '',
+      options: { tags: [], private: false },
+    },
+    {
+      destination: 'mastodon',
+      selected: true,
+      commentMode: 'common',
+      customComment: '',
+      options: { visibility: 'public', spoilerText: '', sensitive: false },
+    },
+    {
+      destination: 'raindrop',
+      selected: false,
+      commentMode: 'common',
+      customComment: '',
+      options: { collectionId: -1, tags: [] },
+    },
+    {
+      destination: 'x',
+      selected: false,
+      commentMode: 'common',
+      customComment: '',
+    },
+  ],
+}
+
+const compactState: ComposeState = {
+  ...savedState,
+  drafts: [compactDraft],
+  activeDraft: compactDraft,
+}
+
+const compactStoryArgs = {
+  state: compactState,
+  analysis: {
+    ...handlers.analysis,
+    summary: {
+      summary:
+        'The article describes a small observation that is useful to revisit after reading.',
+      partial: false,
+    },
+    summaryState: 'success' as const,
+    verification: { issues: [], partial: false },
+    verificationState: 'success' as const,
+  },
+  sourceUrl: '',
+}
+
+export const StaleAnalysis: Story = {
+  args: {
+    ...compactStoryArgs,
+    analysis: {
+      ...compactStoryArgs.analysis,
+      article: {
+        url: 'https://example.test/article',
+        title: 'A sample article title',
+        text: 'A revised fictional article passage.',
+        source: 'manual',
+        partial: false,
+      },
+      summary: {
+        summary: 'A saved summary from before the article text changed.',
+        partial: false,
+      },
+      summaryState: 'stale',
+      verification: {
+        issues: [
+          {
+            kind: 'uncertain',
+            quote: 'A detail from the earlier article text.',
+            reason: 'The saved check should be rerun against the revised text.',
+          },
+        ],
+        partial: false,
+      },
+      verificationState: 'stale',
+    },
+  },
+  name: 'The editor keeps saved results visible while analysis is out of date.',
+}
+
+function viewportStory(width: number, height: number) {
+  const viewportName = `compose-${String(width)}x${String(height)}`
+  return {
+    globals: { viewport: { value: viewportName } },
+    parameters: {
+      viewport: {
+        options: {
+          [viewportName]: {
+            name: `${String(width)} × ${String(height)} px`,
+            styles: {
+              width: `${String(width)}px`,
+              height: `${String(height)}px`,
+            },
+          },
+        },
+      },
+      screenshot: {
+        viewport: { width, height },
+        fullPage: false,
+        scale: 'css',
+      },
+    },
+  }
+}
+
+export const Mini420x600: Story = {
+  ...viewportStory(420, 600),
+  args: compactStoryArgs,
+  name: 'The compact editor keeps primary actions visible at 420 × 600 px.',
+}
+
+export const Mini390x600: Story = {
+  ...viewportStory(390, 600),
+  args: compactStoryArgs,
+  name: 'The compact editor fits the same workflow at 390 × 600 px.',
+}
+
+export const Desktop960x680: Story = {
+  ...viewportStory(960, 680),
+  args: compactStoryArgs,
+  name: 'The editor places summary and comment side by side at 960 × 680 px.',
+}
+
+const mixedOutcomeDraft: BookmarkDraft = {
+  ...compactDraft,
+  delivery: [
+    {
+      article: { url: 'https://example.test/article' },
+      target: {
+        destination: 'hatena',
+        operationId: '00000000-0000-4000-8000-000000000031',
+        comment: 'A fictional shared note.',
+        options: { tags: [], private: false },
+      },
+      result: {
+        destination: 'hatena',
+        operationId: '00000000-0000-4000-8000-000000000031',
+        status: 'succeeded',
+        retryable: false,
+      },
+    },
+    {
+      article: { url: 'https://example.test/article' },
+      target: {
+        destination: 'mastodon',
+        operationId: '00000000-0000-4000-8000-000000000032',
+        comment: 'A fictional shared note.',
+        options: {
+          visibility: 'public',
+          spoilerText: '',
+          sensitive: false,
+        },
+      },
+      result: {
+        destination: 'mastodon',
+        operationId: '00000000-0000-4000-8000-000000000032',
+        status: 'unknown',
+        retryable: false,
+        message: 'The service response could not be confirmed.',
+      },
+    },
+  ],
+}
+
+export const UnknownDeliveryOutcome: Story = {
+  args: {
+    ...compactStoryArgs,
+    state: {
+      ...compactState,
+      drafts: [mixedOutcomeDraft],
+      activeDraft: mixedOutcomeDraft,
+    },
+  },
+  name: 'The editor keeps an unknown outcome warning visible outside delivery details.',
 }

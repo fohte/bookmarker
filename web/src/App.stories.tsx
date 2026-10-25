@@ -57,7 +57,6 @@ export const Preview: Story = {
         }}
         deliveryControls={{
           isLoadingMetadata: true,
-          metadata: null,
           metadataErrorMessage: null,
           canPublish: false,
           canRetryFailed: false,

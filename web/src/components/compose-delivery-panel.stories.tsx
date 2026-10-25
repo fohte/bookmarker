@@ -60,27 +60,8 @@ const delivery: BookmarkDraft['delivery'] = [
   },
 ]
 
-const metadata: ComposeDeliveryPanelProps['metadata'] = {
-  destinations: {
-    hatena: { configured: true },
-    mastodon: {
-      configured: true,
-      maxCharacters: 500,
-      charactersReservedPerUrl: 23,
-    },
-    raindrop: {
-      configured: true,
-      collections: [
-        { id: 187, title: 'Fictional reading list', public: false },
-      ],
-    },
-    x: { configured: true },
-  },
-}
-
 const controls: Omit<ComposeDeliveryPanelProps, 'delivery'> = {
   isLoadingMetadata: false,
-  metadata,
   metadataErrorMessage: null,
   canPublish: true,
   canRetryFailed: false,
@@ -113,6 +94,7 @@ export const NotSent: Story = {
 export const MixedResults: Story = {
   args: {
     delivery,
+    defaultResultsOpen: true,
     deliveryState: 'sending',
     canRetryFailed: true,
     hasRetryableTargets: true,
@@ -155,6 +137,7 @@ export const EarlierFailureBlockedByUnknown: Story = {
         },
       },
     ],
+    defaultResultsOpen: true,
     hasRetryableTargets: false,
   },
   name: 'The editor explains why an older failure cannot be retried after an unknown outcome.',
@@ -162,6 +145,7 @@ export const EarlierFailureBlockedByUnknown: Story = {
 
 export const Succeeded: Story = {
   args: {
+    defaultResultsOpen: true,
     delivery: [
       {
         article: { url: 'https://example.test/article' },
@@ -202,6 +186,7 @@ export const SavingLatestInput: Story = {
 
 export const ResultSaveFailed: Story = {
   args: {
+    defaultResultsOpen: true,
     delivery: delivery.slice(0, 1),
     deliveryState: 'result-save-failed',
     deliveryErrorMessage: 'The result could not be saved on this device.',
@@ -229,7 +214,6 @@ export const AuthenticationRequired: Story = {
 
 export const MetadataUnavailable: Story = {
   args: {
-    metadata: null,
     metadataErrorMessage: 'Destination details are temporarily unavailable.',
     canPublish: false,
   },
@@ -239,7 +223,6 @@ export const MetadataUnavailable: Story = {
 export const LoadingMetadata: Story = {
   args: {
     isLoadingMetadata: true,
-    metadata: null,
     canPublish: false,
   },
   name: 'The editor checks which destinations are connected.',
@@ -248,6 +231,7 @@ export const LoadingMetadata: Story = {
 export const XIntentReady: Story = {
   args: {
     canOpenX: true,
+    xSelected: true,
     xIntentHref: 'https://x.com/intent/tweet?text=A%20fictional%20note',
   },
   name: 'The editor opens X with the saved comment through a normal link.',
