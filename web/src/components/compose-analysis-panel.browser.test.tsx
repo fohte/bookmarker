@@ -4,7 +4,7 @@ import type { Article, Summary, Verification } from 'api/contracts'
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { userEvent } from 'vitest/browser'
+import { page, userEvent } from 'vitest/browser'
 
 import {
   ComposeAnalysisPanel,
@@ -132,11 +132,12 @@ async function click(button: HTMLButtonElement): Promise<void> {
   })
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+  await page.viewport(1280, 800)
 })
 
-afterEach(() => {
+afterEach(async () => {
   const current = mounted
   if (current !== null) {
     act(() => {
@@ -145,6 +146,7 @@ afterEach(() => {
     current.container.remove()
     mounted = null
   }
+  await page.viewport(1280, 800)
 })
 
 describe('ComposeAnalysisPanel in a browser', () => {
@@ -238,5 +240,83 @@ describe('ComposeAnalysisPanel in a browser', () => {
     expect(captureOutput(dialogStatusMessages())).toEqual([
       'This custom comment has not been checked in this session.',
     ])
+  })
+
+  it('scrolls the full summary to its end inside the bounded details dialog', async () => {
+    const endMarker = 'Fictional summary end marker.'
+    const longSummary = [
+      ...Array.from(
+        { length: 35 },
+        (_, index) =>
+          `Fictional summary section ${String(index + 1)} describes a paper kite crossing a quiet meadow.`,
+      ),
+      endMarker,
+    ].join('\n\n')
+    await page.viewport(390, 600)
+    mountPanel({
+      summary: { summary: longSummary, partial: false },
+    })
+    await click(detailButton('Read full summary'))
+    await waitFor(() => dialogSnapshot()?.title === 'Article summary')
+
+    const dialog = document.querySelector('[role="dialog"]')
+    const scrollArea = document.querySelector(
+      '[data-compose-analysis-detail-scroll]',
+    )
+    const summaryParagraph = scrollArea?.querySelector('p.whitespace-pre-wrap')
+    if (
+      !(dialog instanceof HTMLElement) ||
+      !(scrollArea instanceof HTMLElement) ||
+      !(summaryParagraph instanceof HTMLParagraphElement) ||
+      !(summaryParagraph.firstChild instanceof Text)
+    ) {
+      throw new Error('The bounded summary detail content was not rendered.')
+    }
+
+    const textNode = summaryParagraph.firstChild
+    const markerStart = textNode.textContent.indexOf(endMarker)
+    if (markerStart < 0) {
+      throw new Error('The fictional summary end marker was not rendered.')
+    }
+
+    const range = document.createRange()
+    range.setStart(textNode, markerStart)
+    range.setEnd(textNode, markerStart + endMarker.length)
+    scrollArea.scrollTop = scrollArea.scrollHeight
+
+    const dialogRect = dialog.getBoundingClientRect()
+    const scrollRect = scrollArea.getBoundingClientRect()
+    const markerRect = range.getBoundingClientRect()
+    const actual = {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      dialogWithinViewport:
+        dialogRect.top >= 0 &&
+        dialogRect.bottom <= window.innerHeight &&
+        dialogRect.left >= 0 &&
+        dialogRect.right <= window.innerWidth,
+      scrollAreaWithinDialog:
+        scrollRect.top >= dialogRect.top &&
+        scrollRect.bottom <= dialogRect.bottom,
+      scrollAreaHasBoundedOverflow:
+        scrollArea.scrollHeight > scrollArea.clientHeight &&
+        scrollArea.clientHeight < dialog.clientHeight,
+      scrollAreaAtEnd:
+        scrollArea.scrollTop + scrollArea.clientHeight >=
+        scrollArea.scrollHeight,
+      endMarkerVisible:
+        markerRect.width > 0 &&
+        markerRect.height > 0 &&
+        markerRect.top >= scrollRect.top &&
+        markerRect.bottom <= scrollRect.bottom,
+    }
+
+    expect(captureOutput(actual)).toEqual({
+      viewport: { width: 390, height: 600 },
+      dialogWithinViewport: true,
+      scrollAreaWithinDialog: true,
+      scrollAreaHasBoundedOverflow: true,
+      scrollAreaAtEnd: true,
+      endMarkerVisible: true,
+    })
   })
 })

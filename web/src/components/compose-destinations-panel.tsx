@@ -46,7 +46,7 @@ export function ComposeDestinationsPanel({
     <Panel
       data-compose-section="destinations"
       padding="sm"
-      className="space-y-2 rounded-lg p-2"
+      className="shrink-0 space-y-2 rounded-lg p-2"
     >
       <header className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-medium">Destinations</h2>

@@ -175,7 +175,7 @@ export function ComposeScreen({
           data-compose-content
           className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto md:overflow-y-hidden"
         >
-          <section className="grid min-w-0 grid-cols-1 gap-2 md:min-h-0 md:flex-1 md:grid-cols-2">
+          <section className="grid min-h-0 min-w-0 flex-1 grid-rows-2 grid-cols-1 gap-2 md:grid-rows-1 md:grid-cols-2">
             <ComposeAnalysisPanel
               {...analysis}
               canEdit={canEdit && !state.isLoading}

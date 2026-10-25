@@ -101,7 +101,7 @@ export function ComposeAnalysisPanel({
     <Panel
       data-compose-section="analysis"
       padding="sm"
-      className="min-w-0 space-y-2 rounded-lg p-2"
+      className="min-h-0 min-w-0 space-y-1 rounded-lg p-2 max-md:p-1.5"
     >
       {!hasArticleText && (
         <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
@@ -150,7 +150,7 @@ export function ComposeAnalysisPanel({
           </p>
         ) : (
           <>
-            <p className="line-clamp-2 break-words text-xs leading-4">
+            <p className="line-clamp-2 break-words text-xs leading-4 max-md:line-clamp-1">
               {summary.summary}
             </p>
             <div className="flex items-center justify-between gap-2">
@@ -198,7 +198,7 @@ export function ComposeAnalysisPanel({
         )}
       </section>
 
-      <section className="space-y-1 border-t border-border pt-2">
+      <section className="space-y-1 border-t border-border pt-2 max-md:pt-1">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-medium">Comment check</h3>
           <div className="flex shrink-0 items-center gap-1">
@@ -261,7 +261,10 @@ export function ComposeAnalysisPanel({
               Summaries and comment checks use only the available article text.
             </DialogDescription>
           </DialogHeader>
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+          <div
+            className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1"
+            data-compose-analysis-detail-scroll
+          >
             {openDetail === 'summary' ? (
               <section className="space-y-3">
                 <Button

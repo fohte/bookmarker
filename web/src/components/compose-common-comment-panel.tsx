@@ -41,7 +41,7 @@ export function ComposeCommonCommentPanel({
             Common comment
           </label>
           <textarea
-            className="h-20 min-h-20 w-full resize-none overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm leading-5 outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-14 min-h-14 w-full resize-none overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm leading-5 outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:h-20 md:min-h-20"
             disabled={!canEdit}
             id="common-comment"
             onChange={(event) => {
