@@ -11,10 +11,8 @@ import { Panel } from '@fohte/ui/panel'
 import type { BookmarkDraft, DestinationMetadata } from 'api/contracts'
 import { useState } from 'react'
 
-import {
-  deliveryStatus,
-  destinationNames,
-} from '#components/compose-delivery-status'
+import { deliveryStatus } from '#components/compose-delivery-status'
+import { destinationNames } from '#components/compose-destination-labels'
 import { getRetryDeliveryTargetsFromHistory } from '#features/editor/compose-delivery-command'
 import type { ComposeDeliveryState } from '#features/editor/compose-state'
 

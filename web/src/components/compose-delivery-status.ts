@@ -1,12 +1,6 @@
-import type { BookmarkDraft, PublishDestinationId } from 'api/contracts'
+import type { BookmarkDraft } from 'api/contracts'
 
 import type { ComposeDeliveryState } from '#features/editor/compose-state'
-
-export const destinationNames: Record<PublishDestinationId, string> = {
-  hatena: 'Hatena Bookmark',
-  mastodon: 'Mastodon',
-  raindrop: 'Raindrop',
-}
 
 export function deliveryStatus(
   snapshot: BookmarkDraft['delivery'][number],
