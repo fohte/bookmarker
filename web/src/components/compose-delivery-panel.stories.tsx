@@ -60,27 +60,8 @@ const delivery: BookmarkDraft['delivery'] = [
   },
 ]
 
-const metadata: ComposeDeliveryPanelProps['metadata'] = {
-  destinations: {
-    hatena: { configured: true },
-    mastodon: {
-      configured: true,
-      maxCharacters: 500,
-      charactersReservedPerUrl: 23,
-    },
-    raindrop: {
-      configured: true,
-      collections: [
-        { id: 187, title: 'Fictional reading list', public: false },
-      ],
-    },
-    x: { configured: true },
-  },
-}
-
 const controls: Omit<ComposeDeliveryPanelProps, 'delivery'> = {
   isLoadingMetadata: false,
-  metadata,
   metadataErrorMessage: null,
   canPublish: true,
   canRetryFailed: false,
@@ -233,7 +214,6 @@ export const AuthenticationRequired: Story = {
 
 export const MetadataUnavailable: Story = {
   args: {
-    metadata: null,
     metadataErrorMessage: 'Destination details are temporarily unavailable.',
     canPublish: false,
   },
@@ -243,7 +223,6 @@ export const MetadataUnavailable: Story = {
 export const LoadingMetadata: Story = {
   args: {
     isLoadingMetadata: true,
-    metadata: null,
     canPublish: false,
   },
   name: 'The editor checks which destinations are connected.',

@@ -63,23 +63,6 @@ const handlers: Omit<ComposeScreenProps, 'state' | 'sourceUrl'> = {
   onDestinationChange: () => undefined,
   deliveryControls: {
     isLoadingMetadata: false,
-    metadata: {
-      destinations: {
-        hatena: { configured: true },
-        mastodon: {
-          configured: true,
-          maxCharacters: 500,
-          charactersReservedPerUrl: 23,
-        },
-        raindrop: {
-          configured: true,
-          collections: [
-            { id: 187, title: 'Fictional reading list', public: false },
-          ],
-        },
-        x: { configured: true },
-      },
-    },
     metadataErrorMessage: null,
     canPublish: true,
     canRetryFailed: false,

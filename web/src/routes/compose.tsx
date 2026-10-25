@@ -117,7 +117,6 @@ export function ComposeRoute() {
       analysis={analysis}
       deliveryControls={{
         isLoadingMetadata: delivery.isLoadingMetadata,
-        metadata: delivery.metadata,
         metadataErrorMessage: delivery.metadataErrorMessage,
         canPublish: delivery.canPublish,
         canRetryFailed: delivery.canRetryFailed,

@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from '@fohte/ui/dialog'
 import { Panel } from '@fohte/ui/panel'
-import type { BookmarkDraft, DestinationMetadata } from 'api/contracts'
+import type { BookmarkDraft } from 'api/contracts'
 import { useState } from 'react'
 
 import { deliveryStatus } from '#components/compose-delivery-status'
@@ -19,7 +19,6 @@ import type { ComposeDeliveryState } from '#features/editor/compose-state'
 export type ComposeDeliveryPanelProps = {
   delivery: BookmarkDraft['delivery']
   isLoadingMetadata: boolean
-  metadata: DestinationMetadata | null
   metadataErrorMessage: string | null
   canPublish: boolean
   canRetryFailed: boolean
