@@ -93,6 +93,14 @@ export const NotRequested: Story = {
   name: 'The editor distinguishes analysis that has not been requested.',
 }
 
+export const NotRequestedSummaryDetails: Story = {
+  args: {
+    summaryState: 'not-requested',
+    defaultOpenDetail: 'summary',
+  },
+  name: 'The summary detail view explains that analysis has not been requested.',
+}
+
 export const PartialIssues: Story = {
   args: { summary, verification, defaultOpenDetail: 'verification' },
   name: 'The editor shows a partial summary and all three comment issue types.',

@@ -6,7 +6,10 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { userEvent } from 'vitest/browser'
 
-import { ComposeAnalysisPanel } from '#components/compose-analysis-panel'
+import {
+  ComposeAnalysisPanel,
+  type ComposeAnalysisPanelProps,
+} from '#components/compose-analysis-panel'
 
 const article: Article = {
   url: 'https://example.test/article',
@@ -32,6 +35,24 @@ const verification: Verification = {
   partial: false,
 }
 
+const defaultProps: ComposeAnalysisPanelProps = {
+  article,
+  canEdit: true,
+  extractionState: 'success',
+  summary,
+  verification,
+  summaryState: 'success',
+  verificationState: 'success',
+  verificationTargets: [{ id: 'common', label: 'Common comment' }],
+  selectedVerificationTargetId: 'common',
+  isCustomComment: false,
+  canVerifyComment: true,
+  onExtractArticle: () => undefined,
+  onSummarizeArticle: () => undefined,
+  onVerifyComment: () => undefined,
+  onVerificationTargetChange: () => undefined,
+}
+
 let mounted: { container: HTMLDivElement; root: Root } | null = null
 
 function captureOutput<T>(value: T): T {
@@ -48,6 +69,10 @@ function mount(component: ReactNode): void {
   mounted = { container, root }
 }
 
+function mountPanel(overrides: Partial<ComposeAnalysisPanelProps> = {}): void {
+  mount(<ComposeAnalysisPanel {...defaultProps} {...overrides} />)
+}
+
 function detailButton(name: string): HTMLButtonElement {
   const button = document.querySelector(`button[aria-label="${name}"]`)
   if (!(button instanceof HTMLButtonElement)) {
@@ -56,12 +81,12 @@ function detailButton(name: string): HTMLButtonElement {
   return button
 }
 
-function closeButton(): HTMLButtonElement {
-  const button = document.querySelector('[data-slot="dialog-close"]')
-  if (!(button instanceof HTMLButtonElement)) {
-    throw new Error('The dialog close button was not rendered.')
+function commentTargetSelect(): HTMLSelectElement {
+  const select = document.querySelector('#analysis-comment-target')
+  if (!(select instanceof HTMLSelectElement)) {
+    throw new Error('The comment target select was not rendered.')
   }
-  return button
+  return select
 }
 
 function dialogSnapshot() {
@@ -74,6 +99,15 @@ function dialogSnapshot() {
     title: title?.textContent.trim() ?? null,
     content: section?.textContent.replace(/\s+/g, ' ').trim() ?? null,
   }
+}
+
+function dialogStatusMessages(): string[] {
+  const dialog = document.querySelector('[role="dialog"]')
+  if (!(dialog instanceof HTMLElement)) return []
+
+  return Array.from(dialog.querySelectorAll('[role="status"]'), (status) =>
+    status.textContent.trim(),
+  )
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {
@@ -106,56 +140,85 @@ afterEach(() => {
 })
 
 describe('ComposeAnalysisPanel in a browser', () => {
-  it('opens the full summary and comment check from their detail buttons', async () => {
-    mount(
-      <ComposeAnalysisPanel
-        article={article}
-        canEdit
-        extractionState="success"
-        summary={summary}
-        verification={verification}
-        summaryState="success"
-        verificationState="success"
-        verificationTargets={[{ id: 'common', label: 'Common comment' }]}
-        selectedVerificationTargetId="common"
-        isCustomComment={false}
-        canVerifyComment
-        onExtractArticle={() => undefined}
-        onSummarizeArticle={() => undefined}
-        onVerifyComment={() => undefined}
-        onVerificationTargetChange={() => undefined}
-      />,
-    )
-
+  it('opens the full summary from its detail button', async () => {
+    mountPanel()
     await click(detailButton('Read full summary'))
     await waitFor(() => dialogSnapshot()?.title === 'Article summary')
-    const summaryDialog = dialogSnapshot()
-    await click(closeButton())
-    await waitFor(() => document.querySelector('[role="dialog"]') === null)
-    const dialogClosedBeforeCommentCheck =
-      document.querySelector('[role="dialog"]') === null
+    expect(captureOutput(dialogSnapshot())).toEqual({
+      title: 'Article summary',
+      content: 'Refresh summaryA fictional article summary.',
+    })
+  })
+
+  it('opens the comment check from its detail button', async () => {
+    mountPanel()
+    await click(detailButton('Read comment check details'))
+    await waitFor(() => dialogSnapshot()?.title === 'Comment check')
+    expect(captureOutput(dialogSnapshot())).toEqual({
+      title: 'Comment check',
+      content:
+        'Check commentNot supported by the articleA claim without support.The article does not discuss it.This checks the comment against the article, not against external facts.',
+    })
+  })
+
+  it('changes the comment target from the comment check details', async () => {
+    const changedTargetIds: string[] = []
+    mountPanel({
+      verificationTargets: [
+        { id: 'common', label: 'Common comment' },
+        { id: 'destination:hatena', label: 'Hatena custom comment' },
+      ],
+      onVerificationTargetChange: (id) => changedTargetIds.push(id),
+    })
 
     await click(detailButton('Read comment check details'))
     await waitFor(() => dialogSnapshot()?.title === 'Comment check')
-    const commentCheckDialog = dialogSnapshot()
+    const select = commentTargetSelect()
+    await act(async () => {
+      await userEvent.selectOptions(select, 'destination:hatena')
+    })
 
     expect(
       captureOutput({
-        summaryDialog,
-        dialogClosedBeforeCommentCheck,
-        commentCheckDialog,
+        options: Array.from(select.options, (option) => ({
+          id: option.value,
+          label: option.textContent.trim(),
+        })),
+        changedTargetIds,
       }),
     ).toEqual({
-      summaryDialog: {
-        title: 'Article summary',
-        content: 'Refresh summaryA fictional article summary.',
-      },
-      dialogClosedBeforeCommentCheck: true,
-      commentCheckDialog: {
-        title: 'Comment check',
-        content:
-          'Check commentNot supported by the articleA claim without support.The article does not discuss it.This checks the comment against the article, not against external facts.',
-      },
+      options: [
+        { id: 'common', label: 'Common comment' },
+        { id: 'destination:hatena', label: 'Hatena custom comment' },
+      ],
+      changedTargetIds: ['destination:hatena'],
     })
+  })
+
+  it('shows the not-requested summary status once in its details', async () => {
+    mountPanel({
+      summary: null,
+      summaryState: 'not-requested',
+      defaultOpenDetail: 'summary',
+    })
+    await waitFor(() => dialogSnapshot()?.title === 'Article summary')
+
+    expect(captureOutput(dialogStatusMessages())).toEqual([
+      'Summary has not been requested.',
+    ])
+  })
+
+  it('shows the unchecked custom comment status once in its details', async () => {
+    mountPanel({
+      verification: null,
+      verificationState: 'not-requested',
+      isCustomComment: true,
+      defaultOpenDetail: 'verification',
+    })
+    await waitFor(() => dialogSnapshot()?.title === 'Comment check')
+
+    expect(captureOutput(dialogStatusMessages())).toEqual([
+      'This custom comment has not been checked in this session.',
+    ])
   })
 })

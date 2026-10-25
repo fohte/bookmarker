@@ -283,11 +283,7 @@ export function ComposeAnalysisPanel({
                     {summaryMessage}
                   </p>
                 )}
-                {summary === null ? (
-                  <p className="text-sm text-muted-foreground" role="status">
-                    {summaryMessage}
-                  </p>
-                ) : (
+                {summary !== null && (
                   <>
                     <p className="whitespace-pre-wrap break-words text-sm">
                       {summary.summary}
@@ -350,11 +346,7 @@ export function ComposeAnalysisPanel({
                     {verificationMessage}
                   </p>
                 )}
-                {verification === null ? (
-                  <p className="text-sm text-muted-foreground" role="status">
-                    {verificationMessage}
-                  </p>
-                ) : (
+                {verification !== null && (
                   <div className="space-y-3">
                     {verification.partial && (
                       <p className="text-muted-foreground" role="status">
