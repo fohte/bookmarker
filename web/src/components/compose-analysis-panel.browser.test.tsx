@@ -81,6 +81,14 @@ function detailButton(name: string): HTMLButtonElement {
   return button
 }
 
+function closeDialogButton(): HTMLButtonElement {
+  const button = document.querySelector('[data-slot="dialog-close"]')
+  if (!(button instanceof HTMLButtonElement)) {
+    throw new Error('The dialog close button was not rendered.')
+  }
+  return button
+}
+
 function commentTargetSelect(): HTMLSelectElement {
   const select = document.querySelector('#analysis-comment-target')
   if (!(select instanceof HTMLSelectElement)) {
@@ -159,6 +167,16 @@ describe('ComposeAnalysisPanel in a browser', () => {
       content:
         'Check commentNot supported by the articleA claim without support.The article does not discuss it.This checks the comment against the article, not against external facts.',
     })
+  })
+
+  it('closes the summary details from its close button', async () => {
+    mountPanel()
+    await click(detailButton('Read full summary'))
+    await waitFor(() => dialogSnapshot()?.title === 'Article summary')
+    await click(closeDialogButton())
+    await waitFor(() => document.querySelector('[role="dialog"]') === null)
+
+    expect(captureOutput(dialogSnapshot())).toEqual(null)
   })
 
   it('changes the comment target from the comment check details', async () => {
