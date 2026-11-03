@@ -344,7 +344,7 @@ describe('createMastodonAdapter', () => {
               'idempotency-key': target.operationId,
             },
             body: {
-              status: `${target.comment}\n\n${article.url}`,
+              status: `${target.comment}\n${article.url}`,
               visibility: 'unlisted',
               spoiler_text: '架空の CW',
               sensitive: 'true',
@@ -549,7 +549,7 @@ describe('createMastodonAdapter', () => {
               'idempotency-key': target.operationId,
             },
             body: {
-              status: `${target.comment}\n\n${article.url}`,
+              status: `${target.comment}\n${article.url}`,
               visibility: 'unlisted',
               spoiler_text: '架空の CW',
               sensitive: 'true',
@@ -637,7 +637,7 @@ describe('createMastodonAdapter', () => {
     expectOutput(
       { sentStatus, result: await summarizeResult(published) },
       {
-        sentStatus: `${longComment}\n\n${article.url}`,
+        sentStatus: `${longComment}\n${article.url}`,
         result: {
           value: {
             destination: 'mastodon',
@@ -647,6 +647,25 @@ describe('createMastodonAdapter', () => {
           },
         },
       },
+    )
+  })
+
+  it('posts only the article URL when the comment is empty', async () => {
+    setConfig()
+    const requests = stubFetch(() =>
+      jsonResponse({ id: 'fictional-status-id' }),
+    )
+    const adapter = createMastodonAdapter()
+    await adapter.publish({ article, target: { ...target, comment: '' } })
+    const sentBody = requests[0]?.init?.body
+    const sentStatus =
+      typeof sentBody === 'string'
+        ? new URLSearchParams(sentBody).get('status')
+        : null
+
+    expectOutput(
+      { sentStatus, requestCount: requests.length },
+      { sentStatus: article.url, requestCount: 1 },
     )
   })
 })

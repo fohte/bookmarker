@@ -1,6 +1,6 @@
 # Mastodon destination
 
-The API posts the article comment followed by its URL to `POST /api/v1/statuses`. It sends the selected visibility, content warning, and sensitive flag. The comment is sent as written; it is never shortened to fit an instance limit.
+The API posts the article comment and URL to `POST /api/v1/statuses`, separated by a single newline. If the comment is empty, it posts only the URL. It sends the selected visibility, content warning, and sensitive flag. The comment is sent as written; it is never shortened to fit an instance limit.
 
 ## Runtime configuration
 
