@@ -8,7 +8,7 @@ The API reads `HATENA_CONSUMER_KEY`, `HATENA_CONSUMER_SECRET`, `HATENA_ACCESS_TO
 2. Run the one-time authorization CLI with a new absolute output path outside the repository. The CLI creates any missing parent directories with mode `0700`:
 
    ```sh
-   pnpm --filter api authorize:hatena --output "$HOME/.config/bookmarker/hatena.json"
+   pnpm --filter api authorize:hatena --output "$HOME/.config/hatena/credentials.json"
    ```
 
 3. Enter the consumer key and consumer secret at the hidden prompts. Open the temporary authorization URL printed by the CLI, approve access in Hatena, then enter the displayed verifier at the hidden prompt.
