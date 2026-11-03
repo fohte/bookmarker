@@ -13,6 +13,7 @@ import { useState } from 'react'
 
 import { deliveryStatus } from '#components/compose-delivery-status'
 import { destinationNames } from '#components/compose-destination-labels'
+import { destinationHasSucceeded } from '#features/editor/compose-delivery-history'
 import type { ComposeDeliveryState } from '#features/editor/compose-state'
 
 export type ComposeDeliveryPanelProps = {
@@ -286,8 +287,9 @@ export function ComposeDeliveryPanel({
                   const snapshots = delivery.filter(
                     (item) => item.target.destination === destination,
                   )
-                  const destinationHasSucceeded = snapshots.some(
-                    (snapshot) => snapshot.result?.status === 'succeeded',
+                  const hasSucceeded = destinationHasSucceeded(
+                    delivery,
+                    destination,
                   )
                   return (
                     <li
@@ -307,7 +309,7 @@ export function ComposeDeliveryPanel({
                             const status = deliveryStatus(
                               snapshot,
                               deliveryState,
-                              destinationHasSucceeded,
+                              hasSucceeded,
                             )
                             return (
                               <li

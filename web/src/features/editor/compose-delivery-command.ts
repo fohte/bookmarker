@@ -9,6 +9,7 @@ import type {
 import { PublishRequestSchema } from 'api/contracts'
 import { err, ok, type Result } from 'neverthrow'
 
+import { destinationHasSucceeded } from '#features/editor/compose-delivery-history'
 import {
   effectiveDestinationComment,
   isRaindropCollectionAvailable,
@@ -125,12 +126,7 @@ export function createNewDeliveryPlan(
       destination,
     )
     const target = createNewPublishTarget(destination, comment)
-    const hasSucceeded = draft.delivery.some(
-      (snapshot) =>
-        snapshot.target.destination === destination.destination &&
-        snapshot.result?.status === 'succeeded',
-    )
-    if (hasSucceeded) {
+    if (destinationHasSucceeded(draft.delivery, destination.destination)) {
       continue
     }
 
