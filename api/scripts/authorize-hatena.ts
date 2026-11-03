@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url'
 
 import {
   authorizeHatena,
-  resolveOutputPathOutsideRepository,
+  prepareOutputPathOutsideRepository,
   writeCredentialsFile,
 } from '#destinations/hatena/authorize'
 import { promptHidden } from '#destinations/hatena/terminal'
@@ -16,8 +16,18 @@ const authorizationErrorMessages = {
   output_failed: 'The credentials file could not be created.',
 } as const
 
+const outputPathErrorMessages = {
+  invalid_output_path:
+    'Choose an absolute output file path outside the repository.',
+  output_path_resolution_failed:
+    'The output path could not be resolved because of a filesystem error.',
+  output_directory_failed: 'The output directory could not be created.',
+} as const
+
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url))
-const [option, outputArgument, ...remainingArguments] = process.argv.slice(2)
+const commandArguments = process.argv.slice(2)
+const [option, outputArgument, ...remainingArguments] =
+  commandArguments[0] === '--' ? commandArguments.slice(1) : commandArguments
 
 if (
   option !== '--output' ||
@@ -25,19 +35,17 @@ if (
   remainingArguments.length > 0
 ) {
   process.stderr.write(
-    'Usage: pnpm --filter api authorize:hatena -- --output <absolute-path>\n',
+    'Usage: pnpm --filter api authorize:hatena --output <absolute-path>\n',
   )
   process.exitCode = 1
 } else {
-  const resolvedPath = await resolveOutputPathOutsideRepository(
+  const resolvedPath = await prepareOutputPathOutsideRepository(
     outputArgument,
     repositoryRoot,
   )
 
   if (resolvedPath.isErr()) {
-    process.stderr.write(
-      'Choose an absolute output file path outside the repository.\n',
-    )
+    process.stderr.write(`${outputPathErrorMessages[resolvedPath.error]}\n`)
     process.exitCode = 1
   } else {
     const result = await authorizeHatena(resolvedPath.value, {

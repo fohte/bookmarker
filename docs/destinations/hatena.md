@@ -5,12 +5,10 @@ The API reads `HATENA_CONSUMER_KEY`, `HATENA_CONSUMER_SECRET`, `HATENA_ACCESS_TO
 ## Create credentials
 
 1. Register an OAuth application at [Hatena OAuth settings](https://www.hatena.ne.jp/oauth/develop). Enable `read_public`, `read_private`, `write_public`, and `write_private` for the application.
-2. Create a private directory outside the repository, then run the one-time authorization CLI with a new absolute output path:
+2. Run the one-time authorization CLI with a new absolute output path outside the repository. The CLI creates any missing parent directories with mode `0700`:
 
    ```sh
-   mkdir -p "$HOME/.config/bookmarker"
-   chmod 700 "$HOME/.config/bookmarker"
-   pnpm --filter api authorize:hatena -- --output "$HOME/.config/bookmarker/hatena.json"
+   pnpm --filter api authorize:hatena --output "$HOME/.config/hatena/credentials.json"
    ```
 
 3. Enter the consumer key and consumer secret at the hidden prompts. Open the temporary authorization URL printed by the CLI, approve access in Hatena, then enter the displayed verifier at the hidden prompt.
@@ -23,7 +21,7 @@ The CLI requests the `read_public,read_private,write_public,write_private` scope
 Set `HATENA_CREDENTIALS_FILE` to the file created above. The commands below pass each value to AWS CLI through standard input so the credential values do not appear in shell history or process arguments.
 
 ```sh
-HATENA_CREDENTIALS_FILE="$HOME/.config/bookmarker/hatena.json"
+HATENA_CREDENTIALS_FILE="$HOME/.config/hatena/credentials.json"
 
 put_hatena_parameter() {
   local suffix="$1"
