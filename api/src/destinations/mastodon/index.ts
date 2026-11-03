@@ -79,7 +79,7 @@ const remoteUrlFrom = (
 }
 
 const statusTextFor = (comment: string, articleUrl: string): string =>
-  comment.length > 0 ? `${comment}\n\n${articleUrl}` : articleUrl
+  comment.length > 0 ? `${comment}\n${articleUrl}` : articleUrl
 
 const getMetadata = (
   configured: boolean,
