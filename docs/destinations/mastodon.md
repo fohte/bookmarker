@@ -22,20 +22,19 @@ Create an OAuth application on the target instance and authorize it as the accou
 1. Register an application with `POST /api/v1/apps`. Use a descriptive `client_name`, `redirect_uris` set to `urn:ietf:wg:oauth:2.0:oob`, and `scopes` set to `write:statuses`. Keep the returned `client_id` and `client_secret` private while issuing the token.
 2. Open the instance's `/oauth/authorize` endpoint in a browser while signed in to the publishing account. Set `response_type=code`, the registered `client_id`, the same OOB `redirect_uri`, `scope=write:statuses`, and a random `state`. Approve access and record the returned authorization code. Treat the code as a password.
 3. Exchange the code with `POST /oauth/token`, using `grant_type=authorization_code`, the code, `client_id`, `client_secret`, and the same `redirect_uri`. Store the returned user `access_token` securely. Do not request `grant_type=client_credentials`.
-4. The runtime needs only the user access token and instance base URL. It does not need the OAuth application's client ID or client secret.
+4. The backend needs the user access token and instance base URL at runtime. In production, set `MASTODON_BASE_URL` through the `mastodonBaseUrl` value in the bookmarker Helm chart in `fohte/infra`; do not store it in SSM. The runtime does not need the OAuth application's client ID or client secret.
 
 Do not put OAuth credentials or the token in the repository, task pages, shell history, application logs, or browser code.
 
 ## Store the backend values
 
-In AWS Systems Manager Parameter Store, create each parameter with type `SecureString`:
+In AWS Systems Manager Parameter Store, create this parameter with type `SecureString`:
 
-| Name                                      | Value                             |
-| ----------------------------------------- | --------------------------------- |
-| `/infra/bookmarker/mastodon-base-url`     | The target instance HTTPS origin. |
-| `/infra/bookmarker/mastodon-access-token` | The issued user access token.     |
+| Name                                      | Value                         |
+| ----------------------------------------- | ----------------------------- |
+| `/infra/bookmarker/mastodon-access-token` | The issued user access token. |
 
-After saving both parameters, verify that the API `ExternalSecret` has synchronized them. Then restart the API deployment with a rollout restart so its processes read the values as `MASTODON_BASE_URL` and `MASTODON_ACCESS_TOKEN`. Keep parameter values out of logs and deployment output.
+After saving the token, verify that the API `ExternalSecret` has synchronized it. Then restart the API deployment with a rollout restart so its processes read `MASTODON_ACCESS_TOKEN`. The production `MASTODON_BASE_URL` comes from the `mastodonBaseUrl` value in the bookmarker Helm chart in `fohte/infra`. Keep the token out of logs and deployment output.
 
 ## Delivery and failure handling
 
