@@ -1,6 +1,6 @@
 import type { DeliveryResult, PublishTarget } from 'api/contracts'
 
-export const unconfirmedDeliveryMessage =
+const unconfirmedDeliveryMessage =
   'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.'
 
 export const unconfirmedDeliveryResult = (

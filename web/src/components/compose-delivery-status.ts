@@ -5,6 +5,7 @@ import type { ComposeDeliveryState } from '#features/editor/compose-state'
 export function deliveryStatus(
   snapshot: BookmarkDraft['delivery'][number],
   deliveryState: ComposeDeliveryState,
+  destinationHasSucceeded: boolean,
 ): {
   label: string
   details: string[]
@@ -52,7 +53,9 @@ export function deliveryStatus(
     label: 'Failed',
     details: [
       ...(result.message === undefined ? [] : [result.message]),
-      'You can publish to this destination again.',
+      ...(destinationHasSucceeded
+        ? []
+        : ['You can publish to this destination again.']),
     ],
   }
 }

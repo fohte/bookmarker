@@ -241,7 +241,7 @@ describe('ComposeController delivery', () => {
     })
   })
 
-  it('ignores settings for destinations whose delivery history blocks sending', async () => {
+  it('ignores settings for destinations with a successful delivery', async () => {
     const base = createIndexedDbDraftStore()
     const initialDraft: BookmarkDraft = {
       ...draft(),
@@ -946,6 +946,51 @@ describe('ComposeController delivery', () => {
       requestCount: 1,
       targets: ['mastodon'],
       operationIdChanged: true,
+    })
+  })
+
+  it('does not publish when every selected destination has succeeded', async () => {
+    const base = createIndexedDbDraftStore()
+    const initialDraft: BookmarkDraft = {
+      ...draft(),
+      delivery: [
+        {
+          article: { url: 'https://fictional.example.invalid/article' },
+          target: {
+            destination: 'hatena',
+            operationId: successfulOperationId,
+            comment: 'An unfinished common comment',
+            options: { tags: ['fictional tag'], private: false },
+          },
+          result: {
+            destination: 'hatena',
+            operationId: successfulOperationId,
+            status: 'succeeded',
+            retryable: false,
+          },
+        },
+      ],
+    }
+    valueOrThrow(await base.addDraft(initialDraft))
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const controller = new ComposeController(base)
+    await controller.start(initialDraft.id)
+
+    await controller.publishSelectedDestinations(metadata)
+
+    const actual = {
+      requestCount: fetchMock.mock.calls.length,
+      deliveryState: controller.state.deliveryState,
+      deliveryErrorMessage: controller.state.deliveryErrorMessage,
+    }
+    await controller.dispose()
+
+    expect(captureOutput(actual)).toEqual({
+      requestCount: 0,
+      deliveryState: 'idle',
+      deliveryErrorMessage:
+        'All selected destinations already have a successful delivery.',
     })
   })
 

@@ -286,6 +286,9 @@ export function ComposeDeliveryPanel({
                   const snapshots = delivery.filter(
                     (item) => item.target.destination === destination,
                   )
+                  const destinationHasSucceeded = snapshots.some(
+                    (snapshot) => snapshot.result?.status === 'succeeded',
+                  )
                   return (
                     <li
                       key={destination}
@@ -304,6 +307,7 @@ export function ComposeDeliveryPanel({
                             const status = deliveryStatus(
                               snapshot,
                               deliveryState,
+                              destinationHasSucceeded,
                             )
                             return (
                               <li

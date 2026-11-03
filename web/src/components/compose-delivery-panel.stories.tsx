@@ -123,6 +123,54 @@ export const Succeeded: Story = {
   name: 'The editor shows a saved successful result with its remote link.',
 }
 
+export const FailedBeforeSuccess: Story = {
+  args: {
+    defaultResultsOpen: true,
+    delivery: [
+      {
+        article: { url: 'https://example.test/article' },
+        target: {
+          destination: 'mastodon',
+          operationId: operationIds.second,
+          comment: 'A fictional comment.',
+          options: {
+            visibility: 'unlisted',
+            spoilerText: '',
+            sensitive: false,
+          },
+        },
+        result: {
+          destination: 'mastodon',
+          operationId: operationIds.second,
+          status: 'failed',
+          retryable: false,
+          message: 'The destination rejected the request.',
+        },
+      },
+      {
+        article: { url: 'https://example.test/article' },
+        target: {
+          destination: 'mastodon',
+          operationId: operationIds.third,
+          comment: 'A fictional comment.',
+          options: {
+            visibility: 'unlisted',
+            spoilerText: '',
+            sensitive: false,
+          },
+        },
+        result: {
+          destination: 'mastodon',
+          operationId: operationIds.third,
+          status: 'succeeded',
+          retryable: false,
+        },
+      },
+    ],
+  },
+  name: 'The editor hides resend guidance after the destination succeeds.',
+}
+
 export const SavingPendingSnapshot: Story = {
   args: {
     deliveryState: 'saving-pending',
