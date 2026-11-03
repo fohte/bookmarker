@@ -9,6 +9,7 @@ import {
 } from 'neverthrow'
 
 import { asStorageError, DraftError } from '#features/drafts/draft-error'
+import { unconfirmedDeliveryResult } from '#features/publish/unconfirmed-delivery'
 
 const databaseName = 'bookmarker-local-drafts'
 const databaseVersion = 1
@@ -165,6 +166,12 @@ function normalizeLegacyDeliveryResults(value: unknown): unknown {
         !('result' in snapshot) ||
         typeof snapshot.result !== 'object' ||
         snapshot.result === null ||
+        !('destination' in snapshot.result) ||
+        (snapshot.result.destination !== 'hatena' &&
+          snapshot.result.destination !== 'mastodon' &&
+          snapshot.result.destination !== 'raindrop') ||
+        !('operationId' in snapshot.result) ||
+        typeof snapshot.result.operationId !== 'string' ||
         !('status' in snapshot.result) ||
         snapshot.result.status !== 'unknown'
       ) {
@@ -175,10 +182,10 @@ function normalizeLegacyDeliveryResults(value: unknown): unknown {
         ...snapshot,
         result: {
           ...snapshot.result,
-          status: 'failed',
-          retryable: false,
-          message:
-            'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
+          ...unconfirmedDeliveryResult({
+            destination: snapshot.result.destination,
+            operationId: snapshot.result.operationId,
+          }),
         },
       }
     }),

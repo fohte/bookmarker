@@ -8,6 +8,7 @@ import {
 import { err, ok } from 'neverthrow'
 
 import { DraftError } from '#features/drafts/draft-error'
+import { unconfirmedDeliveryResult } from '#features/publish/unconfirmed-delivery'
 
 export function recoverPendingDeliveries(draft: BookmarkDraft): BookmarkDraft {
   const delivery = draft.delivery.map((snapshot) => {
@@ -17,14 +18,7 @@ export function recoverPendingDeliveries(draft: BookmarkDraft): BookmarkDraft {
 
     return {
       ...snapshot,
-      result: {
-        destination: snapshot.target.destination,
-        operationId: snapshot.target.operationId,
-        status: 'failed' as const,
-        retryable: false as const,
-        message:
-          'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
-      },
+      result: unconfirmedDeliveryResult(snapshot.target),
     }
   })
 

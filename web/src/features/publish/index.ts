@@ -2,7 +2,6 @@ import type {
   DeliveryResult,
   DestinationMetadata,
   PublishRequest,
-  PublishTarget,
 } from 'api/contracts'
 import {
   ApiErrorEnvelopeSchema,
@@ -10,6 +9,8 @@ import {
   DestinationMetadataSchema,
 } from 'api/contracts'
 import { errAsync, okAsync, ResultAsync } from 'neverthrow'
+
+import { unconfirmedDeliveryResult } from '#features/publish/unconfirmed-delivery'
 
 type PublishClientError = {
   code: 'authentication_required' | 'unavailable' | 'invalid_response'
@@ -118,20 +119,11 @@ export const getDestinations = (): ResultAsync<
   })
 }
 
-const failedResult = (target: PublishTarget): DeliveryResult => ({
-  destination: target.destination,
-  operationId: target.operationId,
-  status: 'failed',
-  retryable: false,
-  message:
-    'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
-})
-
 const failedTargetsWithoutConfirmation = (
   request: PublishRequest,
   authenticationRequired = false,
 ): PublishTargetsResult => ({
-  results: request.targets.map(failedResult),
+  results: request.targets.map(unconfirmedDeliveryResult),
   ...(authenticationRequired ? { authenticationRequired: true } : {}),
 })
 
@@ -184,7 +176,7 @@ const alignResults = (
 ): DeliveryResult[] => {
   const requestKeys = new Set(request.targets.map(resultKey))
   if (results.some((result) => !requestKeys.has(resultKey(result)))) {
-    return request.targets.map(failedResult)
+    return request.targets.map(unconfirmedDeliveryResult)
   }
 
   return request.targets.map((target) => {
@@ -193,8 +185,8 @@ const alignResults = (
     )
 
     return matches.length === 1
-      ? (matches[0] ?? failedResult(target))
-      : failedResult(target)
+      ? (matches[0] ?? unconfirmedDeliveryResult(target))
+      : unconfirmedDeliveryResult(target)
   })
 }
 

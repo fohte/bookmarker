@@ -834,16 +834,29 @@ describe('ComposeController delivery', () => {
 
     const actual = {
       requestCount: requests.length,
-      destination: requests[0]?.targets[0]?.destination ?? null,
-      operationIdChanged:
-        requests[0]?.targets[0]?.operationId !== failedOperationId,
+      request:
+        requests[0] === undefined
+          ? null
+          : normalizeRequest(requests[0], failedOperationId),
     }
     await controller.dispose()
 
     expect(captureOutput(actual)).toEqual({
       requestCount: 1,
-      destination: 'hatena',
-      operationIdChanged: true,
+      request: {
+        article: {
+          url: 'https://fictional.example.invalid/article',
+          title: 'A fictional article',
+        },
+        targets: [
+          {
+            destination: 'hatena',
+            operationId: '<new>',
+            comment: 'An unfinished common comment',
+            options: { tags: ['fictional tag'], private: false },
+          },
+        ],
+      },
     })
   })
 

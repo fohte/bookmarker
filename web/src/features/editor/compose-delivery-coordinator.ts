@@ -14,6 +14,7 @@ import {
 } from '#features/editor/compose-delivery-command'
 import type { ComposeState } from '#features/editor/compose-state'
 import { publishTargets } from '#features/publish/index'
+import { unconfirmedDeliveryResult } from '#features/publish/unconfirmed-delivery'
 
 type DeliveryResponse = Awaited<ReturnType<typeof publishTargets>>
 type DeliveryStatePatch = Partial<
@@ -36,14 +37,7 @@ type ComposeDeliveryPort = {
 
 function failedResponse(request: PublishRequest): DeliveryResponse {
   return {
-    results: request.targets.map((target) => ({
-      destination: target.destination,
-      operationId: target.operationId,
-      status: 'failed',
-      retryable: false,
-      message:
-        'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
-    })),
+    results: request.targets.map(unconfirmedDeliveryResult),
   }
 }
 
@@ -160,7 +154,7 @@ export class ComposeDeliveryCoordinator {
   async #saveOutcome(
     draft: BookmarkDraft,
     authenticationRequired: boolean,
-  ): Promise<boolean> {
+  ): Promise<void> {
     this.#pendingResult = draft
     this.#pendingAuthenticationRequired = authenticationRequired
     this.port.setState({
@@ -174,7 +168,7 @@ export class ComposeDeliveryCoordinator {
         deliveryErrorMessage:
           'The delivery result is still in memory. Retry saving it before continuing.',
       })
-      return false
+      return
     }
 
     const resultSave = await this.port.flushQueue()
@@ -184,11 +178,10 @@ export class ComposeDeliveryCoordinator {
         deliveryErrorMessage:
           'The delivery result could not be saved. Retry saving it; the service will not be contacted again.',
       })
-      return false
+      return
     }
 
     this.#showCommittedResult()
-    return true
   }
 
   async #retryPendingResult(): Promise<void> {

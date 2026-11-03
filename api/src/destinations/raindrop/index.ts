@@ -86,7 +86,6 @@ const parseExistsResponse = (
 
 const parseSingleResponse = (
   payload: unknown,
-  mode: 'read' | 'write',
 ): ResultAsync<z.infer<typeof RaindropItemSchema>, PublishAdapterError> => {
   const resultEnvelope = ResultResponseSchema.safeParse(payload)
   if (resultEnvelope.success && !resultEnvelope.data.result) {
@@ -96,7 +95,7 @@ const parseSingleResponse = (
   const parsed = SingleResponseSchema.safeParse(payload)
   return parsed.success
     ? okAsync(parsed.data.item)
-    : errAsync(raindropInvalidResponse(mode))
+    : errAsync(raindropInvalidResponse())
 }
 
 const parseCollectionItems = (
@@ -165,7 +164,7 @@ const publishNewRaindrop = (
     'write',
     createPayload(article, target),
   )
-    .andThen((payload) => parseSingleResponse(payload, 'write'))
+    .andThen(parseSingleResponse)
     .andThen((item) =>
       item.link === article.url
         ? okAsync(successfulDelivery(target))
@@ -184,7 +183,7 @@ const updateExistingRaindrop = (
     'GET',
     'read',
   )
-    .andThen((payload) => parseSingleResponse(payload, 'read'))
+    .andThen(parseSingleResponse)
     .andThen((item) => {
       if (item._id !== raindropId) {
         return errAsync(raindropFailed('invalid_response'))
@@ -201,7 +200,7 @@ const updateExistingRaindrop = (
         'write',
         updatePayload(article, target),
       )
-        .andThen((payload) => parseSingleResponse(payload, 'write'))
+        .andThen(parseSingleResponse)
         .andThen((updatedItem) =>
           updatedItem._id === raindropId && updatedItem.link === article.url
             ? okAsync(successfulDelivery(target))

@@ -13,6 +13,7 @@ import {
   effectiveDestinationComment,
   isRaindropCollectionAvailable,
 } from '#features/editor/compose-destination'
+import { unconfirmedDeliveryResult } from '#features/publish/unconfirmed-delivery'
 
 export type ComposeDeliveryPlan = {
   request: PublishRequest
@@ -182,17 +183,6 @@ export function appendPendingDeliverySnapshots(
   }
 }
 
-function failedResult(target: PublishTarget): DeliveryResult {
-  return {
-    destination: target.destination,
-    operationId: target.operationId,
-    status: 'failed',
-    retryable: false,
-    message:
-      'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
-  }
-}
-
 export function applyDeliveryResults(
   draft: BookmarkDraft,
   request: PublishRequest,
@@ -216,7 +206,9 @@ export function applyDeliveryResults(
         article: snapshot.article,
         target: snapshot.target,
         result:
-          matches.length === 1 ? matches[0] : failedResult(snapshot.target),
+          matches.length === 1
+            ? matches[0]
+            : unconfirmedDeliveryResult(snapshot.target),
       }
     }),
     updatedAt: new Date().toISOString(),

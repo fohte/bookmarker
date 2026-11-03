@@ -282,4 +282,32 @@ describe('POST /api/publish', () => {
       },
     })
   })
+
+  it('includes a destination check message when a write error is ambiguous', async () => {
+    const app = appWith(
+      registry({
+        hatena: adapter('hatena', () =>
+          errAsync({ code: 'unavailable', retryable: false }),
+        ),
+      }),
+    )
+
+    const response = await send(app, [hatenaTarget])
+
+    expect(await summarizeResponse(response)).toEqual({
+      status: 200,
+      body: {
+        results: [
+          {
+            destination: 'hatena',
+            operationId: hatenaTarget.operationId,
+            status: 'failed',
+            retryable: false,
+            message:
+              'The destination is temporarily unavailable. Check whether the item reached the destination before publishing again.',
+          },
+        ],
+      },
+    })
+  })
 })
