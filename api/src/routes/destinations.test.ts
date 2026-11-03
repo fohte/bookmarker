@@ -14,8 +14,7 @@ const disabledAdapter = <D extends keyof DestinationRegistry>(
   destination,
   configured: false,
   getMetadata: () => okAsync({ configured: false }),
-  publish: () =>
-    errAsync({ code: 'not_configured', outcome: 'failed', retryable: false }),
+  publish: () => errAsync({ code: 'not_configured', retryable: false }),
 })
 
 const metadataApp = (registry: DestinationRegistry) => {
@@ -55,8 +54,7 @@ describe('GET /api/destinations', () => {
       destination: 'mastodon',
       configured: true,
       getMetadata: () => errAsync({ code: 'unavailable' }),
-      publish: () =>
-        errAsync({ code: 'unavailable', outcome: 'failed', retryable: false }),
+      publish: () => errAsync({ code: 'unavailable', retryable: false }),
     }
     const response = await metadataApp({
       hatena: disabledAdapter('hatena'),
@@ -93,8 +91,7 @@ describe('GET /api/destinations', () => {
           maxCharacters: 640,
           charactersReservedPerUrl: 19,
         }),
-      publish: () =>
-        errAsync({ code: 'unavailable', outcome: 'failed', retryable: false }),
+      publish: () => errAsync({ code: 'unavailable', retryable: false }),
     }
     const raindrop: DestinationRegistry['raindrop'] = {
       destination: 'raindrop',
@@ -111,8 +108,7 @@ describe('GET /api/destinations', () => {
             },
           ],
         }),
-      publish: () =>
-        errAsync({ code: 'unavailable', outcome: 'failed', retryable: false }),
+      publish: () => errAsync({ code: 'unavailable', retryable: false }),
     }
     const response = await metadataApp({
       hatena: disabledAdapter('hatena'),

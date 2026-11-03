@@ -351,23 +351,27 @@ describe('DeliveryResult', () => {
     })
   })
 
-  it('rejects retryable unknown results', () => {
+  it('rejects the legacy unknown delivery status', () => {
     expect(
       summarizeParse(
         DeliveryResultSchema.safeParse({
           ...base,
           status: 'unknown',
-          retryable: true,
+          retryable: false,
         }),
       ),
     ).toEqual({
       success: false,
       issues: [
         {
-          code: 'invalid_value',
-          message: 'Invalid input: expected false',
-          path: ['retryable'],
-          values: [false],
+          code: 'invalid_union',
+          discriminator: 'status',
+          errors: [],
+          message:
+            "Invalid discriminator value. Expected 'succeeded' | 'failed'",
+          note: 'No matching discriminator',
+          options: ['succeeded', 'failed'],
+          path: ['status'],
         },
       ],
     })

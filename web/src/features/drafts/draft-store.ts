@@ -132,7 +132,8 @@ function transactionResult<T>(
 }
 
 function parseDraft(value: unknown): Result<BookmarkDraft, DraftError> {
-  const parsed = BookmarkDraftSchema.safeParse(value)
+  const compatibleValue = normalizeLegacyDeliveryResults(value)
+  const parsed = BookmarkDraftSchema.safeParse(compatibleValue)
   if (!parsed.success) {
     return err(
       new DraftError(
@@ -143,6 +144,45 @@ function parseDraft(value: unknown): Result<BookmarkDraft, DraftError> {
   }
 
   return ok(parsed.data)
+}
+
+function normalizeLegacyDeliveryResults(value: unknown): unknown {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !('delivery' in value) ||
+    !Array.isArray(value.delivery)
+  ) {
+    return value
+  }
+
+  return {
+    ...value,
+    delivery: value.delivery.map((snapshot: unknown) => {
+      if (
+        typeof snapshot !== 'object' ||
+        snapshot === null ||
+        !('result' in snapshot) ||
+        typeof snapshot.result !== 'object' ||
+        snapshot.result === null ||
+        !('status' in snapshot.result) ||
+        snapshot.result.status !== 'unknown'
+      ) {
+        return snapshot
+      }
+
+      return {
+        ...snapshot,
+        result: {
+          ...snapshot.result,
+          status: 'failed',
+          retryable: false,
+          message:
+            'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
+        },
+      }
+    }),
+  }
 }
 
 function isImportReceipt(value: unknown): value is ImportReceipt {

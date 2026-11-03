@@ -11,9 +11,6 @@ import {
   applyDeliveryResults,
   type ComposeDeliveryPlan,
   createNewDeliveryPlan,
-  createRetryDeliveryPlans,
-  getRetryDeliveryTargets,
-  makeRetryPending,
 } from '#features/editor/compose-delivery-command'
 import type { ComposeState } from '#features/editor/compose-state'
 import { publishTargets } from '#features/publish/index'
@@ -25,11 +22,6 @@ type DeliveryStatePatch = Partial<
     'deliveryState' | 'deliveryErrorMessage' | 'deliveryAuthenticationRequired'
   >
 >
-type PlanSendResult = {
-  saved: boolean
-  authenticationRequired: boolean
-}
-
 type ComposeDeliveryPort = {
   canOperate: () => boolean
   getDraft: () => BookmarkDraft | null
@@ -42,14 +34,15 @@ type ComposeDeliveryPort = {
   setState: (patch: DeliveryStatePatch) => void
 }
 
-function unknownResponse(request: PublishRequest): DeliveryResponse {
+function failedResponse(request: PublishRequest): DeliveryResponse {
   return {
     results: request.targets.map((target) => ({
       destination: target.destination,
       operationId: target.operationId,
-      status: 'unknown',
+      status: 'failed',
       retryable: false,
-      message: 'Delivery could not be confirmed.',
+      message:
+        'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
     })),
   }
 }
@@ -91,23 +84,6 @@ export class ComposeDeliveryCoordinator {
     return this.#start(() => this.#publishNewDraft(draft, plan.value))
   }
 
-  retryFailedDeliveries(metadata: DestinationMetadata): Promise<void> {
-    if (this.#busy || !this.port.canOperate()) return Promise.resolve()
-    const draft = this.port.getDraft()
-    if (draft === null) return Promise.resolve()
-
-    const plans = createRetryDeliveryPlans(draft, metadata)
-    if (plans.isErr()) {
-      this.port.setState({
-        deliveryState: 'idle',
-        deliveryErrorMessage: plans.error,
-      })
-      return Promise.resolve()
-    }
-
-    return this.#start(() => this.#retryPlans(plans.value))
-  }
-
   retryDeliverySave(): Promise<void> {
     if (
       !this.#busy ||
@@ -137,28 +113,26 @@ export class ComposeDeliveryCoordinator {
     }
 
     const pending = appendPendingDeliverySnapshots(draft, plan)
-    await this.#sendPlan(draft, pending, plan, 'Publishing')
+    await this.#sendPlan(draft, pending, plan)
   }
 
   async #sendPlan(
     base: BookmarkDraft,
     pending: BookmarkDraft,
     plan: ComposeDeliveryPlan,
-    action: 'Publishing' | 'Retry',
-    continueOperation = false,
-  ): Promise<PlanSendResult> {
+  ): Promise<void> {
     if (!this.port.stageDraft(pending)) {
       this.#finish('The active draft changed before publishing could start.')
-      return { saved: false, authenticationRequired: false }
+      return
     }
     this.port.setState({ deliveryState: 'saving-pending' })
     const pendingSave = await this.port.flushQueue()
     if (pendingSave.isErr()) {
       await this.#restoreBeforeSend(base)
       this.#finish(
-        `${action} was cancelled because its pending snapshot could not be saved. No request was sent. ${pendingSave.error.message}`,
+        `Publishing was cancelled because its pending snapshot could not be saved. No request was sent. ${pendingSave.error.message}`,
       )
-      return { saved: false, authenticationRequired: false }
+      return
     }
 
     this.port.setState({ deliveryState: 'sending' })
@@ -169,50 +143,7 @@ export class ComposeDeliveryCoordinator {
       plan.request,
       response.results,
     )
-    const saved = await this.#saveOutcome(
-      outcome,
-      authenticationRequired,
-      continueOperation && !authenticationRequired,
-    )
-    return { saved, authenticationRequired }
-  }
-
-  async #retryPlans(plans: ComposeDeliveryPlan[]): Promise<void> {
-    this.port.setState({
-      deliveryState: 'saving-input',
-      deliveryErrorMessage: null,
-    })
-    const latestSave = await this.port.flushQueue()
-    if (latestSave.isErr()) {
-      this.#finish(
-        `Retry was cancelled because the latest draft could not be saved. ${latestSave.error.message}`,
-      )
-      return
-    }
-
-    for (const plan of plans) {
-      const current = this.port.getDraft()
-      const target = plan.request.targets[0]
-      if (current === null || target === undefined) {
-        this.#finish('The active draft changed before retry could start.')
-        return
-      }
-      if (
-        !getRetryDeliveryTargets(current).some(
-          (candidate) =>
-            candidate.destination === target.destination &&
-            candidate.operationId === target.operationId,
-        )
-      ) {
-        continue
-      }
-
-      const pending = makeRetryPending(current, target)
-      const result = await this.#sendPlan(current, pending, plan, 'Retry', true)
-      if (!result.saved || result.authenticationRequired) return
-    }
-
-    this.#finish(null)
+    await this.#saveOutcome(outcome, authenticationRequired)
   }
 
   async #restoreBeforeSend(draft: BookmarkDraft): Promise<void> {
@@ -229,7 +160,6 @@ export class ComposeDeliveryCoordinator {
   async #saveOutcome(
     draft: BookmarkDraft,
     authenticationRequired: boolean,
-    continueOperation = false,
   ): Promise<boolean> {
     this.#pendingResult = draft
     this.#pendingAuthenticationRequired = authenticationRequired
@@ -257,7 +187,7 @@ export class ComposeDeliveryCoordinator {
       return false
     }
 
-    this.#showCommittedResult(continueOperation)
+    this.#showCommittedResult()
     return true
   }
 
@@ -276,26 +206,18 @@ export class ComposeDeliveryCoordinator {
     this.#showCommittedResult()
   }
 
-  #showCommittedResult(continueOperation = false): void {
+  #showCommittedResult(): void {
     const pendingResult = this.#pendingResult
     if (pendingResult === null) return
 
     this.port.showCommittedDraft(pendingResult)
     this.#pendingResult = null
-    if (continueOperation) {
-      this.port.setState({
-        deliveryState: 'saving-input',
-        deliveryErrorMessage: null,
-        deliveryAuthenticationRequired: this.#pendingAuthenticationRequired,
-      })
-    } else {
-      this.#busy = false
-      this.port.setState({
-        deliveryState: 'idle',
-        deliveryErrorMessage: null,
-        deliveryAuthenticationRequired: this.#pendingAuthenticationRequired,
-      })
-    }
+    this.#busy = false
+    this.port.setState({
+      deliveryState: 'idle',
+      deliveryErrorMessage: null,
+      deliveryAuthenticationRequired: this.#pendingAuthenticationRequired,
+    })
   }
 
   async #publishRequest(request: PublishRequest): Promise<DeliveryResponse> {
@@ -303,7 +225,7 @@ export class ComposeDeliveryCoordinator {
       publishTargets(request),
       (cause) => {
         console.error('Unexpected publishing client failure.', cause)
-        return unknownResponse(request)
+        return failedResponse(request)
       },
     )
     return response.match(

@@ -68,32 +68,29 @@ const readCredentials = (
 
 const createPublishError = (
   code: PublishAdapterError['code'],
-  outcome: PublishAdapterError['outcome'],
   retryable: boolean,
-): PublishAdapterError => ({ code, outcome, retryable })
+): PublishAdapterError => ({ code, retryable })
 
 const classifyPublishStatus = (
   status: number,
 ): PublishAdapterError | undefined => {
   if (status === 429) {
-    return createPublishError('rate_limited', 'failed', true)
+    return createPublishError('rate_limited', true)
   }
 
   if (status === 401 || status === 403) {
-    return createPublishError('unauthorized', 'failed', false)
+    return createPublishError('unauthorized', false)
   }
 
   if (status >= 500) {
-    return createPublishError('unavailable', 'unknown', false)
+    return createPublishError('unavailable', false)
   }
 
   if (status === 408 || (status >= 300 && status < 400) || status < 200) {
-    return createPublishError('invalid_response', 'unknown', false)
+    return createPublishError('invalid_response', false)
   }
 
-  return status >= 400
-    ? createPublishError('rejected', 'failed', false)
-    : undefined
+  return status >= 400 ? createPublishError('rejected', false) : undefined
 }
 
 const parseBookmarkPermalink = (
@@ -126,7 +123,7 @@ const publishHatenaBookmark = (
   const { article, target } = input
 
   if (target.options.tags.length > 10) {
-    return errAsync(createPublishError('rejected', 'failed', false))
+    return errAsync(createPublishError('rejected', false))
   }
 
   const body = new URLSearchParams()
@@ -158,7 +155,7 @@ const publishHatenaBookmark = (
       'User-Agent': 'bookmarker (https://github.com/fohte/bookmarker)',
     },
   })
-    .mapErr(() => createPublishError('unavailable', 'unknown', false))
+    .mapErr(() => createPublishError('unavailable', false))
     .andThen((response) => {
       const statusError = classifyPublishStatus(response.status)
       if (statusError !== undefined) {
@@ -168,7 +165,7 @@ const publishHatenaBookmark = (
 
       return readResponseText(response, MAX_RESPONSE_BYTES)
         .andThen((text) => parseBookmarkPermalink(text))
-        .mapErr(() => createPublishError('invalid_response', 'unknown', false))
+        .mapErr(() => createPublishError('invalid_response', false))
         .map((remoteUrl) => ({
           destination: 'hatena' as const,
           operationId: target.operationId,
@@ -190,7 +187,7 @@ export const createHatenaAdapter = (
     getMetadata: () => okAsync({ configured: credentials !== undefined }),
     publish: (input) =>
       credentials === undefined
-        ? errAsync(createPublishError('not_configured', 'failed', false))
+        ? errAsync(createPublishError('not_configured', false))
         : publishHatenaBookmark(credentials, input, dependencies),
   }
 }

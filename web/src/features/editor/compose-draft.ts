@@ -20,8 +20,10 @@ export function recoverPendingDeliveries(draft: BookmarkDraft): BookmarkDraft {
       result: {
         destination: snapshot.target.destination,
         operationId: snapshot.target.operationId,
-        status: 'unknown' as const,
+        status: 'failed' as const,
         retryable: false as const,
+        message:
+          'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
       },
     }
   })

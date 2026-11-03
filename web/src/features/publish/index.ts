@@ -118,19 +118,20 @@ export const getDestinations = (): ResultAsync<
   })
 }
 
-const unknownResult = (target: PublishTarget): DeliveryResult => ({
+const failedResult = (target: PublishTarget): DeliveryResult => ({
   destination: target.destination,
   operationId: target.operationId,
-  status: 'unknown',
+  status: 'failed',
   retryable: false,
-  message: 'Delivery could not be confirmed.',
+  message:
+    'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
 })
 
-const unknownTargets = (
+const failedTargetsWithoutConfirmation = (
   request: PublishRequest,
   authenticationRequired = false,
 ): PublishTargetsResult => ({
-  results: request.targets.map(unknownResult),
+  results: request.targets.map(failedResult),
   ...(authenticationRequired ? { authenticationRequired: true } : {}),
 })
 
@@ -183,7 +184,7 @@ const alignResults = (
 ): DeliveryResult[] => {
   const requestKeys = new Set(request.targets.map(resultKey))
   if (results.some((result) => !requestKeys.has(resultKey(result)))) {
-    return request.targets.map(unknownResult)
+    return request.targets.map(failedResult)
   }
 
   return request.targets.map((target) => {
@@ -192,8 +193,8 @@ const alignResults = (
     )
 
     return matches.length === 1
-      ? (matches[0] ?? unknownResult(target))
-      : unknownResult(target)
+      ? (matches[0] ?? failedResult(target))
+      : failedResult(target)
   })
 }
 
@@ -217,7 +218,7 @@ export const publishTargets = async (
   return response.match(
     async (value) => {
       if (isAccessLoginResponse(value)) {
-        return unknownTargets(request, true)
+        return failedTargetsWithoutConfirmation(request, true)
       }
 
       const body = await ResultAsync.fromThrowable(
@@ -228,7 +229,7 @@ export const publishTargets = async (
       return body.match(
         (json) => {
           if (hasAuthenticationEvidence(value, json)) {
-            return unknownTargets(request, true)
+            return failedTargetsWithoutConfirmation(request, true)
           }
 
           if (!value.ok) {
@@ -252,47 +253,19 @@ export const publishTargets = async (
               )
             }
 
-            return unknownTargets(request)
+            return failedTargetsWithoutConfirmation(request)
           }
 
           const parsed = parsePublishResults(json)
           return parsed
             ? { results: alignResults(request, parsed) }
-            : unknownTargets(request)
+            : failedTargetsWithoutConfirmation(request)
         },
-        () => unknownTargets(request),
+        () => failedTargetsWithoutConfirmation(request),
       )
     },
-    () => unknownTargets(request),
+    () => failedTargetsWithoutConfirmation(request),
   )
-}
-
-export const selectRetryTargets = (
-  snapshotTargets: readonly PublishTarget[],
-  results: readonly DeliveryResult[],
-): PublishTarget[] => {
-  const resultCounts = new Map<
-    string,
-    { count: number; result?: DeliveryResult }
-  >()
-
-  for (const result of results) {
-    const key = resultKey(result)
-    const current = resultCounts.get(key)
-    resultCounts.set(key, {
-      count: (current?.count ?? 0) + 1,
-      result,
-    })
-  }
-
-  return snapshotTargets.filter((target) => {
-    const result = resultCounts.get(resultKey(target))
-    return (
-      result?.count === 1 &&
-      result.result?.status === 'failed' &&
-      result.result.retryable
-    )
-  })
 }
 
 export const createXIntent = ({

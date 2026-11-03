@@ -2,10 +2,6 @@ import type { BookmarkDraft, DestinationMetadata } from 'api/contracts'
 import { useCallback, useEffect, useState } from 'react'
 
 import {
-  createRetryDeliveryPlans,
-  getRetryDeliveryTargets,
-} from '#features/editor/compose-delivery-command'
-import {
   effectiveDestinationComment,
   getDestinationDraft,
 } from '#features/editor/compose-destination'
@@ -70,17 +66,6 @@ export function useComposeDelivery({
     state.saveState === 'saved' &&
     state.deliveryState === 'idle'
 
-  const retryableTargets = draft === null ? [] : getRetryDeliveryTargets(draft)
-  const retryPlan =
-    draft === null || metadata === null
-      ? null
-      : createRetryDeliveryPlans(draft, metadata, retryableTargets)
-  const canRetryFailed =
-    retryPlan !== null &&
-    retryPlan.isOk() &&
-    canEdit &&
-    state.deliveryState === 'idle' &&
-    !state.discardOpen
   const authenticationRequired =
     metadataError?.authenticationRequired === true ||
     state.deliveryAuthenticationRequired
@@ -101,8 +86,6 @@ export function useComposeDelivery({
       state.saveState !== 'failed' &&
       state.deliveryState === 'idle' &&
       !state.discardOpen,
-    hasRetryableTargets: retryableTargets.length > 0,
-    canRetryFailed,
     canOpenX,
     xIntentHref,
     authenticationRequired,

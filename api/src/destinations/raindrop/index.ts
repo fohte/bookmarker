@@ -11,7 +11,6 @@ import { createDisabledAdapter } from '#destinations/disabled'
 import {
   raindropFailed,
   raindropInvalidResponse,
-  raindropUnknown,
   requestRaindropJson,
 } from '#destinations/raindrop/http'
 import type {
@@ -170,7 +169,7 @@ const publishNewRaindrop = (
     .andThen((item) =>
       item.link === article.url
         ? okAsync(successfulDelivery(target))
-        : errAsync(raindropUnknown('invalid_response')),
+        : errAsync(raindropFailed('invalid_response')),
     )
 
 const updateExistingRaindrop = (
@@ -206,7 +205,7 @@ const updateExistingRaindrop = (
         .andThen((updatedItem) =>
           updatedItem._id === raindropId && updatedItem.link === article.url
             ? okAsync(successfulDelivery(target))
-            : errAsync(raindropUnknown('invalid_response')),
+            : errAsync(raindropFailed('invalid_response')),
         )
     })
 

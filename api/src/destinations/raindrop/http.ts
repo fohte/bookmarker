@@ -14,28 +14,19 @@ export const raindropFailed = (
   retryable = false,
 ): PublishAdapterError => ({
   code,
-  outcome: 'failed',
   retryable,
-})
-
-export const raindropUnknown = (
-  code: PublishAdapterError['code'],
-): PublishAdapterError => ({
-  code,
-  outcome: 'unknown',
-  retryable: false,
 })
 
 const unavailableFailure = (mode: RequestMode): PublishAdapterError =>
   mode === 'write'
-    ? raindropUnknown('unavailable')
+    ? raindropFailed('unavailable')
     : raindropFailed('unavailable', true)
 
 export const raindropInvalidResponse = (
   mode: RequestMode,
 ): PublishAdapterError =>
   mode === 'write'
-    ? raindropUnknown('invalid_response')
+    ? raindropFailed('invalid_response')
     : raindropFailed('invalid_response')
 
 const cancelAndFail = (
@@ -60,7 +51,7 @@ const statusFailure = (
 
   if (status === 408 || status >= 500) {
     return mode === 'write'
-      ? raindropUnknown('unavailable')
+      ? raindropFailed('unavailable')
       : raindropFailed('unavailable', true)
   }
 

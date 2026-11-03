@@ -114,12 +114,6 @@ export function useComposeController() {
     [],
   )
 
-  const retryFailedDeliveries = useCallback((metadata: DestinationMetadata) => {
-    const controller = controllerRef.current
-    if (controller !== null) return controller.retryFailedDeliveries(metadata)
-    return Promise.resolve()
-  }, [])
-
   const retryDeliverySave = useCallback(() => {
     const controller = controllerRef.current
     if (controller !== null) return controller.retryDeliverySave()
@@ -154,7 +148,6 @@ export function useComposeController() {
     retryLock,
     retrySave,
     publishSelectedDestinations,
-    retryFailedDeliveries,
     retryDeliverySave,
     requestDiscard,
     cancelDiscard,

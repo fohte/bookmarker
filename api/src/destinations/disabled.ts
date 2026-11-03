@@ -12,7 +12,6 @@ export const createDisabledAdapter = <D extends PublishDestinationId>(
   publish: () =>
     errAsync({
       code: 'not_configured',
-      outcome: 'failed',
       retryable: false,
     }),
 })

@@ -5,7 +5,6 @@ import type { ComposeDeliveryState } from '#features/editor/compose-state'
 export function deliveryStatus(
   snapshot: BookmarkDraft['delivery'][number],
   deliveryState: ComposeDeliveryState,
-  retryEligible: boolean,
 ): {
   label: string
   details: string[]
@@ -39,7 +38,7 @@ export function deliveryStatus(
     return {
       label: 'Outcome not recorded',
       details: [
-        'Check the result directly at the service. This editor cannot resend an unconfirmed attempt.',
+        'Check whether the item reached the destination before publishing again.',
       ],
     }
   }
@@ -49,24 +48,11 @@ export function deliveryStatus(
       details: result.message === undefined ? [] : [result.message],
     }
   }
-  if (result.status === 'unknown') {
-    return {
-      label: 'Outcome unknown',
-      details: [
-        ...(result.message === undefined ? [] : [result.message]),
-        'Check the result directly at the service. This editor cannot resend an unknown outcome.',
-      ],
-    }
-  }
   return {
     label: 'Failed',
     details: [
       ...(result.message === undefined ? [] : [result.message]),
-      result.retryable
-        ? retryEligible
-          ? 'This failure can be retried when the destination is connected.'
-          : 'Another recorded outcome for this destination prevents retrying this failure.'
-        : 'This result cannot be retried.',
+      'You can publish to this destination again.',
     ],
   }
 }

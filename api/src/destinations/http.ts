@@ -14,8 +14,10 @@ const publishErrorMessages = {
   rejected: 'The destination rejected this article.',
   unauthorized: 'The destination requires authorization.',
   rate_limited: 'The destination is rate limited.',
-  unavailable: 'The destination is temporarily unavailable.',
-  invalid_response: 'The destination returned an invalid response.',
+  unavailable:
+    'The destination is temporarily unavailable. Check whether the item reached the destination before publishing again.',
+  invalid_response:
+    'The destination returned an invalid response. Check whether the item reached the destination before publishing again.',
 } satisfies Record<PublishAdapterError['code'], string>
 
 const metadataErrorMessages = {
@@ -29,16 +31,6 @@ export const adapterErrorToDeliveryResult = (
   target: PublishTarget,
   error: PublishAdapterError,
 ): DeliveryResult => {
-  if (error.outcome === 'unknown') {
-    return {
-      destination: target.destination,
-      operationId: target.operationId,
-      status: 'unknown',
-      retryable: false,
-      message: 'Delivery could not be confirmed.',
-    }
-  }
-
   return {
     destination: target.destination,
     operationId: target.operationId,
@@ -53,9 +45,10 @@ export const invalidAdapterResult = (
 ): DeliveryResult => ({
   destination: target.destination,
   operationId: target.operationId,
-  status: 'unknown',
+  status: 'failed',
   retryable: false,
-  message: 'Delivery could not be confirmed.',
+  message:
+    'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
 })
 
 export const metadataAdapterError = (

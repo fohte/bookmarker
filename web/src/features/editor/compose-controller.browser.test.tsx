@@ -1143,8 +1143,10 @@ describe('ComposeController in a browser', () => {
             result: {
               destination: 'hatena',
               operationId,
-              status: 'unknown',
+              status: 'failed',
               retryable: false,
+              message:
+                'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
             },
           },
         ],
@@ -1752,5 +1754,56 @@ describe('ComposeController in a browser', () => {
     }
 
     expect(captureOutput(actual)).toEqual(expected)
+  })
+
+  it('loads legacy unknown delivery results as failed', async () => {
+    const store = createIndexedDbDraftStore()
+    const legacyDraft = {
+      ...pendingDraft(),
+      delivery: [
+        {
+          article: { url: 'https://example.test/sent', title: 'Sent title' },
+          target: {
+            destination: 'hatena',
+            operationId,
+            comment: 'Sent comment',
+            options: { tags: ['sent'], private: true },
+          },
+          result: {
+            destination: 'hatena',
+            operationId,
+            status: 'unknown',
+            retryable: false,
+          },
+        },
+      ],
+    }
+    valueOrThrow(await store.listDrafts())
+    await putRawDraft(legacyDraft)
+
+    const controller = new ComposeController(store)
+    await controller.start(firstDraftId)
+    const activeDelivery = controller.state.activeDraft?.delivery ?? []
+    await controller.dispose()
+
+    expect(captureOutput(activeDelivery)).toEqual([
+      {
+        article: { url: 'https://example.test/sent', title: 'Sent title' },
+        target: {
+          destination: 'hatena',
+          operationId,
+          comment: 'Sent comment',
+          options: { tags: ['sent'], private: true },
+        },
+        result: {
+          destination: 'hatena',
+          operationId,
+          status: 'failed',
+          retryable: false,
+          message:
+            'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
+        },
+      },
+    ])
   })
 })

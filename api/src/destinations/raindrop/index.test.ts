@@ -176,7 +176,6 @@ describe('createRaindropAdapter', () => {
       publish: {
         error: {
           code: 'not_configured',
-          outcome: 'failed',
           retryable: false,
         },
       },
@@ -283,7 +282,6 @@ describe('createRaindropAdapter', () => {
       result: {
         error: {
           code: 'rejected',
-          outcome: 'failed',
           retryable: false,
         },
       },
@@ -309,7 +307,6 @@ describe('createRaindropAdapter', () => {
       result: {
         error: {
           code: 'rejected',
-          outcome: 'failed',
           retryable: false,
         },
       },
@@ -329,7 +326,6 @@ describe('createRaindropAdapter', () => {
       result: {
         error: {
           code: 'unavailable',
-          outcome: 'failed',
           retryable: true,
         },
       },
@@ -352,7 +348,6 @@ describe('createRaindropAdapter', () => {
       result: {
         error: {
           code: 'rate_limited',
-          outcome: 'failed',
           retryable: true,
         },
       },
@@ -360,7 +355,7 @@ describe('createRaindropAdapter', () => {
     })
   })
 
-  it('does not recreate after a create request has an unknown outcome', async () => {
+  it('does not recreate after a create request fails', async () => {
     const calls = installFetch(
       jsonResponse({ result: false, ids: [] }),
       new Error('fictional transport failure'),
@@ -375,7 +370,6 @@ describe('createRaindropAdapter', () => {
       result: {
         error: {
           code: 'unavailable',
-          outcome: 'unknown',
           retryable: false,
         },
       },
@@ -383,7 +377,7 @@ describe('createRaindropAdapter', () => {
     })
   })
 
-  it('marks a server error after create as an unknown outcome', async () => {
+  it('marks a server error after create as failed', async () => {
     const calls = installFetch(
       jsonResponse({ result: false, ids: [] }),
       jsonResponse({ error: 'temporary failure' }, 503),
@@ -398,7 +392,6 @@ describe('createRaindropAdapter', () => {
       result: {
         error: {
           code: 'unavailable',
-          outcome: 'unknown',
           retryable: false,
         },
       },
@@ -406,7 +399,7 @@ describe('createRaindropAdapter', () => {
     })
   })
 
-  it('marks an unparseable create response as an unknown outcome', async () => {
+  it('marks an unparseable create response as failed', async () => {
     const calls = installFetch(
       jsonResponse({ result: false, ids: [] }),
       new Response('{unreadable', { status: 200 }),
@@ -421,7 +414,6 @@ describe('createRaindropAdapter', () => {
       result: {
         error: {
           code: 'invalid_response',
-          outcome: 'unknown',
           retryable: false,
         },
       },

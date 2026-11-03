@@ -59,8 +59,6 @@ export const Preview: Story = {
           isLoadingMetadata: true,
           metadataErrorMessage: null,
           canPublish: false,
-          canRetryFailed: false,
-          hasRetryableTargets: false,
           canOpenX: false,
           xIntentHref: null,
           deliveryState: 'idle',
@@ -68,7 +66,6 @@ export const Preview: Story = {
           authenticationRequired: false,
           signInHref: null,
           onPublish: () => undefined,
-          onRetryFailed: () => undefined,
           onRetryDeliverySave: () => undefined,
           onRetryMetadata: () => undefined,
         }}

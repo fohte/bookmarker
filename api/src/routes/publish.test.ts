@@ -125,7 +125,6 @@ describe('POST /api/publish', () => {
     const publishMastodon = vi.fn(() =>
       errAsync<DeliveryResult, PublishAdapterError>({
         code: 'rejected',
-        outcome: 'failed',
         retryable: true,
       }),
     )
@@ -254,7 +253,7 @@ describe('POST /api/publish', () => {
     })
   })
 
-  it('turns an adapter result for another operation into unknown', async () => {
+  it('marks an adapter result for another operation as failed', async () => {
     const wrongResult: DeliveryResult = {
       ...success(hatenaTarget),
       operationId: '6a3448e4-8ec1-4bcb-af69-9c7f1ec46e04',
@@ -274,9 +273,10 @@ describe('POST /api/publish', () => {
           {
             destination: 'hatena',
             operationId: hatenaTarget.operationId,
-            status: 'unknown',
+            status: 'failed',
             retryable: false,
-            message: 'Delivery could not be confirmed.',
+            message:
+              'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
           },
         ],
       },

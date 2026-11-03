@@ -13,7 +13,6 @@ import {
   effectiveDestinationComment,
   isRaindropCollectionAvailable,
 } from '#features/editor/compose-destination'
-import { selectRetryTargets } from '#features/publish/index'
 
 export type ComposeDeliveryPlan = {
   request: PublishRequest
@@ -56,34 +55,6 @@ function createNewPublishTarget(
         options: destination.options,
       }
   }
-}
-
-function optionsKey(options: PublishTarget['options']): string {
-  return JSON.stringify(
-    Object.entries(options).sort(([left], [right]) =>
-      left.localeCompare(right),
-    ),
-  )
-}
-
-function hasSamePayload(
-  article: PublishArticle,
-  target: NewPublishTarget,
-  snapshot: BookmarkDraft['delivery'][number],
-): boolean {
-  return (
-    article.url === snapshot.article.url &&
-    article.title === snapshot.article.title &&
-    target.destination === snapshot.target.destination &&
-    target.comment === snapshot.target.comment &&
-    optionsKey(target.options) === optionsKey(snapshot.target.options)
-  )
-}
-
-function blocksDestination(
-  snapshot: BookmarkDraft['delivery'][number],
-): boolean {
-  return snapshot.result === undefined || snapshot.result.status !== 'failed'
 }
 
 const isSelectedPublishDestination = (
@@ -153,13 +124,12 @@ export function createNewDeliveryPlan(
       destination,
     )
     const target = createNewPublishTarget(destination, comment)
-    const history = draft.delivery.filter(
-      (snapshot) => snapshot.target.destination === destination.destination,
+    const hasSucceeded = draft.delivery.some(
+      (snapshot) =>
+        snapshot.target.destination === destination.destination &&
+        snapshot.result?.status === 'succeeded',
     )
-    if (
-      history.some(blocksDestination) ||
-      history.some((snapshot) => hasSamePayload(article, target, snapshot))
-    ) {
+    if (hasSucceeded) {
       continue
     }
 
@@ -195,91 +165,10 @@ export function createNewDeliveryPlan(
   }
 
   if (targets.length === 0) {
-    const history = selected.flatMap((destination) =>
-      draft.delivery.filter(
-        (snapshot) => snapshot.target.destination === destination.destination,
-      ),
-    )
-    if (
-      history.some(
-        (snapshot) =>
-          snapshot.result === undefined || snapshot.result.status === 'unknown',
-      )
-    ) {
-      return err(
-        'A selected destination has an unconfirmed outcome. Check it directly at the service; this editor cannot resend it.',
-      )
-    }
-    if (history.some((snapshot) => snapshot.result?.status === 'succeeded')) {
-      return err(
-        'A selected destination already has a successful delivery and cannot be sent again.',
-      )
-    }
-    if (getRetryDeliveryTargetsFromHistory(history).length > 0) {
-      return err('Retry eligible failed attempts using their saved content.')
-    }
-    return err(
-      'Edit the content before starting a new attempt. This failed result cannot be retried.',
-    )
+    return err('All selected destinations already have a successful delivery.')
   }
 
   return parsePlan(article, targets)
-}
-
-export function getRetryDeliveryTargetsFromHistory(
-  delivery: readonly BookmarkDraft['delivery'][number][],
-): PublishTarget[] {
-  const blockedDestinations = new Set(
-    delivery
-      .filter(blocksDestination)
-      .map((snapshot) => snapshot.target.destination),
-  )
-  const retryableHistory = delivery.filter(
-    (snapshot) => !blockedDestinations.has(snapshot.target.destination),
-  )
-
-  return selectRetryTargets(
-    retryableHistory.map((snapshot) => snapshot.target),
-    retryableHistory.flatMap((snapshot) =>
-      snapshot.result === undefined ? [] : [snapshot.result],
-    ),
-  )
-}
-
-export function getRetryDeliveryTargets(draft: BookmarkDraft): PublishTarget[] {
-  return getRetryDeliveryTargetsFromHistory(draft.delivery)
-}
-
-export function createRetryDeliveryPlans(
-  draft: BookmarkDraft,
-  metadata: DestinationMetadata,
-  targets = getRetryDeliveryTargets(draft),
-): Result<ComposeDeliveryPlan[], string> {
-  const snapshots = targets.flatMap((target) => {
-    const matches = draft.delivery.filter(
-      (snapshot) => operationKey(snapshot.target) === operationKey(target),
-    )
-    const [snapshot] = matches
-    return matches.length === 1 && snapshot !== undefined ? [snapshot] : []
-  })
-  const retryableSnapshots = snapshots.filter((snapshot) =>
-    isConfigured(snapshot.target.destination, metadata),
-  )
-
-  if (retryableSnapshots.length === 0) {
-    return err(
-      'There are no connected failed destinations that can be retried.',
-    )
-  }
-
-  const plans: ComposeDeliveryPlan[] = []
-  for (const snapshot of retryableSnapshots) {
-    const plan = parsePlan(snapshot.article, [snapshot.target])
-    if (plan.isErr()) return err(plan.error)
-    plans.push(plan.value)
-  }
-
-  return ok(plans)
 }
 
 export function appendPendingDeliverySnapshots(
@@ -293,28 +182,14 @@ export function appendPendingDeliverySnapshots(
   }
 }
 
-export function makeRetryPending(
-  draft: BookmarkDraft,
-  target: PublishTarget,
-): BookmarkDraft {
-  const key = operationKey(target)
-  return {
-    ...draft,
-    delivery: draft.delivery.map((snapshot) =>
-      operationKey(snapshot.target) === key
-        ? { article: snapshot.article, target: snapshot.target }
-        : snapshot,
-    ),
-    updatedAt: new Date().toISOString(),
-  }
-}
-
-function unknownResult(target: PublishTarget): DeliveryResult {
+function failedResult(target: PublishTarget): DeliveryResult {
   return {
     destination: target.destination,
     operationId: target.operationId,
-    status: 'unknown',
+    status: 'failed',
     retryable: false,
+    message:
+      'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
   }
 }
 
@@ -341,7 +216,7 @@ export function applyDeliveryResults(
         article: snapshot.article,
         target: snapshot.target,
         result:
-          matches.length === 1 ? matches[0] : unknownResult(snapshot.target),
+          matches.length === 1 ? matches[0] : failedResult(snapshot.target),
       }
     }),
     updatedAt: new Date().toISOString(),

@@ -65,8 +65,6 @@ const handlers: Omit<ComposeScreenProps, 'state' | 'sourceUrl'> = {
     isLoadingMetadata: false,
     metadataErrorMessage: null,
     canPublish: true,
-    canRetryFailed: false,
-    hasRetryableTargets: false,
     canOpenX: false,
     xIntentHref: null,
     deliveryState: 'idle',
@@ -74,7 +72,6 @@ const handlers: Omit<ComposeScreenProps, 'state' | 'sourceUrl'> = {
     authenticationRequired: false,
     signInHref: null,
     onPublish: () => undefined,
-    onRetryFailed: () => undefined,
     onRetryDeliverySave: () => undefined,
     onRetryMetadata: () => undefined,
   },
@@ -426,15 +423,16 @@ const mixedOutcomeDraft: BookmarkDraft = {
       result: {
         destination: 'mastodon',
         operationId: '00000000-0000-4000-8000-000000000032',
-        status: 'unknown',
+        status: 'failed',
         retryable: false,
-        message: 'The service response could not be confirmed.',
+        message:
+          'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
       },
     },
   ],
 }
 
-export const UnknownDeliveryOutcome: Story = {
+export const DeliveryFailure: Story = {
   args: {
     ...compactStoryArgs,
     state: {
@@ -443,5 +441,5 @@ export const UnknownDeliveryOutcome: Story = {
       activeDraft: mixedOutcomeDraft,
     },
   },
-  name: 'The editor keeps an unknown outcome warning visible outside delivery details.',
+  name: 'The editor keeps a failed delivery warning visible outside delivery details.',
 }

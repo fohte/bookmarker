@@ -77,7 +77,6 @@ const Harness = ({ draft: activeDraft, state, canEdit }: HarnessProps) => {
       )}
       onPublish={noop}
       onRetryDeliverySave={noop}
-      onRetryFailed={noop}
       onRetryMetadata={onLoadMetadata}
     />
   )

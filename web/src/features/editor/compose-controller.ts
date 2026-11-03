@@ -231,10 +231,6 @@ export class ComposeController {
     return this.#delivery.publishSelectedDestinations(metadata)
   }
 
-  retryFailedDeliveries(metadata: DestinationMetadata): Promise<void> {
-    return this.#delivery.retryFailedDeliveries(metadata)
-  }
-
   retryDeliverySave(): Promise<void> {
     if (this.#disposed) return Promise.resolve()
     return this.#delivery.retryDeliverySave()
