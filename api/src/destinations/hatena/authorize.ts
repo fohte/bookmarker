@@ -1,4 +1,4 @@
-import { open, realpath, unlink } from 'node:fs/promises'
+import { chmod, mkdir, open, realpath, unlink } from 'node:fs/promises'
 import {
   basename,
   dirname,
@@ -266,16 +266,66 @@ export const resolveOutputPathOutsideRepository = (
   }
 
   const absoluteOutputPath = resolve(outputPath)
-  return ResultAsync.fromPromise(
-    Promise.all([
-      realpath(dirname(absoluteOutputPath)),
-      realpath(repositoryRoot),
-    ]),
-    () => 'invalid_output_path' as const,
-  ).andThen(([outputDirectory, absoluteRepositoryRoot]) => {
-    const resolvedPath = join(outputDirectory, basename(absoluteOutputPath))
-    return isWithinDirectory(absoluteRepositoryRoot, resolvedPath)
-      ? errAsync<string, 'invalid_output_path'>('invalid_output_path')
-      : okAsync(resolvedPath)
-  })
+  const resolveExistingAncestor = (
+    directory: string,
+    missingDirectories: string[] = [],
+  ): ResultAsync<
+    { path: string; missingDirectories: string[] },
+    'invalid_output_path'
+  > =>
+    ResultAsync.fromPromise(realpath(directory), (error) => error)
+      .andThen((path) => okAsync({ path, missingDirectories }))
+      .orElse((error) => {
+        if (
+          typeof error === 'object' &&
+          error !== null &&
+          'code' in error &&
+          error.code === 'ENOENT' &&
+          dirname(directory) !== directory
+        ) {
+          return resolveExistingAncestor(dirname(directory), [
+            basename(directory),
+            ...missingDirectories,
+          ])
+        }
+
+        return errAsync<
+          { path: string; missingDirectories: string[] },
+          'invalid_output_path'
+        >('invalid_output_path')
+      })
+
+  return resolveExistingAncestor(dirname(absoluteOutputPath)).andThen(
+    ({ path: existingAncestor, missingDirectories }) => {
+      const outputDirectory = join(existingAncestor, ...missingDirectories)
+      const resolvedPath = join(outputDirectory, basename(absoluteOutputPath))
+
+      return ResultAsync.fromPromise(
+        realpath(repositoryRoot),
+        () => 'invalid_output_path' as const,
+      ).andThen((absoluteRepositoryRoot) =>
+        isWithinDirectory(absoluteRepositoryRoot, resolvedPath)
+          ? errAsync<string, 'invalid_output_path'>('invalid_output_path')
+          : ResultAsync.fromPromise(
+              mkdir(outputDirectory, { recursive: true, mode: 0o700 }).then(
+                async () => {
+                  await Promise.all(
+                    missingDirectories.map((_directory, index) =>
+                      chmod(
+                        join(
+                          existingAncestor,
+                          ...missingDirectories.slice(0, index + 1),
+                        ),
+                        0o700,
+                      ),
+                    ),
+                  )
+                  return resolvedPath
+                },
+              ),
+              () => 'invalid_output_path' as const,
+            ),
+      )
+    },
+  )
 }

@@ -17,7 +17,9 @@ const authorizationErrorMessages = {
 } as const
 
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url))
-const [option, outputArgument, ...remainingArguments] = process.argv.slice(2)
+const commandArguments = process.argv.slice(2)
+const [option, outputArgument, ...remainingArguments] =
+  commandArguments[0] === '--' ? commandArguments.slice(1) : commandArguments
 
 if (
   option !== '--output' ||
@@ -25,7 +27,7 @@ if (
   remainingArguments.length > 0
 ) {
   process.stderr.write(
-    'Usage: pnpm --filter api authorize:hatena -- --output <absolute-path>\n',
+    'Usage: pnpm --filter api authorize:hatena --output <absolute-path>\n',
   )
   process.exitCode = 1
 } else {

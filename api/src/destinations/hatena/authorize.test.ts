@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import {
   mkdir,
   mkdtemp,
@@ -5,10 +6,12 @@ import {
   realpath,
   rm,
   stat,
+  symlink,
   writeFile,
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { okAsync } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -268,10 +271,17 @@ describe('authorizeHatena', () => {
     const directory = await makeTemporaryDirectory()
     const repository = join(directory, 'repository')
     const outside = join(directory, 'outside')
+    const linkedRepository = join(directory, 'linked-repository')
     await mkdir(repository)
     await mkdir(outside)
-    const outputPath = join(outside, 'credentials.json')
-    const resolvedOutputPath = join(await realpath(outside), 'credentials.json')
+    await symlink(repository, linkedRepository)
+    const outputPath = join(outside, 'nested', 'deeper', 'credentials.json')
+    const resolvedOutputPath = join(
+      await realpath(outside),
+      'nested',
+      'deeper',
+      'credentials.json',
+    )
     const localPathResult = await resolveOutputPathOutsideRepository(
       join(repository, 'credentials.json'),
       repository,
@@ -286,11 +296,73 @@ describe('authorizeHatena', () => {
       (path) => ({ kind: 'success' as const, path }),
       (error) => ({ kind: 'error' as const, error }),
     )
+    const linkedLocalPathResult = await resolveOutputPathOutsideRepository(
+      join(linkedRepository, 'not-created', 'credentials.json'),
+      repository,
+    ).match(
+      (path) => ({ kind: 'success' as const, path }),
+      (error) => ({ kind: 'error' as const, error }),
+    )
+    const createdDirectoryModes = await Promise.all(
+      [join(outside, 'nested'), join(outside, 'nested', 'deeper')].map(
+        async (path) => (await stat(path)).mode & 0o777,
+      ),
+    )
 
-    const summarizePathResults = () => ({ localPathResult, outsidePathResult })
+    const summarizePathResults = () => ({
+      localPathResult,
+      outsidePathResult,
+      linkedLocalPathResult,
+      createdDirectoryModes,
+    })
     expect(summarizePathResults()).toEqual({
       localPathResult: { kind: 'error', error: 'invalid_output_path' },
       outsidePathResult: { kind: 'success', path: resolvedOutputPath },
+      linkedLocalPathResult: {
+        kind: 'error',
+        error: 'invalid_output_path',
+      },
+      createdDirectoryModes: [0o700, 0o700],
+    })
+  })
+
+  it('accepts output arguments with or without a leading separator', () => {
+    const repositoryRoot = fileURLToPath(
+      new URL('../../../../', import.meta.url),
+    )
+    const apiRoot = fileURLToPath(new URL('../../../', import.meta.url))
+    const scriptPath = fileURLToPath(
+      new URL('../../../scripts/authorize-hatena.ts', import.meta.url),
+    )
+    const outputPath = join(repositoryRoot, 'credentials.json')
+    const invoke = (args: string[]) => {
+      const result = spawnSync(
+        process.execPath,
+        ['--import', 'tsx', scriptPath, ...args, outputPath],
+        { cwd: apiRoot, encoding: 'utf8' },
+      )
+      return {
+        status: result.status,
+        stdout: result.stdout,
+        stderr: result.stderr,
+      }
+    }
+
+    const summarizeCliInvocations = () => ({
+      withoutSeparator: invoke(['--output']),
+      withSeparator: invoke(['--', '--output']),
+    })
+    expect(summarizeCliInvocations()).toEqual({
+      withoutSeparator: {
+        status: 1,
+        stdout: '',
+        stderr: 'Choose an absolute output file path outside the repository.\n',
+      },
+      withSeparator: {
+        status: 1,
+        stdout: '',
+        stderr: 'Choose an absolute output file path outside the repository.\n',
+      },
     })
   })
 
