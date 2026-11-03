@@ -21,7 +21,7 @@ The CLI requests the `read_public,read_private,write_public,write_private` scope
 Set `HATENA_CREDENTIALS_FILE` to the file created above. The commands below pass each value to AWS CLI through standard input so the credential values do not appear in shell history or process arguments.
 
 ```sh
-HATENA_CREDENTIALS_FILE="$HOME/.config/bookmarker/hatena.json"
+HATENA_CREDENTIALS_FILE="$HOME/.config/hatena/credentials.json"
 
 put_hatena_parameter() {
   local suffix="$1"
