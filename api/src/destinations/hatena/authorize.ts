@@ -257,47 +257,55 @@ const isWithinDirectory = (directory: string, path: string): boolean => {
   )
 }
 
-export const resolveOutputPathOutsideRepository = (
+type ExistingAncestor = { path: string; missingDirectories: string[] }
+
+type OutputPathResolution = ExistingAncestor & {
+  outputDirectory: string
+  resolvedPath: string
+}
+
+const resolveExistingAncestor = (
+  directory: string,
+  missingDirectories: string[] = [],
+): ResultAsync<ExistingAncestor, 'invalid_output_path'> =>
+  ResultAsync.fromPromise(realpath(directory), (cause) => ({ cause }))
+    .map((path) => ({ path, missingDirectories }))
+    .orElse(({ cause }) => {
+      if (
+        typeof cause === 'object' &&
+        cause !== null &&
+        'code' in cause &&
+        cause.code === 'ENOENT' &&
+        dirname(directory) !== directory
+      ) {
+        return resolveExistingAncestor(dirname(directory), [
+          basename(directory),
+          ...missingDirectories,
+        ])
+      }
+
+      return errAsync<ExistingAncestor, 'invalid_output_path'>(
+        'invalid_output_path',
+      )
+    })
+
+const resolveOutputPathDetails = (
   outputPath: string,
   repositoryRoot: string,
-): ResultAsync<string, 'invalid_output_path'> => {
+): ResultAsync<OutputPathResolution, 'invalid_output_path'> => {
   if (!isAbsolute(outputPath)) {
-    return errAsync<string, 'invalid_output_path'>('invalid_output_path')
+    return errAsync<OutputPathResolution, 'invalid_output_path'>(
+      'invalid_output_path',
+    )
   }
 
   const absoluteOutputPath = resolve(outputPath)
-  const resolveExistingAncestor = (
-    directory: string,
-    missingDirectories: string[] = [],
-  ): ResultAsync<
-    { path: string; missingDirectories: string[] },
-    'invalid_output_path'
-  > =>
-    ResultAsync.fromPromise(realpath(directory), (error) => error)
-      .andThen((path) => okAsync({ path, missingDirectories }))
-      .orElse((error) => {
-        if (
-          typeof error === 'object' &&
-          error !== null &&
-          'code' in error &&
-          error.code === 'ENOENT' &&
-          dirname(directory) !== directory
-        ) {
-          return resolveExistingAncestor(dirname(directory), [
-            basename(directory),
-            ...missingDirectories,
-          ])
-        }
-
-        return errAsync<
-          { path: string; missingDirectories: string[] },
-          'invalid_output_path'
-        >('invalid_output_path')
-      })
-
   return resolveExistingAncestor(dirname(absoluteOutputPath)).andThen(
-    ({ path: existingAncestor, missingDirectories }) => {
-      const outputDirectory = join(existingAncestor, ...missingDirectories)
+    (existingAncestor) => {
+      const outputDirectory = join(
+        existingAncestor.path,
+        ...existingAncestor.missingDirectories,
+      )
       const resolvedPath = join(outputDirectory, basename(absoluteOutputPath))
 
       return ResultAsync.fromPromise(
@@ -305,27 +313,50 @@ export const resolveOutputPathOutsideRepository = (
         () => 'invalid_output_path' as const,
       ).andThen((absoluteRepositoryRoot) =>
         isWithinDirectory(absoluteRepositoryRoot, resolvedPath)
-          ? errAsync<string, 'invalid_output_path'>('invalid_output_path')
-          : ResultAsync.fromPromise(
-              mkdir(outputDirectory, { recursive: true, mode: 0o700 }).then(
-                async () => {
-                  await Promise.all(
-                    missingDirectories.map((_directory, index) =>
-                      chmod(
-                        join(
-                          existingAncestor,
-                          ...missingDirectories.slice(0, index + 1),
-                        ),
-                        0o700,
-                      ),
-                    ),
-                  )
-                  return resolvedPath
-                },
-              ),
-              () => 'invalid_output_path' as const,
-            ),
+          ? errAsync<OutputPathResolution, 'invalid_output_path'>(
+              'invalid_output_path',
+            )
+          : okAsync({ ...existingAncestor, outputDirectory, resolvedPath }),
       )
     },
   )
 }
+
+export const resolveOutputPathOutsideRepository = (
+  outputPath: string,
+  repositoryRoot: string,
+): ResultAsync<string, 'invalid_output_path'> =>
+  resolveOutputPathDetails(outputPath, repositoryRoot).map(
+    ({ resolvedPath }) => resolvedPath,
+  )
+
+const createPrivateDirectories = (
+  resolution: OutputPathResolution,
+): ResultAsync<undefined, 'output_directory_failed'> => {
+  const createdDirectories = resolution.missingDirectories.map(
+    (_directory, index) =>
+      join(
+        resolution.path,
+        ...resolution.missingDirectories.slice(0, index + 1),
+      ),
+  )
+
+  return ResultAsync.fromPromise(
+    mkdir(resolution.outputDirectory, { recursive: true, mode: 0o700 })
+      .then(() =>
+        Promise.all(
+          createdDirectories.map((directory) => chmod(directory, 0o700)),
+        ),
+      )
+      .then(() => undefined),
+    () => 'output_directory_failed' as const,
+  )
+}
+
+export const prepareOutputPathOutsideRepository = (
+  outputPath: string,
+  repositoryRoot: string,
+): ResultAsync<string, 'invalid_output_path' | 'output_directory_failed'> =>
+  resolveOutputPathDetails(outputPath, repositoryRoot).andThen((resolution) =>
+    createPrivateDirectories(resolution).map(() => resolution.resolvedPath),
+  )

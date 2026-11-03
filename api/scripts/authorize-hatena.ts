@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url'
 
 import {
   authorizeHatena,
-  resolveOutputPathOutsideRepository,
+  prepareOutputPathOutsideRepository,
   writeCredentialsFile,
 } from '#destinations/hatena/authorize'
 import { promptHidden } from '#destinations/hatena/terminal'
@@ -31,14 +31,16 @@ if (
   )
   process.exitCode = 1
 } else {
-  const resolvedPath = await resolveOutputPathOutsideRepository(
+  const resolvedPath = await prepareOutputPathOutsideRepository(
     outputArgument,
     repositoryRoot,
   )
 
   if (resolvedPath.isErr()) {
     process.stderr.write(
-      'Choose an absolute output file path outside the repository.\n',
+      resolvedPath.error === 'invalid_output_path'
+        ? 'Choose an absolute output file path outside the repository.\n'
+        : 'The output directory could not be created.\n',
     )
     process.exitCode = 1
   } else {

@@ -19,6 +19,7 @@ import { z } from 'zod'
 
 import {
   authorizeHatena,
+  prepareOutputPathOutsideRepository,
   resolveOutputPathOutsideRepository,
   writeCredentialsFile,
 } from '#destinations/hatena/authorize'
@@ -289,7 +290,7 @@ describe('authorizeHatena', () => {
       (path) => ({ kind: 'success' as const, path }),
       (error) => ({ kind: 'error' as const, error }),
     )
-    const outsidePathResult = await resolveOutputPathOutsideRepository(
+    const outsidePathResult = await prepareOutputPathOutsideRepository(
       outputPath,
       repository,
     ).match(
