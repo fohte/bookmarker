@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process'
 import {
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   realpath,
   rm,
@@ -303,6 +304,7 @@ describe('authorizeHatena', () => {
       (path) => ({ kind: 'success' as const, path }),
       (error) => ({ kind: 'error' as const, error }),
     )
+    const repositoryEntriesAfterRejection = await readdir(repository)
     const createdDirectoryModes = await Promise.all(
       [join(outside, 'nested'), join(outside, 'nested', 'deeper')].map(
         async (path) => (await stat(path)).mode & 0o777,
@@ -313,6 +315,7 @@ describe('authorizeHatena', () => {
       localPathResult,
       outsidePathResult,
       linkedLocalPathResult,
+      repositoryEntriesAfterRejection,
       createdDirectoryModes,
     })
     expect(summarizePathResults()).toEqual({
@@ -322,6 +325,7 @@ describe('authorizeHatena', () => {
         kind: 'error',
         error: 'invalid_output_path',
       },
+      repositoryEntriesAfterRejection: [],
       createdDirectoryModes: [0o700, 0o700],
     })
   })
