@@ -267,6 +267,15 @@ type OutputPathResolution = ExistingAncestor & {
 type OutputPathResolutionError =
   'invalid_output_path' | 'output_path_resolution_failed'
 
+const isNotFound = (cause: unknown): boolean =>
+  typeof cause === 'object' &&
+  cause !== null &&
+  'code' in cause &&
+  cause.code === 'ENOENT'
+
+const outputPathError = (error: OutputPathResolutionError) =>
+  errAsync<ExistingAncestor, OutputPathResolutionError>(error)
+
 const resolveExistingAncestor = (
   directory: string,
   missingDirectories: string[] = [],
@@ -274,22 +283,19 @@ const resolveExistingAncestor = (
   ResultAsync.fromPromise(realpath(directory), (cause) => ({ cause }))
     .map((path) => ({ path, missingDirectories }))
     .orElse(({ cause }) => {
-      if (typeof cause === 'object' && cause !== null && 'code' in cause) {
-        if (cause.code === 'ENOENT') {
-          return dirname(directory) !== directory
-            ? resolveExistingAncestor(dirname(directory), [
-                basename(directory),
-                ...missingDirectories,
-              ])
-            : errAsync<ExistingAncestor, OutputPathResolutionError>(
-                'invalid_output_path',
-              )
-        }
+      if (!isNotFound(cause)) {
+        return outputPathError('output_path_resolution_failed')
       }
 
-      return errAsync<ExistingAncestor, OutputPathResolutionError>(
-        'output_path_resolution_failed',
-      )
+      const parentDirectory = dirname(directory)
+      if (parentDirectory === directory) {
+        return outputPathError('invalid_output_path')
+      }
+
+      return resolveExistingAncestor(parentDirectory, [
+        basename(directory),
+        ...missingDirectories,
+      ])
     })
 
 const resolveOutputPathDetails = (
