@@ -14,29 +14,16 @@ export const raindropFailed = (
   retryable = false,
 ): PublishAdapterError => ({
   code,
-  outcome: 'failed',
   retryable,
-})
-
-export const raindropUnknown = (
-  code: PublishAdapterError['code'],
-): PublishAdapterError => ({
-  code,
-  outcome: 'unknown',
-  retryable: false,
 })
 
 const unavailableFailure = (mode: RequestMode): PublishAdapterError =>
   mode === 'write'
-    ? raindropUnknown('unavailable')
+    ? raindropFailed('unavailable')
     : raindropFailed('unavailable', true)
 
-export const raindropInvalidResponse = (
-  mode: RequestMode,
-): PublishAdapterError =>
-  mode === 'write'
-    ? raindropUnknown('invalid_response')
-    : raindropFailed('invalid_response')
+export const raindropInvalidResponse = (): PublishAdapterError =>
+  raindropFailed('invalid_response')
 
 const cancelAndFail = (
   cancel: () => Promise<unknown> | undefined,
@@ -60,7 +47,7 @@ const statusFailure = (
 
   if (status === 408 || status >= 500) {
     return mode === 'write'
-      ? raindropUnknown('unavailable')
+      ? raindropFailed('unavailable')
       : raindropFailed('unavailable', true)
   }
 
@@ -116,13 +103,13 @@ const readResponseBody = (
 
         const rawChunk: unknown = value
         if (!(rawChunk instanceof Uint8Array)) {
-          return errAsync(raindropInvalidResponse(mode))
+          return errAsync(raindropInvalidResponse())
         }
 
         const nextTotalBytes = totalBytes + rawChunk.byteLength
 
         if (nextTotalBytes > maximumResponseBytes) {
-          const error = raindropInvalidResponse(mode)
+          const error = raindropInvalidResponse()
           return cancelAndFail(() => reader.cancel(), error)
         }
 
@@ -168,7 +155,7 @@ export const requestRaindropJson = (
     return readResponseBody(response, mode).andThen((text) =>
       ResultAsync.fromPromise(
         Promise.resolve().then(() => JSON.parse(text) as unknown),
-        () => raindropInvalidResponse(mode),
+        () => raindropInvalidResponse(),
       ),
     )
   })

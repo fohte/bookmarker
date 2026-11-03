@@ -13,7 +13,7 @@ import { useState } from 'react'
 
 import { deliveryStatus } from '#components/compose-delivery-status'
 import { destinationNames } from '#components/compose-destination-labels'
-import { getRetryDeliveryTargetsFromHistory } from '#features/editor/compose-delivery-command'
+import { destinationHasSucceeded } from '#features/editor/compose-delivery-history'
 import type { ComposeDeliveryState } from '#features/editor/compose-state'
 
 export type ComposeDeliveryPanelProps = {
@@ -21,8 +21,6 @@ export type ComposeDeliveryPanelProps = {
   isLoadingMetadata: boolean
   metadataErrorMessage: string | null
   canPublish: boolean
-  canRetryFailed: boolean
-  hasRetryableTargets: boolean
   canOpenX: boolean
   xSelected?: boolean
   xIntentHref: string | null
@@ -32,7 +30,6 @@ export type ComposeDeliveryPanelProps = {
   signInHref: string | null
   defaultResultsOpen?: boolean
   onPublish: () => void
-  onRetryFailed: () => void
   onRetryDeliverySave: () => void
   onRetryMetadata: () => void
 }
@@ -51,8 +48,6 @@ export function ComposeDeliveryPanel({
   isLoadingMetadata,
   metadataErrorMessage,
   canPublish,
-  canRetryFailed,
-  hasRetryableTargets,
   canOpenX,
   xSelected = false,
   xIntentHref,
@@ -62,44 +57,22 @@ export function ComposeDeliveryPanel({
   signInHref,
   defaultResultsOpen,
   onPublish,
-  onRetryFailed,
   onRetryDeliverySave,
   onRetryMetadata,
 }: ComposeDeliveryPanelProps) {
   const [resultsOpen, setResultsOpen] = useState(defaultResultsOpen ?? false)
-  const retryableOperationKeys = new Set(
-    getRetryDeliveryTargetsFromHistory(delivery).map(
-      (target) => `${target.destination}:${target.operationId}`,
-    ),
-  )
-  const unknownSnapshots = delivery.filter(
-    (snapshot) =>
-      snapshot.result?.status === 'unknown' ||
-      (snapshot.result === undefined && deliveryState === 'idle'),
-  )
-  const unknownDestinationNames = [
-    ...new Set(
-      unknownSnapshots.map(
-        (snapshot) => destinationNames[snapshot.target.destination],
-      ),
-    ),
-  ]
   const outcomeCounts = {
     succeeded: delivery.filter(
       (snapshot) => snapshot.result?.status === 'succeeded',
     ).length,
     failed: delivery.filter((snapshot) => snapshot.result?.status === 'failed')
       .length,
-    unknown: unknownSnapshots.length,
   }
   const outcomeSummary = [
     outcomeCounts.succeeded > 0
       ? `${String(outcomeCounts.succeeded)} succeeded`
       : null,
     outcomeCounts.failed > 0 ? `${String(outcomeCounts.failed)} failed` : null,
-    outcomeCounts.unknown > 0
-      ? `${String(outcomeCounts.unknown)} outcome unknown`
-      : null,
   ]
     .filter((value) => value !== null)
     .join(' · ')
@@ -177,7 +150,7 @@ export function ComposeDeliveryPanel({
         {authenticationRequired && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="min-w-0 text-muted-foreground" role="alert">
-              Sign in again to continue. Unknown outcomes cannot be resent.
+              Sign in again to continue.
             </p>
             {signInHref === null ? (
               <p role="status">Save the latest draft before signing in.</p>
@@ -196,32 +169,7 @@ export function ComposeDeliveryPanel({
             Results: {outcomeSummary}
           </p>
         )}
-        {unknownSnapshots.length > 0 && (
-          <p className="font-medium text-foreground" role="alert">
-            Outcome unknown for {unknownDestinationNames.join(', ')}. Check at
-            the service; this editor cannot resend it.
-          </p>
-        )}
       </div>
-
-      {hasRetryableTargets && (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            disabled={!canRetryFailed}
-            onClick={onRetryFailed}
-            size="xs"
-            variant="outline"
-          >
-            Retry failed destinations
-          </Button>
-          {!canRetryFailed && (
-            <p className="text-2xs text-muted-foreground" role="status">
-              Retry is available when the draft is editable and the failed
-              destination is connected.
-            </p>
-          )}
-        </div>
-      )}
 
       <div className="flex min-w-0 items-center gap-2">
         <Button
@@ -313,8 +261,7 @@ export function ComposeDeliveryPanel({
             {authenticationRequired && (
               <div className="space-y-2 rounded-md border border-border p-3">
                 <p className="text-sm" role="alert">
-                  Sign in again to continue. Unknown outcomes can only be
-                  checked at the service and cannot be resent from this editor.
+                  Sign in again to continue.
                 </p>
                 {signInHref === null ? (
                   <p className="text-sm text-muted-foreground" role="status">
@@ -340,6 +287,10 @@ export function ComposeDeliveryPanel({
                   const snapshots = delivery.filter(
                     (item) => item.target.destination === destination,
                   )
+                  const hasSucceeded = destinationHasSucceeded(
+                    delivery,
+                    destination,
+                  )
                   return (
                     <li
                       key={destination}
@@ -358,9 +309,7 @@ export function ComposeDeliveryPanel({
                             const status = deliveryStatus(
                               snapshot,
                               deliveryState,
-                              retryableOperationKeys.has(
-                                `${snapshot.target.destination}:${snapshot.target.operationId}`,
-                              ),
+                              hasSucceeded,
                             )
                             return (
                               <li

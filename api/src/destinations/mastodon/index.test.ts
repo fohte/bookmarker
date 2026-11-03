@@ -128,7 +128,6 @@ describe('createMastodonAdapter', () => {
             publish: {
               error: {
                 code: 'not_configured',
-                outcome: 'failed',
                 retryable: false,
               },
             },
@@ -139,7 +138,6 @@ describe('createMastodonAdapter', () => {
             publish: {
               error: {
                 code: 'not_configured',
-                outcome: 'failed',
                 retryable: false,
               },
             },
@@ -150,7 +148,6 @@ describe('createMastodonAdapter', () => {
             publish: {
               error: {
                 code: 'not_configured',
-                outcome: 'failed',
                 retryable: false,
               },
             },
@@ -194,7 +191,6 @@ describe('createMastodonAdapter', () => {
           publish: {
             error: {
               code: 'not_configured',
-              outcome: 'failed',
               retryable: false,
             },
           },
@@ -364,11 +360,11 @@ describe('createMastodonAdapter', () => {
   it.each([
     {
       status: 401,
-      error: { code: 'unauthorized', outcome: 'failed', retryable: false },
+      error: { code: 'unauthorized', retryable: false },
     },
     {
       status: 422,
-      error: { code: 'rejected', outcome: 'failed', retryable: false },
+      error: { code: 'rejected', retryable: false },
     },
   ])(
     'maps a clear HTTP $status rejection to a safe failure',
@@ -399,14 +395,14 @@ describe('createMastodonAdapter', () => {
       },
       {
         result: {
-          error: { code: 'rate_limited', outcome: 'failed', retryable: true },
+          error: { code: 'rate_limited', retryable: true },
         },
         requestCount: 1,
       },
     )
   })
 
-  it('marks transport failures as unknown and never retries the write', async () => {
+  it('marks transport failures as failed and never retries the write', async () => {
     setConfig()
     const requests = stubFetch(() => Promise.reject(new Error(token)))
     const adapter = createMastodonAdapter()
@@ -418,14 +414,14 @@ describe('createMastodonAdapter', () => {
       },
       {
         result: {
-          error: { code: 'unavailable', outcome: 'unknown', retryable: false },
+          error: { code: 'unavailable', retryable: false },
         },
         requestCount: 1,
       },
     )
   })
 
-  it('maps an aborted write to unknown with the configured timeout', async () => {
+  it('maps an aborted write to failed with the configured timeout', async () => {
     setConfig()
     const timeoutController = new AbortController()
     let timeoutMs: number | undefined
@@ -472,7 +468,7 @@ describe('createMastodonAdapter', () => {
       },
       {
         result: {
-          error: { code: 'unavailable', outcome: 'unknown', retryable: false },
+          error: { code: 'unavailable', retryable: false },
         },
         requestCount: 1,
         timeoutMs: 10_000,
@@ -481,7 +477,7 @@ describe('createMastodonAdapter', () => {
     )
   })
 
-  it('marks a server error after the write as unknown', async () => {
+  it('marks a server error after the write as failed', async () => {
     setConfig()
     const requests = stubFetch(() =>
       jsonResponse({ error: 'private response' }, 503),
@@ -495,14 +491,14 @@ describe('createMastodonAdapter', () => {
       },
       {
         result: {
-          error: { code: 'unavailable', outcome: 'unknown', retryable: false },
+          error: { code: 'unavailable', retryable: false },
         },
         requestCount: 1,
       },
     )
   })
 
-  it('marks HTTP 408 after the write as unknown', async () => {
+  it('marks HTTP 408 after the write as failed', async () => {
     setConfig()
     const requests = stubFetch(() =>
       jsonResponse({ error: 'private response' }, 408),
@@ -516,7 +512,7 @@ describe('createMastodonAdapter', () => {
       },
       {
         result: {
-          error: { code: 'unavailable', outcome: 'unknown', retryable: false },
+          error: { code: 'unavailable', retryable: false },
         },
         requestCount: 1,
       },
@@ -541,7 +537,7 @@ describe('createMastodonAdapter', () => {
       },
       {
         result: {
-          error: { code: 'unavailable', outcome: 'unknown', retryable: false },
+          error: { code: 'unavailable', retryable: false },
         },
         requests: [
           {
@@ -566,7 +562,7 @@ describe('createMastodonAdapter', () => {
     )
   })
 
-  it('marks an unreadable successful response as unknown', async () => {
+  it('marks an unreadable successful response as failed', async () => {
     setConfig()
     const requests = stubFetch(() => jsonResponse({ url: 'not an ID' }))
     const adapter = createMastodonAdapter()
@@ -580,7 +576,6 @@ describe('createMastodonAdapter', () => {
         result: {
           error: {
             code: 'invalid_response',
-            outcome: 'unknown',
             retryable: false,
           },
         },
@@ -589,7 +584,7 @@ describe('createMastodonAdapter', () => {
     )
   })
 
-  it('marks a response over the body limit as unknown', async () => {
+  it('marks a response over the body limit as failed', async () => {
     setConfig()
     const requests = stubFetch(
       () =>
@@ -614,7 +609,6 @@ describe('createMastodonAdapter', () => {
         result: {
           error: {
             code: 'invalid_response',
-            outcome: 'unknown',
             retryable: false,
           },
         },

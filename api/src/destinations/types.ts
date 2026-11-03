@@ -17,7 +17,6 @@ type PublishAdapterErrorCode =
 
 export type PublishAdapterError = {
   code: PublishAdapterErrorCode
-  outcome: 'failed' | 'unknown'
   retryable: boolean
 }
 

@@ -25,13 +25,6 @@ export const DeliveryResultSchema = z.discriminatedUnion('status', [
       retryable: z.boolean(),
     })
     .strict(),
-  z
-    .object({
-      ...DeliveryResultFields,
-      status: z.literal('unknown'),
-      retryable: z.literal(false),
-    })
-    .strict(),
 ])
 
 export type DeliveryResult = z.infer<typeof DeliveryResultSchema>

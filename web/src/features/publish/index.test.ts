@@ -8,7 +8,6 @@ import {
   createXIntent,
   getDestinations,
   publishTargets,
-  selectRetryTargets,
 } from 'web/features/publish'
 
 const hatenaTarget: PublishTarget = {
@@ -93,39 +92,6 @@ afterEach(() => {
 })
 
 describe('publish client helpers', () => {
-  it('selects only retryable failed targets with matching destination and operation ID', () => {
-    const retryableFailure: DeliveryResult = {
-      destination: 'mastodon',
-      operationId: mastodonTarget.operationId,
-      status: 'failed',
-      retryable: true,
-      message: 'The destination rejected this article.',
-    }
-    const results: DeliveryResult[] = [
-      succeeded(hatenaTarget),
-      retryableFailure,
-      {
-        ...retryableFailure,
-        destination: 'hatena',
-        retryable: false,
-      },
-      {
-        ...retryableFailure,
-        operationId: '6a3448e4-8ec1-4bcb-af69-9c7f1ec46e04',
-      },
-      {
-        destination: 'raindrop',
-        operationId: 'c2d34d58-d795-4995-9acb-5c85a31e41c2',
-        status: 'unknown',
-        retryable: false,
-      },
-    ]
-
-    expect(selectRetryTargets([hatenaTarget, mastodonTarget], results)).toEqual(
-      [mastodonTarget],
-    )
-  })
-
   it('sends the prepared request once and restores results to request order', async () => {
     const fetchMock = installFetch(() =>
       response({
@@ -147,7 +113,7 @@ describe('publish client helpers', () => {
     })
   })
 
-  it('returns unknown for a missing response target while retaining a matched result', async () => {
+  it('marks a missing response target failed while retaining a matched result', async () => {
     installFetch(() => response({ results: [succeeded(hatenaTarget)] }))
 
     expect(await publishTargets(request)).toEqual({
@@ -156,9 +122,10 @@ describe('publish client helpers', () => {
         {
           destination: 'mastodon',
           operationId: mastodonTarget.operationId,
-          status: 'unknown',
+          status: 'failed',
           retryable: false,
-          message: 'Delivery could not be confirmed.',
+          message:
+            'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
         },
       ],
     })
@@ -220,15 +187,16 @@ describe('publish client helpers', () => {
         results: request.targets.map((target) => ({
           destination: target.destination,
           operationId: target.operationId,
-          status: 'unknown',
+          status: 'failed',
           retryable: false,
-          message: 'Delivery could not be confirmed.',
+          message:
+            'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
         })),
       },
     ])
   })
 
-  it('returns unknown without an authentication claim for transport failures', async () => {
+  it('records transport failures as failed without an authentication claim', async () => {
     const fetchMock = vi.fn(() =>
       Promise.reject(new TypeError('network failed')),
     )
@@ -238,9 +206,10 @@ describe('publish client helpers', () => {
       results: request.targets.map((target) => ({
         destination: target.destination,
         operationId: target.operationId,
-        status: 'unknown',
+        status: 'failed',
         retryable: false,
-        message: 'Delivery could not be confirmed.',
+        message:
+          'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
       })),
     })
   })
@@ -257,9 +226,10 @@ describe('publish client helpers', () => {
       results: request.targets.map((target) => ({
         destination: target.destination,
         operationId: target.operationId,
-        status: 'unknown',
+        status: 'failed',
         retryable: false,
-        message: 'Delivery could not be confirmed.',
+        message:
+          'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
       })),
       authenticationRequired: true,
     })
@@ -281,9 +251,10 @@ describe('publish client helpers', () => {
       results: request.targets.map((target) => ({
         destination: target.destination,
         operationId: target.operationId,
-        status: 'unknown',
+        status: 'failed',
         retryable: false,
-        message: 'Delivery could not be confirmed.',
+        message:
+          'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
       })),
       authenticationRequired: true,
     })

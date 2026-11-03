@@ -53,9 +53,10 @@ const delivery: BookmarkDraft['delivery'] = [
     result: {
       destination: 'raindrop',
       operationId: operationIds.third,
-      status: 'unknown',
+      status: 'failed',
       retryable: false,
-      message: 'The service response could not be confirmed.',
+      message:
+        'The delivery result could not be confirmed. Check whether the item reached the destination before publishing again.',
     },
   },
 ]
@@ -64,8 +65,6 @@ const controls: Omit<ComposeDeliveryPanelProps, 'delivery'> = {
   isLoadingMetadata: false,
   metadataErrorMessage: null,
   canPublish: true,
-  canRetryFailed: false,
-  hasRetryableTargets: false,
   canOpenX: false,
   xIntentHref: null,
   deliveryState: 'idle',
@@ -73,7 +72,6 @@ const controls: Omit<ComposeDeliveryPanelProps, 'delivery'> = {
   authenticationRequired: false,
   signInHref: null,
   onPublish: () => undefined,
-  onRetryFailed: () => undefined,
   onRetryDeliverySave: () => undefined,
   onRetryMetadata: () => undefined,
 }
@@ -96,51 +94,8 @@ export const MixedResults: Story = {
     delivery,
     defaultResultsOpen: true,
     deliveryState: 'sending',
-    canRetryFailed: true,
-    hasRetryableTargets: true,
-    onRetryFailed: () => undefined,
   },
-  name: 'The editor distinguishes in-progress, failed, and unknown results.',
-}
-
-export const EarlierFailureBlockedByUnknown: Story = {
-  args: {
-    delivery: [
-      {
-        article: { url: 'https://example.test/earlier-article' },
-        target: {
-          destination: 'hatena',
-          operationId: operationIds.first,
-          comment: 'The earlier fictional comment.',
-          options: { tags: ['earlier'], private: false },
-        },
-        result: {
-          destination: 'hatena',
-          operationId: operationIds.first,
-          status: 'failed',
-          retryable: true,
-        },
-      },
-      {
-        article: { url: 'https://example.test/later-article' },
-        target: {
-          destination: 'hatena',
-          operationId: operationIds.second,
-          comment: 'The later fictional comment.',
-          options: { tags: ['later'], private: false },
-        },
-        result: {
-          destination: 'hatena',
-          operationId: operationIds.second,
-          status: 'unknown',
-          retryable: false,
-        },
-      },
-    ],
-    defaultResultsOpen: true,
-    hasRetryableTargets: false,
-  },
-  name: 'The editor explains why an older failure cannot be retried after an unknown outcome.',
+  name: 'The editor distinguishes in-progress and failed results.',
 }
 
 export const Succeeded: Story = {
@@ -166,6 +121,54 @@ export const Succeeded: Story = {
     ],
   },
   name: 'The editor shows a saved successful result with its remote link.',
+}
+
+export const FailedBeforeSuccess: Story = {
+  args: {
+    defaultResultsOpen: true,
+    delivery: [
+      {
+        article: { url: 'https://example.test/article' },
+        target: {
+          destination: 'mastodon',
+          operationId: operationIds.second,
+          comment: 'A fictional comment.',
+          options: {
+            visibility: 'unlisted',
+            spoilerText: '',
+            sensitive: false,
+          },
+        },
+        result: {
+          destination: 'mastodon',
+          operationId: operationIds.second,
+          status: 'failed',
+          retryable: false,
+          message: 'The destination rejected the request.',
+        },
+      },
+      {
+        article: { url: 'https://example.test/article' },
+        target: {
+          destination: 'mastodon',
+          operationId: operationIds.third,
+          comment: 'A fictional comment.',
+          options: {
+            visibility: 'unlisted',
+            spoilerText: '',
+            sensitive: false,
+          },
+        },
+        result: {
+          destination: 'mastodon',
+          operationId: operationIds.third,
+          status: 'succeeded',
+          retryable: false,
+        },
+      },
+    ],
+  },
+  name: 'The editor hides resend guidance after the destination succeeds.',
 }
 
 export const SavingPendingSnapshot: Story = {

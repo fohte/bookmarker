@@ -119,8 +119,6 @@ export function ComposeRoute() {
         isLoadingMetadata: delivery.isLoadingMetadata,
         metadataErrorMessage: delivery.metadataErrorMessage,
         canPublish: delivery.canPublish,
-        canRetryFailed: delivery.canRetryFailed,
-        hasRetryableTargets: delivery.hasRetryableTargets,
         canOpenX: delivery.canOpenX,
         xIntentHref: delivery.xIntentHref,
         deliveryState: delivery.deliveryState,
@@ -130,11 +128,6 @@ export function ComposeRoute() {
         onPublish: () => {
           if (delivery.metadata !== null) {
             void controller.publishSelectedDestinations(delivery.metadata)
-          }
-        },
-        onRetryFailed: () => {
-          if (delivery.metadata !== null) {
-            void controller.retryFailedDeliveries(delivery.metadata)
           }
         },
         onRetryDeliverySave: () => {

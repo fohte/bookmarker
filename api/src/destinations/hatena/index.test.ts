@@ -239,7 +239,6 @@ describe('createHatenaAdapter', () => {
           kind: 'error',
           error: {
             code: 'not_configured',
-            outcome: 'failed',
             retryable: false,
           },
         },
@@ -271,7 +270,7 @@ describe('createHatenaAdapter', () => {
     expect(await summarize(adapter, calls, tooManyTags)).toEqual({
       result: {
         kind: 'error',
-        error: { code: 'rejected', outcome: 'failed', retryable: false },
+        error: { code: 'rejected', retryable: false },
       },
       calls: [],
     })
@@ -285,7 +284,7 @@ describe('createHatenaAdapter', () => {
       networkFailure: false,
       timeout: false,
       oversized: false,
-      expected: { code: 'rejected', outcome: 'failed', retryable: false },
+      expected: { code: 'rejected', retryable: false },
     },
     {
       name: 'authorization rejection',
@@ -294,7 +293,7 @@ describe('createHatenaAdapter', () => {
       networkFailure: false,
       timeout: false,
       oversized: false,
-      expected: { code: 'unauthorized', outcome: 'failed', retryable: false },
+      expected: { code: 'unauthorized', retryable: false },
     },
     {
       name: 'rate limiting',
@@ -303,7 +302,7 @@ describe('createHatenaAdapter', () => {
       networkFailure: false,
       timeout: false,
       oversized: false,
-      expected: { code: 'rate_limited', outcome: 'failed', retryable: true },
+      expected: { code: 'rate_limited', retryable: true },
     },
     {
       name: 'server failure',
@@ -312,7 +311,7 @@ describe('createHatenaAdapter', () => {
       networkFailure: false,
       timeout: false,
       oversized: false,
-      expected: { code: 'unavailable', outcome: 'unknown', retryable: false },
+      expected: { code: 'unavailable', retryable: false },
     },
     {
       name: 'redirect',
@@ -323,7 +322,6 @@ describe('createHatenaAdapter', () => {
       oversized: false,
       expected: {
         code: 'invalid_response',
-        outcome: 'unknown',
         retryable: false,
       },
     },
@@ -336,7 +334,6 @@ describe('createHatenaAdapter', () => {
       oversized: false,
       expected: {
         code: 'invalid_response',
-        outcome: 'unknown',
         retryable: false,
       },
     },
@@ -349,7 +346,6 @@ describe('createHatenaAdapter', () => {
       oversized: true,
       expected: {
         code: 'invalid_response',
-        outcome: 'unknown',
         retryable: false,
       },
     },
@@ -360,7 +356,7 @@ describe('createHatenaAdapter', () => {
       networkFailure: true,
       timeout: false,
       oversized: false,
-      expected: { code: 'unavailable', outcome: 'unknown', retryable: false },
+      expected: { code: 'unavailable', retryable: false },
     },
     {
       name: 'request timeout',
@@ -369,7 +365,7 @@ describe('createHatenaAdapter', () => {
       networkFailure: false,
       timeout: true,
       oversized: false,
-      expected: { code: 'unavailable', outcome: 'unknown', retryable: false },
+      expected: { code: 'unavailable', retryable: false },
     },
   ])('$name maps to a safe outcome', async (scenario) => {
     const calls: CapturedRequest[] = []

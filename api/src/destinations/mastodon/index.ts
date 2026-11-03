@@ -51,9 +51,8 @@ const metadataErrorForStatus = (status: number): MetadataAdapterError => {
 
 const publishError = (
   code: PublishAdapterError['code'],
-  outcome: PublishAdapterError['outcome'],
   retryable: boolean,
-): PublishAdapterError => ({ code, outcome, retryable })
+): PublishAdapterError => ({ code, retryable })
 
 const remoteUrlFrom = (
   value: string | null | undefined,
@@ -129,7 +128,7 @@ const publish = (
   },
 ): ReturnType<DestinationAdapter<'mastodon'>['publish']> => {
   if (!configured || statusesUrl === undefined || accessToken === undefined) {
-    return errAsync(publishError('not_configured', 'failed', false))
+    return errAsync(publishError('not_configured', false))
   }
 
   const { article, target } = input
@@ -149,15 +148,15 @@ const publish = (
     },
     body: form.toString(),
   })
-    .mapErr((error) => publishError(error.code, 'unknown', false))
+    .mapErr((error) => publishError(error.code, false))
     .andThen((response) => {
       if (response.status === 401 || response.status === 403) {
         discardMastodonResponse(response)
-        return errAsync(publishError('unauthorized', 'failed', false))
+        return errAsync(publishError('unauthorized', false))
       }
       if (response.status === 429) {
         discardMastodonResponse(response)
-        return errAsync(publishError('rate_limited', 'failed', true))
+        return errAsync(publishError('rate_limited', true))
       }
       if (
         response.status === 408 ||
@@ -165,19 +164,19 @@ const publish = (
         (response.status >= 300 && response.status < 400)
       ) {
         discardMastodonResponse(response)
-        return errAsync(publishError('unavailable', 'unknown', false))
+        return errAsync(publishError('unavailable', false))
       }
       if (!response.ok) {
         discardMastodonResponse(response)
-        return errAsync(publishError('rejected', 'failed', false))
+        return errAsync(publishError('rejected', false))
       }
 
       return readMastodonJson(response)
-        .mapErr((error) => publishError(error.code, 'unknown', false))
+        .mapErr((error) => publishError(error.code, false))
         .andThen((body) => {
           const parsed = createdStatusSchema.safeParse(body)
           if (!parsed.success) {
-            return errAsync(publishError('invalid_response', 'unknown', false))
+            return errAsync(publishError('invalid_response', false))
           }
 
           const remoteUrl = remoteUrlFrom(parsed.data.url)
