@@ -16,6 +16,14 @@ const authorizationErrorMessages = {
   output_failed: 'The credentials file could not be created.',
 } as const
 
+const outputPathErrorMessages = {
+  invalid_output_path:
+    'Choose an absolute output file path outside the repository.',
+  output_path_resolution_failed:
+    'The output path could not be resolved because of a filesystem error.',
+  output_directory_failed: 'The output directory could not be created.',
+} as const
+
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url))
 const commandArguments = process.argv.slice(2)
 const [option, outputArgument, ...remainingArguments] =
@@ -37,11 +45,7 @@ if (
   )
 
   if (resolvedPath.isErr()) {
-    process.stderr.write(
-      resolvedPath.error === 'invalid_output_path'
-        ? 'Choose an absolute output file path outside the repository.\n'
-        : 'The output directory could not be created.\n',
-    )
+    process.stderr.write(`${outputPathErrorMessages[resolvedPath.error]}\n`)
     process.exitCode = 1
   } else {
     const result = await authorizeHatena(resolvedPath.value, {

@@ -367,6 +367,35 @@ describe('authorizeHatena', () => {
     })
   })
 
+  it('reports filesystem path resolution errors separately from invalid paths', () => {
+    const apiRoot = fileURLToPath(new URL('../../../', import.meta.url))
+    const scriptPath = fileURLToPath(
+      new URL('../../../scripts/authorize-hatena.ts', import.meta.url),
+    )
+    const outputPath = join(
+      fileURLToPath(import.meta.url),
+      'missing',
+      'credentials.json',
+    )
+    const result = spawnSync(
+      process.execPath,
+      ['--import', 'tsx', scriptPath, '--output', outputPath],
+      { cwd: apiRoot, encoding: 'utf8' },
+    )
+
+    const summarizeFilesystemError = () => ({
+      status: result.status,
+      stdout: result.stdout,
+      stderr: result.stderr,
+    })
+    expect(summarizeFilesystemError()).toEqual({
+      status: 1,
+      stdout: '',
+      stderr:
+        'The output path could not be resolved because of a filesystem error.\n',
+    })
+  })
+
   it('does not replace credentials when creating the output file fails', async () => {
     const directory = await makeTemporaryDirectory()
     const outputPath = join(directory, 'missing', 'credentials.json')
