@@ -331,14 +331,6 @@ const resolveOutputPathDetails = (
   )
 }
 
-export const resolveOutputPathOutsideRepository = (
-  outputPath: string,
-  repositoryRoot: string,
-): ResultAsync<string, OutputPathResolutionError> =>
-  resolveOutputPathDetails(outputPath, repositoryRoot).map(
-    ({ resolvedPath }) => resolvedPath,
-  )
-
 const createPrivateDirectories = (
   resolution: OutputPathResolution,
 ): ResultAsync<undefined, 'output_directory_failed'> => {

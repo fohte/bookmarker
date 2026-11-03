@@ -20,7 +20,6 @@ import { z } from 'zod'
 import {
   authorizeHatena,
   prepareOutputPathOutsideRepository,
-  resolveOutputPathOutsideRepository,
   writeCredentialsFile,
 } from '#destinations/hatena/authorize'
 import { createOAuthAuthorizationHeader } from '#destinations/hatena/oauth'
@@ -283,7 +282,7 @@ describe('authorizeHatena', () => {
       'deeper',
       'credentials.json',
     )
-    const localPathResult = await resolveOutputPathOutsideRepository(
+    const localPathResult = await prepareOutputPathOutsideRepository(
       join(repository, 'credentials.json'),
       repository,
     ).match(
@@ -297,7 +296,7 @@ describe('authorizeHatena', () => {
       (path) => ({ kind: 'success' as const, path }),
       (error) => ({ kind: 'error' as const, error }),
     )
-    const linkedLocalPathResult = await resolveOutputPathOutsideRepository(
+    const linkedLocalPathResult = await prepareOutputPathOutsideRepository(
       join(linkedRepository, 'not-created', 'credentials.json'),
       repository,
     ).match(
