@@ -19,6 +19,11 @@ export function ComposeDestinationTagsField({
     if (added.length > 0) onTagsChange([...tags, ...added])
   }
 
+  const commitPendingTag = () => {
+    addTags([pendingTag])
+    setPendingTag('')
+  }
+
   return (
     <div className="flex flex-col gap-1.5">
       <label
@@ -52,10 +57,7 @@ export function ComposeDestinationTagsField({
           className="h-7 min-w-18 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground-strong disabled:cursor-not-allowed"
           disabled={disabled}
           id={id}
-          onBlur={() => {
-            addTags([pendingTag])
-            setPendingTag('')
-          }}
+          onBlur={commitPendingTag}
           onChange={(event) => {
             // A comma finishes a tag so a pasted "a,b" list becomes chips.
             const parts = event.currentTarget.value.split(',')
@@ -65,8 +67,7 @@ export function ComposeDestinationTagsField({
           onKeyDown={(event) => {
             if (event.key !== 'Enter') return
             event.preventDefault()
-            addTags([pendingTag])
-            setPendingTag('')
+            commitPendingTag()
           }}
           placeholder="Add tag"
           value={pendingTag}
