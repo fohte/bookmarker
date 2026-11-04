@@ -33,6 +33,7 @@ export const VerificationSchema = z
         .strict(),
     ),
     partial: z.boolean(),
+    omittedIssueCount: z.number().int().nonnegative().optional(),
   })
   .strict()
 

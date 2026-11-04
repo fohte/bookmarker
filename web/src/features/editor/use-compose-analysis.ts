@@ -83,6 +83,21 @@ const displayErrorState = (
   if (error.kind === 'authentication-required') {
     return 'authentication-required'
   }
+  if (error.kind === 'http') {
+    if (error.code === 'ARTICLE_INSUFFICIENT') return 'insufficient'
+    if (
+      error.code === 'ANALYSIS_TIMEOUT' ||
+      error.code === 'ARTICLE_FETCH_TIMEOUT'
+    ) {
+      return 'timeout'
+    }
+    if (
+      error.code === 'INVALID_ANALYSIS_RESPONSE' ||
+      error.code === 'ANALYSIS_UPSTREAM_FAILURE'
+    ) {
+      return 'invalid-response'
+    }
+  }
   return 'failed'
 }
 

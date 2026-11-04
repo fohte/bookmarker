@@ -12,6 +12,32 @@ import { requestCompletion } from '#analysis/provider'
 import type { AnalysisConfig, AnalysisFailure } from '#analysis/types'
 import type { Article, Summary, Verification } from '#contracts/article'
 
+const normalizeCitation = (text: string): string =>
+  text
+    .normalize('NFKC')
+    .replace(/[“”„‟«»「」『』]/gu, '"')
+    .replace(/[‘’‚‛‹›]/gu, "'")
+    .replace(/\s+/gu, ' ')
+    .trim()
+
+const citationMatches = (source: string, citation: string): boolean => {
+  const normalizedSource = normalizeCitation(source)
+  const normalizedCitation = normalizeCitation(citation)
+  const unwrappedCitation =
+    normalizedCitation.length >= 2 &&
+    ((normalizedCitation.startsWith('"') && normalizedCitation.endsWith('"')) ||
+      (normalizedCitation.startsWith("'") && normalizedCitation.endsWith("'")))
+      ? normalizedCitation.slice(1, -1)
+      : undefined
+
+  return [normalizedCitation, unwrappedCitation].some(
+    (candidate) =>
+      candidate !== undefined &&
+      candidate.length > 0 &&
+      normalizedSource.includes(candidate),
+  )
+}
+
 export const summarizeArticle = (
   article: Article,
   config: AnalysisConfig,
@@ -57,18 +83,18 @@ export const verifyComment = (
       return err({ kind: 'insufficient' } as const)
     }
 
-    const hasInvalidCitation = parsed.value.issues.some(
+    const issues = parsed.value.issues.filter(
       (issue) =>
-        !comment.includes(issue.quote) ||
-        (issue.kind === 'error' && !article.text.includes(issue.evidence)) ||
-        (issue.kind !== 'error' &&
-          issue.evidence !== undefined &&
-          !article.text.includes(issue.evidence)),
+        citationMatches(comment, issue.quote) &&
+        (issue.evidence === undefined ||
+          citationMatches(article.text, issue.evidence)),
     )
-    if (hasInvalidCitation) {
-      return err({ kind: 'invalid-response' } as const)
-    }
+    const omittedIssueCount = parsed.value.issues.length - issues.length
 
-    return ok({ issues: parsed.value.issues, partial: article.partial })
+    return ok({
+      issues,
+      partial: article.partial,
+      ...(omittedIssueCount > 0 ? { omittedIssueCount } : {}),
+    })
   })
 }

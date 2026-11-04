@@ -170,6 +170,91 @@ afterEach(() => {
 })
 
 describe('useComposeAnalysis', () => {
+  it('maps article fetch timeouts to the extraction timeout state', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          jsonResponse(
+            {
+              error: {
+                code: 'ARTICLE_FETCH_TIMEOUT',
+                message: 'The article could not be loaded in time.',
+              },
+            },
+            504,
+          ),
+        ),
+      ),
+    )
+
+    await mount({
+      draft: draft(undefined),
+      canEdit: true,
+      autoAnalyzeDraftId: null,
+      saveAnalysisResult: () => true,
+    })
+    await act(async () => {
+      await current.onExtractArticle()
+    })
+
+    expect(captureOutput(current.extractionState)).toBe('timeout')
+  })
+
+  it.each([
+    {
+      code: 'ARTICLE_INSUFFICIENT',
+      status: 422,
+      expectedState: 'insufficient',
+    },
+    { code: 'ANALYSIS_TIMEOUT', status: 504, expectedState: 'timeout' },
+    {
+      code: 'INVALID_ANALYSIS_RESPONSE',
+      status: 502,
+      expectedState: 'invalid-response',
+    },
+    {
+      code: 'ANALYSIS_UPSTREAM_FAILURE',
+      status: 502,
+      expectedState: 'invalid-response',
+    },
+  ])(
+    'maps $code and preserves the saved verification after failure',
+    async ({ code, status, expectedState }) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() =>
+          Promise.resolve(
+            jsonResponse(
+              { error: { code, message: 'A fictional analysis failure.' } },
+              status,
+            ),
+          ),
+        ),
+      )
+
+      await mount({
+        draft: draft(undefined),
+        canEdit: true,
+        autoAnalyzeDraftId: null,
+        saveAnalysisResult: () => true,
+      })
+      await act(async () => {
+        await current.onVerifyComment()
+      })
+
+      expect(
+        captureOutput({
+          verification: current.verification,
+          verificationState: current.verificationState,
+        }),
+      ).toEqual({
+        verification: savedCommonVerification,
+        verificationState: expectedState,
+      })
+    },
+  )
+
   it('shows authentication-required when the analysis API asks the user to sign in', async () => {
     vi.stubGlobal(
       'fetch',
