@@ -1,7 +1,7 @@
 import type { DestinationId } from 'api/contracts'
 
 export const destinationNames: Record<DestinationId, string> = {
-  hatena: 'Hatena Bookmark',
+  hatena: 'Hatena',
   mastodon: 'Mastodon',
   raindrop: 'Raindrop',
   x: 'X',

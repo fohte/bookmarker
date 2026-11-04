@@ -1,8 +1,4 @@
-import {
-  ArticleSchema,
-  type DestinationId,
-  ShareInputSchema,
-} from 'api/contracts'
+import { ArticleSchema, ShareInputSchema } from 'api/contracts'
 import { useCallback, useEffect, useState } from 'react'
 
 import { ComposeScreen } from '#components/compose-screen'
@@ -15,8 +11,6 @@ import { useShareIntake } from '#features/share/use-share-intake'
 
 export function ComposeRoute() {
   const [sourceUrl, setSourceUrl] = useState('')
-  const [copyConfirmationDestination, setCopyConfirmationDestination] =
-    useState<DestinationId | null>(null)
   const [autoAnalyzeDraftId, setAutoAnalyzeDraftId] = useState<string | null>(
     null,
   )
@@ -146,15 +140,6 @@ export function ComposeRoute() {
       {...(delivery.metadata === null
         ? {}
         : { destinationMetadata: delivery.metadata })}
-      copyConfirmationDestination={copyConfirmationDestination}
-      onRequestCopyCommonComment={setCopyConfirmationDestination}
-      onCancelCopyCommonComment={() => {
-        setCopyConfirmationDestination(null)
-      }}
-      onCopyCommonComment={(destination) => {
-        controller.copyCommonComment(destination)
-        setCopyConfirmationDestination(null)
-      }}
       onRetrySave={() => void controller.retrySave()}
       onRetryLock={() => void controller.retryLock()}
       onRequestDiscard={controller.requestDiscard}

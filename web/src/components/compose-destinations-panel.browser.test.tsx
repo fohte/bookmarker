@@ -1,0 +1,268 @@
+import '#index.css'
+
+import type { DestinationDraft, DestinationMetadata } from 'api/contracts'
+import { act, useState } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { page, userEvent } from 'vitest/browser'
+
+import { ComposeDestinationsPanel } from '#components/compose-destinations-panel'
+
+const configured: DestinationMetadata = {
+  destinations: {
+    hatena: { configured: true },
+    mastodon: { configured: true },
+    raindrop: {
+      configured: true,
+      collections: [
+        { id: 71, title: 'Fictional reading collection', public: false },
+      ],
+    },
+    x: { configured: true },
+  },
+}
+
+const captureOutput = <T,>(value: T): T => value
+
+let mounted: { container: HTMLDivElement; root: Root } | null = null
+
+function mountPanel(
+  initialDestinations: DestinationDraft[],
+  metadata: DestinationMetadata = configured,
+): DestinationDraft[] {
+  const updates: DestinationDraft[] = []
+  function Harness() {
+    const [destinations, setDestinations] = useState(initialDestinations)
+    return (
+      <ComposeDestinationsPanel
+        articleUrl="https://example.test/notes/paper-lantern"
+        canEdit
+        commonComment="A shared fictional note."
+        destinations={destinations}
+        metadata={metadata}
+        onDestinationChange={(next) => {
+          updates.push(next)
+          setDestinations((current) => [
+            ...current.filter((item) => item.destination !== next.destination),
+            next,
+          ])
+        }}
+      />
+    )
+  }
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  act(() => {
+    root.render(<Harness />)
+  })
+  mounted = { container, root }
+  return updates
+}
+
+function buttonLabelled(label: string): HTMLButtonElement {
+  const button = document.querySelector(`button[aria-label="${label}"]`)
+  if (!(button instanceof HTMLButtonElement)) {
+    throw new Error(`Button ${label} was not found.`)
+  }
+  return button
+}
+
+function field<T extends Element>(
+  selector: string,
+  type: abstract new () => T,
+): T {
+  const element = document.querySelector(selector)
+  if (!(element instanceof type)) {
+    throw new Error(`${selector} was not found.`)
+  }
+  return element
+}
+
+async function click(target: Element): Promise<void> {
+  await act(async () => userEvent.click(target))
+}
+
+beforeEach(() => {
+  Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+})
+
+afterEach(() => {
+  const current = mounted
+  if (current === null) return
+  act(() => {
+    current.root.unmount()
+  })
+  current.container.remove()
+  mounted = null
+})
+
+describe('ComposeDestinationsPanel in a browser', () => {
+  it('turns typing in a row into a destination-only comment and back', async () => {
+    const updates = mountPanel([])
+
+    await click(buttonLabelled('Post to Mastodon'))
+    await click(buttonLabelled('Edit Mastodon post and settings'))
+    const inheritedText = field('#mastodon-comment', HTMLTextAreaElement).value
+    await act(async () =>
+      userEvent.fill(
+        field('#mastodon-comment', HTMLTextAreaElement),
+        'A Mastodon-only note.',
+      ),
+    )
+    await click(
+      page.getByRole('button', { name: 'Use main comment' }).element(),
+    )
+    await click(page.getByRole('button', { name: 'Done' }).element())
+
+    expect(
+      captureOutput({
+        inheritedText,
+        updates,
+        rowOpen: document.querySelector('#mastodon-comment') !== null,
+      }),
+    ).toEqual({
+      inheritedText: 'A shared fictional note.',
+      updates: [
+        {
+          destination: 'mastodon',
+          selected: true,
+          commentMode: 'common',
+          customComment: '',
+          options: { visibility: 'public', spoilerText: '', sensitive: false },
+        },
+        {
+          destination: 'mastodon',
+          selected: true,
+          commentMode: 'custom',
+          customComment: 'A Mastodon-only note.',
+          options: { visibility: 'public', spoilerText: '', sensitive: false },
+        },
+        {
+          destination: 'mastodon',
+          selected: true,
+          commentMode: 'common',
+          customComment: '',
+          options: { visibility: 'public', spoilerText: '', sensitive: false },
+        },
+      ],
+      rowOpen: false,
+    })
+  })
+
+  it('adds tags from commas, Enter, and leaving the field, and removes a chip', async () => {
+    const updates = mountPanel([
+      {
+        destination: 'hatena',
+        selected: true,
+        commentMode: 'common',
+        customComment: '',
+        options: { tags: ['saved'], private: false },
+      },
+    ])
+
+    await click(buttonLabelled('Edit Hatena post and settings'))
+    const tags = () => field('#hatena-tags', HTMLInputElement)
+    await act(async () => userEvent.type(tags(), 'paper,lan'))
+    await act(async () => userEvent.keyboard('tern{Enter}'))
+    await act(async () => userEvent.type(tags(), 'glow'))
+    await click(
+      page.getByRole('switch', { name: 'Private bookmark' }).element(),
+    )
+    await click(buttonLabelled('Remove tag saved'))
+
+    expect(
+      updates.map((update) =>
+        update.destination === 'hatena' ? update.options : null,
+      ),
+    ).toEqual([
+      { tags: ['saved', 'paper'], private: false },
+      { tags: ['saved', 'paper', 'lantern'], private: false },
+      { tags: ['saved', 'paper', 'lantern', 'glow'], private: false },
+      { tags: ['saved', 'paper', 'lantern', 'glow'], private: true },
+      { tags: ['paper', 'lantern', 'glow'], private: true },
+    ])
+  })
+
+  it('blocks selecting an unconnected destination but lets a saved one be removed', async () => {
+    const updates = mountPanel(
+      [
+        {
+          destination: 'raindrop',
+          selected: true,
+          commentMode: 'common',
+          customComment: '',
+          options: { collectionId: -1, tags: [] },
+        },
+      ],
+      {
+        destinations: {
+          ...configured.destinations,
+          hatena: { configured: false },
+          raindrop: { configured: false },
+        },
+      },
+    )
+
+    const hatenaDisabled = buttonLabelled('Post to Hatena').disabled
+    await click(buttonLabelled('Post to Raindrop'))
+
+    expect(
+      captureOutput({
+        hatenaDisabled,
+        raindropDisabled: buttonLabelled('Post to Raindrop').disabled,
+        statuses: [...document.querySelectorAll('[role="status"]')].map(
+          (status) => status.textContent,
+        ),
+        updates: updates.map((update) => [update.destination, update.selected]),
+      }),
+    ).toEqual({
+      hatenaDisabled: true,
+      raindropDisabled: true,
+      statuses: ['Not connected', 'Not connected'],
+      updates: [['raindrop', false]],
+    })
+  })
+
+  it('keeps an unknown Raindrop collection until a real collection is chosen', async () => {
+    const updates = mountPanel([
+      {
+        destination: 'raindrop',
+        selected: true,
+        commentMode: 'common',
+        customComment: '',
+        options: { collectionId: 918, tags: [] },
+      },
+    ])
+
+    await click(buttonLabelled('Edit Raindrop post and settings'))
+    const status = document.querySelector('[role="status"]')?.textContent
+    await click(field('#raindrop-collection', HTMLButtonElement))
+    const unknownOption = page.getByRole('option', {
+      exact: true,
+      name: 'Saved collection ID 918 (not in the available list)',
+    })
+    await expect.element(unknownOption).toHaveAttribute('aria-disabled', 'true')
+    await act(async () =>
+      page
+        .getByRole('option', {
+          exact: true,
+          name: 'Fictional reading collection',
+        })
+        .click(),
+    )
+
+    expect(
+      captureOutput({
+        status,
+        updates: updates.map((update) =>
+          update.destination === 'raindrop' ? update.options : null,
+        ),
+      }),
+    ).toEqual({
+      status:
+        'Saved collection ID 918 is not available. Choose an available collection.',
+      updates: [{ collectionId: 71, tags: [] }],
+    })
+  })
+})

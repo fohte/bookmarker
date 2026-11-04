@@ -1,7 +1,6 @@
 import type {
   BookmarkDraft,
   DestinationDraft,
-  DestinationId,
   DestinationMetadata,
   ShareInput,
 } from 'api/contracts'
@@ -81,10 +80,6 @@ export function useComposeController() {
     controllerRef.current?.updateDestination(destination)
   }, [])
 
-  const copyCommonComment = useCallback((destination: DestinationId) => {
-    controllerRef.current?.copyCommonComment(destination)
-  }, [])
-
   const selectDraft = useCallback((draftId: string) => {
     const controller = controllerRef.current
     if (controller !== null) return controller.selectDraft(draftId)
@@ -143,7 +138,6 @@ export function useComposeController() {
     updateCommonComment,
     saveAnalysisResult,
     updateDestination,
-    copyCommonComment,
     selectDraft,
     retryLock,
     retrySave,

@@ -86,10 +86,6 @@ const handlers: Omit<ComposeScreenProps, 'state' | 'sourceUrl'> = {
   prePublishReview: null,
   onCancelPrePublishReview: () => undefined,
   onConfirmPrePublish: () => undefined,
-  copyConfirmationDestination: null,
-  onRequestCopyCommonComment: () => undefined,
-  onCancelCopyCommonComment: () => undefined,
-  onCopyCommonComment: () => undefined,
   onRetrySave: () => undefined,
   onRetryLock: () => undefined,
   onRequestDiscard: () => undefined,
@@ -264,32 +260,6 @@ const unconfiguredMetadata: DestinationMetadata = {
 export const DestinationUnavailable: Story = {
   args: { state: savedState, destinationMetadata: unconfiguredMetadata },
   name: 'The editor keeps saved settings visible when a service is unconfigured.',
-}
-
-export const ConfirmCopy: Story = {
-  args: {
-    state: {
-      ...savedState,
-      activeDraft: {
-        ...exampleDraft,
-        destinations: [
-          {
-            destination: 'mastodon',
-            selected: true,
-            commentMode: 'custom',
-            customComment: 'An existing individual comment.',
-            options: {
-              visibility: 'unlisted',
-              spoilerText: '',
-              sensitive: false,
-            },
-          },
-        ],
-      },
-    },
-    copyConfirmationDestination: 'mastodon',
-  },
-  name: 'The editor confirms before replacing a saved custom comment.',
 }
 
 const compactDraft: BookmarkDraft = {

@@ -64,10 +64,6 @@ export const Preview: Story = {
         prePublishReview={null}
         onCancelPrePublishReview={() => undefined}
         onConfirmPrePublish={() => undefined}
-        copyConfirmationDestination={null}
-        onRequestCopyCommonComment={() => undefined}
-        onCancelCopyCommonComment={() => undefined}
-        onCopyCommonComment={() => undefined}
         onRetrySave={() => undefined}
         onRetryLock={() => undefined}
         onRequestDiscard={() => undefined}

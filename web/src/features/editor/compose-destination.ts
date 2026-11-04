@@ -98,22 +98,3 @@ export function updateDestinationDraft(
     destinations: replaceDestinationDraft(draft.destinations, destination),
   }
 }
-
-export function copyCommonCommentDraft(
-  draft: BookmarkDraft,
-  destinationId: DestinationId,
-): BookmarkDraft {
-  const destination = getDestinationDraft(draft.destinations, destinationId)
-  const copiedDestination = {
-    ...destination,
-    commentMode: 'custom' as const,
-    customComment: draft.commonComment,
-  }
-  return {
-    ...draft,
-    destinations: replaceDestinationDraft(
-      draft.destinations,
-      copiedDestination,
-    ),
-  }
-}

@@ -279,7 +279,7 @@ describe('ComposeScreen in a browser', () => {
     ]
     contentPane().scrollTop = contentPane().scrollHeight
     layouts.push(
-      measurePhoneLayout({ lastDestination: 'input[aria-label="Select X"]' }),
+      measurePhoneLayout({ lastDestination: 'button[aria-label="Post to X"]' }),
     )
 
     expect(captureOutput(layouts)).toEqual([

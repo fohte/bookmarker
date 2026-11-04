@@ -1,7 +1,6 @@
 import {
   type BookmarkDraft,
   type DestinationDraft,
-  type DestinationId,
   type DestinationMetadata,
   type ShareInput,
 } from 'api/contracts'
@@ -27,10 +26,7 @@ import {
 } from '#features/editor/compose-analysis-command'
 import { ComposeDeliveryCoordinator } from '#features/editor/compose-delivery-coordinator'
 import { createComposeDeliveryDraftPort } from '#features/editor/compose-delivery-draft'
-import {
-  copyCommonCommentDraft,
-  updateDestinationDraft,
-} from '#features/editor/compose-destination'
+import { updateDestinationDraft } from '#features/editor/compose-destination'
 import { discardComposeDraft } from '#features/editor/compose-discard-command'
 import {
   clearDraftVerification,
@@ -221,10 +217,6 @@ export class ComposeController {
 
   updateDestination(destination: DestinationDraft): void {
     this.#updateDraft((draft) => updateDestinationDraft(draft, destination))
-  }
-
-  copyCommonComment(destinationId: DestinationId): void {
-    this.#updateDraft((draft) => copyCommonCommentDraft(draft, destinationId))
   }
 
   publishSelectedDestinations(metadata: DestinationMetadata): Promise<void> {
