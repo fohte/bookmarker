@@ -663,55 +663,6 @@ describe('ComposeController in a browser', () => {
     expect(captureOutput(actual)).toEqual(expected)
   })
 
-  it('copies and restores a destination comment while preserving common verification', async () => {
-    const store = createIndexedDbDraftStore()
-    const sourceDraft = draft()
-    const initialDraft: BookmarkDraft = {
-      ...sourceDraft,
-      destinations: sourceDraft.destinations.map((destination) =>
-        destination.destination === 'x'
-          ? {
-              ...destination,
-              commentMode: 'custom',
-              customComment: 'An older individual note.',
-            }
-          : destination,
-      ),
-    }
-    valueOrThrow(await store.addDraft(initialDraft))
-
-    const editing = new ComposeController(store)
-    await editing.start(initialDraft.id)
-    editing.copyCommonComment('x')
-    await editing.dispose()
-
-    const restoring = new ComposeController(store)
-    await restoring.start(initialDraft.id)
-    const restored = restoring.state.activeDraft
-    const actual =
-      restored === null
-        ? null
-        : {
-            destination:
-              restored.destinations.find((item) => item.destination === 'x') ??
-              null,
-            analysis: restored.analysis ?? null,
-          }
-    await restoring.dispose()
-
-    const expected = {
-      destination: {
-        destination: 'x',
-        selected: false,
-        commentMode: 'custom',
-        customComment: 'Original comment',
-      },
-      analysis: initialDraft.analysis ?? null,
-    }
-
-    expect(captureOutput(actual)).toEqual(expected)
-  })
-
   it('preserves common verification after editing a custom destination comment', async () => {
     const store = createIndexedDbDraftStore()
     const initialDraft = draft()

@@ -3,23 +3,19 @@ import type { DestinationDraft, DestinationMetadata } from 'api/contracts'
 
 import { ComposeDestinationSettings } from '#components/compose-destination-settings'
 
-type ComposeDestinationSettingsProps = Parameters<
-  typeof ComposeDestinationSettings
->[0]
-
 const hatena: DestinationDraft = {
   destination: 'hatena',
-  selected: false,
-  commentMode: 'custom',
-  customComment: 'A short individual note.',
+  selected: true,
+  commentMode: 'common',
+  customComment: '',
   options: { tags: ['sample', 'unfinished'], private: true },
 }
 
 const mastodon: DestinationDraft = {
   destination: 'mastodon',
   selected: true,
-  commentMode: 'custom',
-  customComment: 'A separate Mastodon note.',
+  commentMode: 'common',
+  customComment: '',
   options: {
     visibility: 'unlisted',
     spoilerText: 'A fictional content warning.',
@@ -35,27 +31,7 @@ const raindrop: DestinationDraft = {
   options: { collectionId: 283, tags: ['reading'] },
 }
 
-const x: DestinationDraft = {
-  destination: 'x',
-  selected: false,
-  commentMode: 'common',
-  customComment: '',
-}
-
-const mastodonMetadata: DestinationMetadata = {
-  destinations: {
-    hatena: { configured: true },
-    mastodon: {
-      configured: true,
-      maxCharacters: 480,
-      charactersReservedPerUrl: 24,
-    },
-    raindrop: { configured: true },
-    x: { configured: true },
-  },
-}
-
-const raindropMetadata: DestinationMetadata = {
+const metadata: DestinationMetadata = {
   destinations: {
     hatena: { configured: true },
     mastodon: { configured: true },
@@ -69,24 +45,21 @@ const raindropMetadata: DestinationMetadata = {
   },
 }
 
-const handlers: Omit<ComposeDestinationSettingsProps, 'destination'> = {
-  commonComment: 'A shared note for the article.',
-  canEdit: true,
-  copyConfirmationOpen: false,
-  settingsOpen: true,
-  onSettingsOpenChange: () => undefined,
-  onDestinationChange: () => undefined,
-  onRequestCopyCommonComment: () => undefined,
-  onCancelCopyCommonComment: () => undefined,
-  onCopyCommonComment: () => undefined,
-}
-
 const meta = {
   component: ComposeDestinationSettings,
   args: {
-    ...handlers,
     destination: hatena,
+    canEdit: true,
+    metadata,
+    onDestinationChange: () => undefined,
   },
+  decorators: [
+    (Story) => (
+      <div className="max-w-120 p-4">
+        <Story />
+      </div>
+    ),
+  ],
 } satisfies Meta<typeof ComposeDestinationSettings>
 
 export default meta
@@ -94,25 +67,32 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const Hatena: Story = {
-  name: 'Hatena settings keep an unfinished tag and privacy option editable.',
-}
-
-export const HatenaCommentModeOpen: Story = {
-  args: { openSelect: 'comment-mode' },
-  name: 'The comment selector is open in the settings dialog.',
+  name: 'Hatena settings show its tags and a private bookmark switch.',
 }
 
 export const Mastodon: Story = {
-  args: { destination: mastodon, metadata: mastodonMetadata },
-  name: 'Mastodon settings show visibility, content warning, and sensitivity.',
+  args: { destination: mastodon },
+  name: 'Mastodon settings show visibility, a content warning, and a sensitive switch.',
 }
 
 export const Raindrop: Story = {
-  args: { destination: raindrop, metadata: raindropMetadata },
-  name: 'Raindrop settings keep collection and tag values visible.',
+  args: { destination: raindrop },
+  name: 'Raindrop settings show the saved collection and tags.',
 }
 
 export const X: Story = {
-  args: { destination: x },
-  name: 'X settings explain that posting opens another composer.',
+  args: {
+    destination: {
+      destination: 'x',
+      selected: true,
+      commentMode: 'common',
+      customComment: '',
+    },
+  },
+  name: 'X settings explain that X opens its own composer.',
+}
+
+export const ReadOnly: Story = {
+  args: { destination: mastodon, canEdit: false },
+  name: 'Destination settings are read-only while another tab owns the draft.',
 }

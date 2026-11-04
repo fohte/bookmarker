@@ -58,36 +58,6 @@ let mounted: { container: HTMLDivElement; root: Root } | null = null
 
 const captureOutput = <T,>(value: T): T => value
 
-type SelectOptionInput = {
-  settingsDialogName: string
-  comboboxName: string
-  optionName: string
-}
-
-async function selectOption({
-  settingsDialogName,
-  comboboxName,
-  optionName,
-}: SelectOptionInput): Promise<void> {
-  const dialog = page.getByRole('dialog', {
-    exact: true,
-    name: settingsDialogName,
-  })
-  await expect.element(dialog).toBeVisible()
-
-  const combobox = page.getByRole('combobox', {
-    exact: true,
-    name: comboboxName,
-  })
-  await expect.element(combobox).toBeVisible()
-  await act(async () => combobox.click())
-  await expect.element(combobox).toHaveAttribute('aria-expanded', 'true')
-
-  const option = page.getByRole('option', { exact: true, name: optionName })
-  await expect.element(option).toBeVisible()
-  await act(async () => option.click())
-}
-
 function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -143,14 +113,6 @@ function normalizeDelivery(
       ? {}
       : { result: { ...snapshot.result, operationId: '<operation>' } }),
   }))
-}
-
-function input(selector: string): HTMLInputElement {
-  const match = document.querySelector(selector)
-  if (!(match instanceof HTMLInputElement)) {
-    throw new Error(`Element ${selector} was not found.`)
-  }
-  return match
 }
 
 function textarea(selector: string): HTMLTextAreaElement {
@@ -333,11 +295,11 @@ describe('ComposeRoute publishing in a browser', () => {
     await waitFor(() => document.querySelector('#article-title') === null)
     await waitFor(() => {
       const hatenaSelection = document.querySelector(
-        'input[aria-label="Select Hatena Bookmark"]',
+        'button[aria-label="Post to Hatena"]',
       )
       return (
         document.body.textContent.includes(summary.summary) &&
-        hatenaSelection instanceof HTMLInputElement &&
+        hatenaSelection instanceof HTMLButtonElement &&
         !hatenaSelection.disabled
       )
     })
@@ -347,24 +309,17 @@ describe('ComposeRoute publishing in a browser', () => {
         textarea('#main-comment'),
         'A shared comment with trailing spaces  ',
       )
-      await userEvent.click(input('input[aria-label="Select Hatena Bookmark"]'))
-      await userEvent.click(input('input[aria-label="Select Mastodon"]'))
-      await userEvent.click(input('input[aria-label="Select X"]'))
+      await userEvent.click(button('button[aria-label="Post to Hatena"]'))
+      await userEvent.click(button('button[aria-label="Post to Mastodon"]'))
+      await userEvent.click(button('button[aria-label="Post to X"]'))
       await userEvent.click(
-        button('button[aria-label="Open Hatena Bookmark settings"]'),
+        button('button[aria-label="Edit Hatena post and settings"]'),
       )
-    })
-    await selectOption({
-      settingsDialogName: 'Hatena Bookmark settings',
-      comboboxName: 'Hatena Bookmark comment mode',
-      optionName: 'Use individual comment',
-    })
-    await act(async () => {
       await userEvent.fill(
-        textarea('#hatena-custom-comment'),
+        textarea('#hatena-comment'),
         'A separate individual comment 😀 ',
       )
-      await userEvent.click(button('[data-slot="dialog-close"]'))
+      await userEvent.click(page.getByRole('button', { name: 'Done' }))
     })
 
     await waitFor(() =>

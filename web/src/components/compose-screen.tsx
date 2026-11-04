@@ -7,11 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@fohte/ui/dialog'
-import type {
-  DestinationDraft,
-  DestinationId,
-  DestinationMetadata,
-} from 'api/contracts'
+import type { DestinationDraft, DestinationMetadata } from 'api/contracts'
 import { useState } from 'react'
 
 import {
@@ -47,10 +43,6 @@ export type ComposeScreenProps = {
   onCancelPrePublishReview: () => void
   onConfirmPrePublish: () => void
   destinationMetadata?: DestinationMetadata
-  copyConfirmationDestination: DestinationId | null
-  onRequestCopyCommonComment: (destination: DestinationId) => void
-  onCancelCopyCommonComment: () => void
-  onCopyCommonComment: (destination: DestinationId) => void
   onRetrySave: () => void
   onRetryLock: () => void
   onRequestDiscard: () => void
@@ -75,10 +67,6 @@ export function ComposeScreen({
   onCancelPrePublishReview,
   onConfirmPrePublish,
   destinationMetadata,
-  copyConfirmationDestination,
-  onRequestCopyCommonComment,
-  onCancelCopyCommonComment,
-  onCopyCommonComment,
   onRetrySave,
   onRetryLock,
   onRequestDiscard,
@@ -219,21 +207,16 @@ export function ComposeScreen({
                   value={activeDraft.commonComment}
                 />
               </div>
-              <div className="px-4 pb-3 md:px-5">
-                <ComposeDestinationsPanel
-                  canEdit={canEdit}
-                  commonComment={activeDraft.commonComment}
-                  copyConfirmationDestination={copyConfirmationDestination}
-                  destinations={activeDraft.destinations}
-                  {...(destinationMetadata === undefined
-                    ? {}
-                    : { metadata: destinationMetadata })}
-                  onCancelCopyCommonComment={onCancelCopyCommonComment}
-                  onCopyCommonComment={onCopyCommonComment}
-                  onDestinationChange={onDestinationChange}
-                  onRequestCopyCommonComment={onRequestCopyCommonComment}
-                />
-              </div>
+              <ComposeDestinationsPanel
+                articleUrl={activeDraft.article?.url ?? activeDraft.source.url}
+                canEdit={canEdit}
+                commonComment={activeDraft.commonComment}
+                destinations={activeDraft.destinations}
+                {...(destinationMetadata === undefined
+                  ? {}
+                  : { metadata: destinationMetadata })}
+                onDestinationChange={onDestinationChange}
+              />
             </section>
           </div>
         )}

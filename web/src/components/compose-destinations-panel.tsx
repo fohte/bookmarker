@@ -1,4 +1,3 @@
-import { Panel } from '@fohte/ui/panel'
 import type {
   DestinationDraft,
   DestinationId,
@@ -6,7 +5,7 @@ import type {
 } from 'api/contracts'
 import { useState } from 'react'
 
-import { ComposeDestinationCard } from '#components/compose-destination-card'
+import { ComposeDestinationRow } from '#components/compose-destination-row'
 import {
   destinationIds,
   getDestinationDraft,
@@ -15,66 +14,49 @@ import {
 export function ComposeDestinationsPanel({
   destinations,
   commonComment,
+  articleUrl,
   canEdit,
   metadata,
   defaultOpenDestination = null,
-  copyConfirmationDestination,
   onDestinationChange,
-  onRequestCopyCommonComment,
-  onCancelCopyCommonComment,
-  onCopyCommonComment,
 }: {
   destinations: DestinationDraft[]
   commonComment: string
+  articleUrl: string
   canEdit: boolean
   metadata?: DestinationMetadata
   defaultOpenDestination?: DestinationId | null
-  copyConfirmationDestination: DestinationId | null
   onDestinationChange: (destination: DestinationDraft) => void
-  onRequestCopyCommonComment: (destination: DestinationId) => void
-  onCancelCopyCommonComment: () => void
-  onCopyCommonComment: (destination: DestinationId) => void
 }) {
   const [openDestination, setOpenDestination] = useState<DestinationId | null>(
     defaultOpenDestination,
   )
-  const selectedCount = destinations.filter(
-    (destination) => destination.selected,
-  ).length
 
   return (
-    <Panel
-      data-compose-section="destinations"
-      padding="sm"
-      className="shrink-0 space-y-2 rounded-lg p-2"
-    >
-      <header className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-medium">Destinations</h2>
-        <p className="text-xs text-muted-foreground">
-          {selectedCount} selected
-        </p>
-      </header>
-
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+    <section aria-labelledby="post-to" className="border-t border-border">
+      <h2
+        className="px-4 pt-3 pb-0.5 font-mono text-xs font-normal text-muted-foreground-strong md:px-5"
+        id="post-to"
+      >
+        post to
+      </h2>
+      <ul>
         {destinationIds.map((destinationId) => (
-          <ComposeDestinationCard
+          <ComposeDestinationRow
             key={destinationId}
+            articleUrl={articleUrl}
             canEdit={canEdit}
             commonComment={commonComment}
-            copyConfirmationOpen={copyConfirmationDestination === destinationId}
             destination={getDestinationDraft(destinations, destinationId)}
-            settingsOpen={openDestination === destinationId}
             {...(metadata === undefined ? {} : { metadata })}
-            onCancelCopyCommonComment={onCancelCopyCommonComment}
-            onCopyCommonComment={onCopyCommonComment}
             onDestinationChange={onDestinationChange}
-            onRequestCopyCommonComment={onRequestCopyCommonComment}
-            onSettingsOpenChange={(open) => {
+            onOpenChange={(open) => {
               setOpenDestination(open ? destinationId : null)
             }}
+            open={openDestination === destinationId}
           />
         ))}
-      </div>
-    </Panel>
+      </ul>
+    </section>
   )
 }
