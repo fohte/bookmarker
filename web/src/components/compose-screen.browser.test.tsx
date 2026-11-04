@@ -215,53 +215,89 @@ afterEach(() => {
   unmount()
 })
 
-function measurePhoneLayout() {
-  const scrollingElement = document.scrollingElement ?? document.documentElement
-  const content = document.querySelector('[data-compose-content]')
-  const withinViewport = (selector: string): boolean => {
-    const element = document.querySelector(selector)
-    if (element === null) return false
-    const rect = element.getBoundingClientRect()
-    return (
-      rect.width > 0 &&
-      rect.height > 0 &&
-      rect.left >= 0 &&
-      rect.right <= window.innerWidth &&
-      rect.top >= 0 &&
-      rect.bottom <= window.innerHeight
-    )
+function contentPane(): HTMLElement {
+  const match = document.querySelector('[data-compose-content]')
+  if (!(match instanceof HTMLElement)) {
+    throw new Error('The compose content was not rendered.')
   }
+  return match
+}
+
+function within(selector: string, bounds: DOMRect): boolean {
+  const element = document.querySelector(selector)
+  if (element === null) return false
+  const rect = element.getBoundingClientRect()
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.left >= bounds.left &&
+    rect.right <= bounds.right &&
+    rect.top >= bounds.top &&
+    rect.bottom <= bounds.bottom
+  )
+}
+
+function measurePhoneLayout(visibleInContent: Record<string, string>) {
+  const scrollingElement = document.scrollingElement ?? document.documentElement
+  const content = contentPane()
+  const contentBounds = content.getBoundingClientRect()
 
   return {
     documentHasVerticalScroll:
       scrollingElement.scrollHeight > scrollingElement.clientHeight,
     documentHasHorizontalScroll:
       scrollingElement.scrollWidth > scrollingElement.clientWidth,
-    contentHasHorizontalScroll:
-      content instanceof HTMLElement &&
-      content.scrollWidth > content.clientWidth,
+    contentHasHorizontalScroll: content.scrollWidth > content.clientWidth,
+    contentScrolled: content.scrollTop > 0,
     visible: {
-      article: withinViewport('section[aria-label="Article"] h2'),
-      comment: withinViewport('#main-comment'),
-      publish: withinViewport('[data-compose-publish]'),
+      ...Object.fromEntries(
+        Object.entries(visibleInContent).map(([name, selector]) => [
+          name,
+          within(selector, contentBounds),
+        ]),
+      ),
+      publish: within(
+        '[data-compose-publish]',
+        new DOMRect(0, 0, window.innerWidth, window.innerHeight),
+      ),
     },
   }
 }
 
 describe('ComposeScreen in a browser', () => {
-  it('scrolls only the content on a phone and keeps the article, comment, and publish button in view', async () => {
-    await page.viewport(390, 844)
+  it('scrolls only the content on a short phone screen while the publish button stays in view', async () => {
+    await page.viewport(390, 520)
     mount(<ComposeScreen {...screenProps(Phone390x844.args)} />)
     await waitFor(
       () => document.querySelector('[data-compose-content]') !== null,
     )
+    const layouts = [
+      measurePhoneLayout({
+        article: 'section[aria-label="Article"] h2',
+        comment: '#main-comment',
+      }),
+    ]
+    contentPane().scrollTop = contentPane().scrollHeight
+    layouts.push(
+      measurePhoneLayout({ lastDestination: 'input[aria-label="Select X"]' }),
+    )
 
-    expect(captureOutput(measurePhoneLayout())).toEqual({
-      documentHasVerticalScroll: false,
-      documentHasHorizontalScroll: false,
-      contentHasHorizontalScroll: false,
-      visible: { article: true, comment: true, publish: true },
-    })
+    expect(captureOutput(layouts)).toEqual([
+      {
+        documentHasVerticalScroll: false,
+        documentHasHorizontalScroll: false,
+        contentHasHorizontalScroll: false,
+        contentScrolled: false,
+        visible: { article: true, comment: true, publish: true },
+      },
+      {
+        documentHasVerticalScroll: false,
+        documentHasHorizontalScroll: false,
+        contentHasHorizontalScroll: false,
+        contentScrolled: true,
+        visible: { lastDestination: true, publish: true },
+      },
+    ])
   })
 
   it('keeps article edits and validation errors after the details dialog closes', async () => {
