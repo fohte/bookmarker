@@ -21,7 +21,7 @@ export type ComposeResultsProps = ComposeDeliveryNoticesProps & {
   xIntentHref: string | null
   canRetry: boolean
   onRetry: () => void
-  onBackToEdit: () => void
+  onDone: () => void
 }
 
 function ResultIcon({ status }: { status: 'succeeded' | 'failed' | null }) {
@@ -48,7 +48,7 @@ export function ComposeResults({
   xIntentHref,
   canRetry,
   onRetry,
-  onBackToEdit,
+  onDone,
   ...notices
 }: ComposeResultsProps) {
   const url = draft.article?.url ?? draft.source.url
@@ -171,10 +171,10 @@ export function ComposeResults({
             ))}
           <button
             className="flex h-11 items-center justify-center px-3 text-sm text-muted-foreground-strong"
-            onClick={onBackToEdit}
+            onClick={onDone}
             type="button"
           >
-            Back to edit
+            Done
           </button>
         </div>
       </footer>

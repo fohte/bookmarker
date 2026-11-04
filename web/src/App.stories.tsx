@@ -70,6 +70,7 @@ export const Preview: Story = {
         onRequestDiscard={() => undefined}
         onCancelDiscard={() => undefined}
         onConfirmDiscard={() => undefined}
+        onCloseDraft={() => undefined}
       />
     ),
   },

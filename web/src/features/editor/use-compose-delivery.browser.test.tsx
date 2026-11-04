@@ -76,7 +76,7 @@ const Harness = ({ draft: activeDraft, state, canEdit }: HarnessProps) => {
       draft={activeDraft}
       isLoadingMetadata={controls.isLoadingMetadata}
       metadataErrorMessage={controls.metadataErrorMessage}
-      onBackToEdit={noop}
+      onDone={noop}
       onRetry={noop}
       onRetryDeliverySave={noop}
       onRetryMetadata={controls.onLoadMetadata}

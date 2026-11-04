@@ -150,6 +150,7 @@ export function ComposeRoute() {
       onRequestDiscard={controller.requestDiscard}
       onCancelDiscard={controller.cancelDiscard}
       onConfirmDiscard={() => void controller.discardDraft()}
+      onCloseDraft={() => void controller.closeDraft()}
     />
   )
 }
