@@ -155,6 +155,14 @@ export const Empty: Story = {
   name: 'The editor offers to open a draft when none is open.',
 }
 
+export const Loading: Story = {
+  args: {
+    state: { ...emptyState, isLoading: true },
+    sourceUrl: '',
+  },
+  name: 'The editor shows that saved drafts are loading.',
+}
+
 export const Saving: Story = {
   args: {
     state: { ...savedState, saveState: 'saving' },

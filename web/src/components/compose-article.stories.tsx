@@ -115,6 +115,46 @@ export const ExtractionTimedOut: Story = {
   name: 'The article offers a retry after text extraction times out.',
 }
 
+export const ExtractionFailed: Story = {
+  ...phone,
+  args: {
+    article: { ...article, text: '' },
+    extractionState: 'failed',
+    summary: null,
+    summaryState: 'not-requested',
+  },
+  name: 'The article offers a retry after text extraction fails.',
+}
+
+export const ExtractionNeedsSignIn: Story = {
+  ...phone,
+  args: {
+    article: { ...article, text: '' },
+    extractionState: 'authentication-required',
+    summary: null,
+    summaryState: 'not-requested',
+  },
+  name: 'The article asks to sign in before extracting text.',
+}
+
+export const SummaryInsufficient: Story = {
+  ...phone,
+  args: { summary: null, summaryState: 'insufficient' },
+  name: 'The article explains that its text is too short to summarize.',
+}
+
+export const SummaryInvalidResponse: Story = {
+  ...phone,
+  args: { summary: null, summaryState: 'invalid-response' },
+  name: 'The article explains that the AI returned an unusable summary.',
+}
+
+export const SummaryServiceUnavailable: Story = {
+  ...phone,
+  args: { summary: null, summaryState: 'unavailable' },
+  name: 'The article explains that the summary service is unavailable.',
+}
+
 export const NotSummarized: Story = {
   ...phone,
   args: { summary: null, summaryState: 'not-requested' },
