@@ -361,7 +361,7 @@ describe('ComposeScreen in a browser', () => {
     ).toBe('A fictional first article')
   })
 
-  it('lists only unfinished drafts without an open draft and keeps them selectable while read-only', async () => {
+  it('lists only unfinished drafts on the empty screen and opens the chosen one', async () => {
     const postedFirstDraft: BookmarkDraft = {
       ...firstDraft,
       delivery: [
@@ -400,8 +400,23 @@ describe('ComposeScreen in a browser', () => {
       'A fictional second article',
     ).disabled
     await click(draftButton(unfinished, 'A fictional second article'))
-    unmount()
 
+    expect(
+      captureOutput({
+        unfinishedDrafts,
+        disabled: withoutDraftDisabled,
+        selectedDraftIds: selectedWithoutDraft,
+      }),
+    ).toEqual({
+      unfinishedDrafts: [
+        'A fictional second articlestories.example.test · not posted',
+      ],
+      disabled: false,
+      selectedDraftIds: [secondDraftId],
+    })
+  })
+
+  it('keeps drafts switchable from the sheet while the open draft is read-only', async () => {
     const selectedWhileReadOnly: string[] = []
     mount(
       <ComposeScreen
@@ -421,28 +436,12 @@ describe('ComposeScreen in a browser', () => {
 
     expect(
       captureOutput({
-        withoutDraft: {
-          unfinishedDrafts,
-          disabled: withoutDraftDisabled,
-          selectedDraftIds: selectedWithoutDraft,
-        },
-        whileReadOnly: {
-          disabled: readOnlyDisabled,
-          selectedDraftIds: selectedWhileReadOnly,
-        },
+        disabled: readOnlyDisabled,
+        selectedDraftIds: selectedWhileReadOnly,
       }),
     ).toEqual({
-      withoutDraft: {
-        unfinishedDrafts: [
-          'A fictional second articlestories.example.test · not posted',
-        ],
-        disabled: false,
-        selectedDraftIds: [secondDraftId],
-      },
-      whileReadOnly: {
-        disabled: false,
-        selectedDraftIds: [secondDraftId],
-      },
+      disabled: false,
+      selectedDraftIds: [secondDraftId],
     })
   })
 

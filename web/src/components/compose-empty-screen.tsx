@@ -4,6 +4,7 @@ import { ChevronRightIcon } from 'lucide-react'
 import {
   composeDraftHost,
   composeDraftProgress,
+  isComposeDraftPosted,
 } from '#components/compose-draft-progress'
 import { getComposeDraftTitle } from '#components/compose-draft-title'
 
@@ -24,9 +25,7 @@ export function ComposeEmptyScreen({
   onOpenSource: () => Promise<boolean>
   onSelectDraft: (id: string) => void
 }) {
-  const unfinished = drafts.filter(
-    (draft) => composeDraftProgress(draft) !== 'posted',
-  )
+  const unfinished = drafts.filter((draft) => !isComposeDraftPosted(draft))
 
   return (
     <div data-compose-content className="min-h-0 flex-1 overflow-y-auto">

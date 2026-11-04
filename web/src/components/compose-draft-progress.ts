@@ -7,8 +7,16 @@ export function composeDraftHost(draft: BookmarkDraft): string {
   return URL.parse(url)?.hostname.replace(/^www\./, '') ?? url
 }
 
-// 'posted' is the only label of a finished draft.
+export function isComposeDraftPosted(draft: BookmarkDraft): boolean {
+  const snapshots = latestDeliverySnapshots(draft.delivery)
+  return (
+    snapshots.length > 0 &&
+    snapshots.every((snapshot) => snapshot.result?.status === 'succeeded')
+  )
+}
+
 export function composeDraftProgress(draft: BookmarkDraft): string {
+  if (isComposeDraftPosted(draft)) return 'posted'
   const snapshots = latestDeliverySnapshots(draft.delivery)
   if (snapshots.length === 0) return 'not posted'
   const failed = snapshots.filter(
@@ -17,9 +25,8 @@ export function composeDraftProgress(draft: BookmarkDraft): string {
   const unrecorded = snapshots.filter(
     (snapshot) => snapshot.result === undefined,
   ).length
-  const problems = [
+  return [
     ...(failed > 0 ? [`${String(failed)} failed`] : []),
     ...(unrecorded > 0 ? [`${String(unrecorded)} not recorded`] : []),
-  ]
-  return problems.length === 0 ? 'posted' : problems.join(', ')
+  ].join(', ')
 }

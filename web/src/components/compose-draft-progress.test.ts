@@ -1,7 +1,10 @@
 import type { BookmarkDraft } from 'api/contracts'
 import { describe, expect, it } from 'vitest'
 
-import { composeDraftProgress } from '#components/compose-draft-progress'
+import {
+  composeDraftProgress,
+  isComposeDraftPosted,
+} from '#components/compose-draft-progress'
 
 type Snapshot = BookmarkDraft['delivery'][number]
 
@@ -69,11 +72,16 @@ describe('composeDraftProgress', () => {
       ]),
     ]
 
-    expect(drafts.map(composeDraftProgress)).toEqual([
-      'not posted',
-      'posted',
-      'posted',
-      '1 failed, 1 not recorded',
+    expect(
+      drafts.map((draft) => ({
+        label: composeDraftProgress(draft),
+        posted: isComposeDraftPosted(draft),
+      })),
+    ).toEqual([
+      { label: 'not posted', posted: false },
+      { label: 'posted', posted: true },
+      { label: 'posted', posted: true },
+      { label: '1 failed, 1 not recorded', posted: false },
     ])
   })
 })
