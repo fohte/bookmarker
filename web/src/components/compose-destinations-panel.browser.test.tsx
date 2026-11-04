@@ -1,6 +1,10 @@
 import '#index.css'
 
-import type { DestinationDraft, DestinationMetadata } from 'api/contracts'
+import type {
+  DestinationDraft,
+  DestinationId,
+  DestinationMetadata,
+} from 'api/contracts'
 import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -33,6 +37,8 @@ function mountPanel(
   const updates: DestinationDraft[] = []
   function Harness() {
     const [destinations, setDestinations] = useState(initialDestinations)
+    const [openDestination, setOpenDestination] =
+      useState<DestinationId | null>(null)
     return (
       <ComposeDestinationsPanel
         articleUrl="https://example.test/notes/paper-lantern"
@@ -40,6 +46,8 @@ function mountPanel(
         commonComment="A shared fictional note."
         destinations={destinations}
         metadata={metadata}
+        onOpenDestinationChange={setOpenDestination}
+        openDestination={openDestination}
         onDestinationChange={(next) => {
           updates.push(next)
           setDestinations((current) => [

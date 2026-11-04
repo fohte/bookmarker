@@ -5,7 +5,6 @@ import type { ComposeDeliveryState } from '#features/editor/compose-state'
 export function deliveryStatus(
   snapshot: BookmarkDraft['delivery'][number],
   deliveryState: ComposeDeliveryState,
-  destinationHasSucceeded: boolean,
 ): {
   label: string
   details: string[]
@@ -14,48 +13,45 @@ export function deliveryStatus(
   if (result === undefined) {
     if (deliveryState === 'saving-pending') {
       return {
-        label: 'Saving attempt',
+        label: 'saving attempt',
         details: ['The attempt must be saved before contacting the service.'],
       }
     }
     if (deliveryState === 'sending') {
-      return {
-        label: 'Sending',
-        details: ['The outcome has not been recorded yet.'],
-      }
+      return { label: 'posting…', details: [] }
     }
     if (deliveryState === 'saving-results') {
       return {
-        label: 'Saving result',
+        label: 'saving result',
         details: ['The result must be saved before it is shown.'],
       }
     }
     if (deliveryState === 'result-save-failed') {
       return {
-        label: 'Result not saved',
+        label: 'result not saved',
         details: ['The response is held in memory. Save it before continuing.'],
       }
     }
     return {
-      label: 'Outcome not recorded',
+      label: 'not recorded',
       details: [
-        'Check whether the item reached the destination before publishing again.',
+        'Check whether the item reached the destination before posting again.',
       ],
     }
   }
   if (result.status === 'succeeded') {
     return {
-      label: 'Succeeded',
+      label: 'posted',
       details: result.message === undefined ? [] : [result.message],
     }
   }
   return {
-    label: 'Failed',
+    label: 'failed',
     details: [
       ...(result.message === undefined ? [] : [result.message]),
-      ...(destinationHasSucceeded
-        ? []
-        : ['You can publish to this destination again.']),
+      ...(result.retryable
+        ? ['The draft is kept, so it is safe to retry.']
+        : []),
     ],
   }
 }

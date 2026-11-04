@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ComposeDeliveryPanel } from '#components/compose-delivery-panel'
+import { ComposeResults } from '#components/compose-results'
 import {
   type ComposeState,
   initialComposeState,
@@ -65,19 +65,24 @@ const noop = () => undefined
 
 const Harness = ({ draft: activeDraft, state, canEdit }: HarnessProps) => {
   const controls = useComposeDelivery({ draft: activeDraft, state, canEdit })
-  const { onLoadMetadata, ...deliveryProps } = controls
 
   return (
-    <ComposeDeliveryPanel
-      {...deliveryProps}
-      delivery={activeDraft.delivery}
-      xSelected={activeDraft.destinations.some(
-        (destination) =>
-          destination.destination === 'x' && destination.selected,
-      )}
-      onRequestPublishReview={noop}
+    <ComposeResults
+      authenticationRequired={controls.authenticationRequired}
+      canOpenX={controls.canOpenX}
+      canRetry={controls.canPublish}
+      deliveryErrorMessage={controls.deliveryErrorMessage}
+      deliveryState={controls.deliveryState}
+      draft={activeDraft}
+      isLoadingMetadata={controls.isLoadingMetadata}
+      metadataErrorMessage={controls.metadataErrorMessage}
+      onBackToEdit={noop}
+      onRetry={noop}
       onRetryDeliverySave={noop}
-      onRetryMetadata={onLoadMetadata}
+      onRetryMetadata={controls.onLoadMetadata}
+      signInHref={controls.signInHref}
+      xIntentHref={controls.xIntentHref}
+      xSelected
     />
   )
 }
@@ -148,7 +153,7 @@ describe('useComposeDelivery in a browser', () => {
     const savedLink = xLinkOutput()
     await render({ draft, state: savingState, canEdit: true })
     const xButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent.trim() === 'Open X composer',
+      (button) => button.textContent.trim() === 'Continue in X',
     )
     const whileSaving = {
       xLink: xLinkOutput(),

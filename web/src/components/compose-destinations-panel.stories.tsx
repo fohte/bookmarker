@@ -55,6 +55,8 @@ const meta = {
     articleUrl: 'https://example.test/notes/paper-lantern',
     canEdit: true,
     metadata,
+    openDestination: null,
+    onOpenDestinationChange: () => undefined,
     onDestinationChange: () => undefined,
   },
   decorators: [
@@ -75,7 +77,7 @@ export const Editing: Story = {
 }
 
 export const RowOpen: Story = {
-  args: { defaultOpenDestination: 'hatena' },
+  args: { openDestination: 'hatena' },
   name: 'The post to list opens one destination to edit its comment and settings in place.',
 }
 

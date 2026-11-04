@@ -72,6 +72,7 @@ const handlers: Omit<ComposeScreenProps, 'state' | 'sourceUrl'> = {
     authenticationRequired: false,
     signInHref: null,
     onRequestPublishReview: () => undefined,
+    onRetryDelivery: () => undefined,
     onRetryDeliverySave: () => undefined,
     onRetryMetadata: () => undefined,
   },
@@ -424,6 +425,7 @@ export const DeliveryFailure: Story = {
       drafts: [mixedOutcomeDraft],
       activeDraft: mixedOutcomeDraft,
     },
+    defaultResultsOpen: true,
   },
-  name: 'The editor keeps a failed delivery warning visible outside delivery details.',
+  name: 'The screen shows the results with one destination posted and one failed.',
 }
