@@ -641,6 +641,129 @@ describe('ComposeScreen in a browser', () => {
     })
   })
 
+  it('opens X from the check sheet without sending when only X is selected', async () => {
+    const calls = { confirmed: 0, cancelled: 0 }
+    mount(
+      <ComposeScreen
+        {...screenProps({
+          state: {
+            ...editingState,
+            activeDraft: {
+              ...firstDraft,
+              commonComment: 'A fictional note.',
+              destinations: [
+                {
+                  destination: 'x',
+                  selected: true,
+                  commentMode: 'common',
+                  customComment: '',
+                },
+              ],
+            },
+          },
+          deliveryControls: {
+            ...composeScreenStoryMeta.args.deliveryControls,
+            canOpenX: true,
+            xIntentHref: 'https://x.com/intent/tweet?text=A%20fictional%20note',
+          },
+          prePublishReview: {
+            status: 'complete',
+            checks: [
+              {
+                destinations: ['x'],
+                commentTargetIds: ['common'],
+                comment: 'A fictional note.',
+                status: 'success',
+                verification: { issues: [], partial: false },
+                error: null,
+              },
+            ],
+          },
+          onConfirmPrePublish: () => {
+            calls.confirmed += 1
+          },
+          onCancelPrePublishReview: () => {
+            calls.cancelled += 1
+          },
+        })}
+      />,
+    )
+    const postLink = page.getByRole('link', { name: 'Post' }).element()
+    if (!(postLink instanceof HTMLAnchorElement)) {
+      throw new Error('The X post link was not rendered.')
+    }
+    // Keeps the browser under test from opening the X tab.
+    const stayOnPage = (event: Event) => {
+      event.preventDefault()
+    }
+    document.addEventListener('click', stayOnPage, { capture: true })
+    await act(async () => {
+      await userEvent.click(postLink)
+    })
+    document.removeEventListener('click', stayOnPage, { capture: true })
+
+    expect(
+      captureOutput({
+        href: postLink.href,
+        target: postLink.target,
+        calls,
+        resultsShown:
+          document.querySelector('[aria-label="Results by destination"]') !==
+          null,
+      }),
+    ).toEqual({
+      href: 'https://x.com/intent/tweet?text=A%20fictional%20note',
+      target: '_blank',
+      calls: { confirmed: 0, cancelled: 1 },
+      resultsShown: false,
+    })
+  })
+
+  it('retries a retryable failure from the results screen', async () => {
+    let retries = 0
+    const raindropTarget = {
+      destination: 'raindrop',
+      operationId: '00000000-0000-4000-8000-000000000213',
+      comment: '',
+      options: { collectionId: -1, tags: [] },
+    } satisfies BookmarkDraft['delivery'][number]['target']
+    mount(
+      <ComposeScreen
+        {...screenProps({
+          state: {
+            ...editingState,
+            activeDraft: {
+              ...firstDraft,
+              delivery: [
+                {
+                  article: { url: firstDraft.source.url },
+                  target: raindropTarget,
+                  result: {
+                    destination: 'raindrop',
+                    operationId: raindropTarget.operationId,
+                    status: 'failed',
+                    retryable: true,
+                    message: 'Raindrop did not respond.',
+                  },
+                },
+              ],
+            },
+          },
+          defaultResultsOpen: true,
+          deliveryControls: {
+            ...composeScreenStoryMeta.args.deliveryControls,
+            onRetryDelivery: () => {
+              retries += 1
+            },
+          },
+        })}
+      />,
+    )
+    await click(buttonByText('Retry'))
+
+    expect(captureOutput(retries)).toBe(1)
+  })
+
   it('retries saving from the header after saving fails', async () => {
     let retries = 0
     mount(
