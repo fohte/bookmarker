@@ -13,6 +13,15 @@ import { useState } from 'react'
 
 import type { AnalysisDisplayState } from '#features/editor/compose-analysis-state'
 
+const retryableAnalysisStates: ReadonlySet<AnalysisDisplayState> = new Set([
+  'failed',
+  'insufficient',
+  'timeout',
+  'invalid-response',
+  'unavailable',
+  'authentication-required',
+])
+
 function stateMessage(
   state: AnalysisDisplayState,
   subject: string,
@@ -27,6 +36,12 @@ function stateMessage(
       return `${subject} is in progress.`
     case 'failed':
       return `${subject} could not be completed. The saved draft is still available.`
+    case 'insufficient':
+      return 'The article does not contain enough information for this analysis.'
+    case 'timeout':
+      return `${subject} timed out. Try again.`
+    case 'invalid-response':
+      return 'The AI check could not return a usable result. The saved draft is still available.'
     case 'stale':
       return `The previous ${subject.toLowerCase()} is out of date. Run it again.`
     case 'unavailable':
@@ -88,15 +103,7 @@ export function ComposeAnalysisPanel({
     'Comment check',
     isCustomComment,
   )
-  const summaryIsRetryable =
-    summaryState === 'failed' ||
-    summaryState === 'unavailable' ||
-    summaryState === 'authentication-required'
-  const verificationIsRetryable =
-    verificationState === 'failed' ||
-    verificationState === 'unavailable' ||
-    verificationState === 'authentication-required'
-
+  const omittedIssueCount = verification?.omittedIssueCount ?? 0
   return (
     <Panel
       data-compose-section="analysis"
@@ -116,9 +123,7 @@ export function ComposeAnalysisPanel({
             size="xs"
             variant="outline"
           >
-            {extractionState === 'failed' ||
-            extractionState === 'unavailable' ||
-            extractionState === 'authentication-required'
+            {retryableAnalysisStates.has(extractionState)
               ? 'Retry extract'
               : 'Extract text'}
           </Button>
@@ -137,7 +142,7 @@ export function ComposeAnalysisPanel({
             size="xs"
             variant="outline"
           >
-            {summaryIsRetryable
+            {retryableAnalysisStates.has(summaryState)
               ? 'Retry'
               : summary === null
                 ? 'Generate'
@@ -213,7 +218,9 @@ export function ComposeAnalysisPanel({
               size="xs"
               variant="outline"
             >
-              {verificationIsRetryable ? 'Retry' : 'Check'}
+              {retryableAnalysisStates.has(verificationState)
+                ? 'Retry'
+                : 'Check'}
             </Button>
             <Button
               aria-label="Read comment check details"
@@ -275,7 +282,7 @@ export function ComposeAnalysisPanel({
                   size="sm"
                   variant="outline"
                 >
-                  {summaryIsRetryable
+                  {retryableAnalysisStates.has(summaryState)
                     ? 'Retry summary'
                     : summary === null
                       ? 'Generate summary'
@@ -340,7 +347,7 @@ export function ComposeAnalysisPanel({
                   size="sm"
                   variant="outline"
                 >
-                  {verificationIsRetryable
+                  {retryableAnalysisStates.has(verificationState)
                     ? 'Retry comment check'
                     : 'Check comment'}
                 </Button>
@@ -356,9 +363,21 @@ export function ComposeAnalysisPanel({
                         This check is based on partial article text.
                       </p>
                     )}
+                    {verification.issues.length > 0 &&
+                      omittedIssueCount > 0 && (
+                        <p className="text-muted-foreground" role="status">
+                          {omittedIssueCount} potential{' '}
+                          {omittedIssueCount === 1
+                            ? 'issue was'
+                            : 'issues were'}{' '}
+                          omitted because their citations could not be verified.
+                        </p>
+                      )}
                     {verification.issues.length === 0 ? (
                       <p role="status">
-                        No issues were found in the available article text.
+                        {omittedIssueCount > 0
+                          ? `No verifiable issues were found. ${String(omittedIssueCount)} potential ${omittedIssueCount === 1 ? 'issue was' : 'issues were'} omitted because their citations could not be verified.`
+                          : 'No issues were found in the available article text.'}
                       </p>
                     ) : (
                       <ul className="space-y-3">
