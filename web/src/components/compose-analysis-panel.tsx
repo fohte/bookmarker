@@ -27,6 +27,12 @@ function stateMessage(
       return `${subject} is in progress.`
     case 'failed':
       return `${subject} could not be completed. The saved draft is still available.`
+    case 'insufficient':
+      return 'The article does not contain enough information for this analysis.'
+    case 'timeout':
+      return `${subject} timed out. Try again.`
+    case 'invalid-response':
+      return 'The AI check could not return a usable result. The saved draft is still available.'
     case 'stale':
       return `The previous ${subject.toLowerCase()} is out of date. Run it again.`
     case 'unavailable':
@@ -90,10 +96,16 @@ export function ComposeAnalysisPanel({
   )
   const summaryIsRetryable =
     summaryState === 'failed' ||
+    summaryState === 'insufficient' ||
+    summaryState === 'timeout' ||
+    summaryState === 'invalid-response' ||
     summaryState === 'unavailable' ||
     summaryState === 'authentication-required'
   const verificationIsRetryable =
     verificationState === 'failed' ||
+    verificationState === 'insufficient' ||
+    verificationState === 'timeout' ||
+    verificationState === 'invalid-response' ||
     verificationState === 'unavailable' ||
     verificationState === 'authentication-required'
 

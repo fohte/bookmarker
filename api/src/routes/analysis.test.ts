@@ -719,7 +719,7 @@ describe('POST /api/analysis/verify', () => {
     })
   })
 
-  it('rejects an issue quote that does not occur in the comment', async () => {
+  it('drops an issue whose quote does not occur in the comment', async () => {
     const fetchImpl: typeof fetch = () =>
       Promise.resolve(
         completionResponse(
@@ -742,17 +742,12 @@ describe('POST /api/analysis/verify', () => {
     })
 
     expect(result).toEqual({
-      status: 502,
-      body: {
-        error: {
-          code: 'INVALID_ANALYSIS_RESPONSE',
-          message: 'The analysis service returned an invalid response.',
-        },
-      },
+      status: 200,
+      body: { issues: [], partial: false },
     })
   })
 
-  it('rejects error evidence that does not occur in the article', async () => {
+  it('drops an issue whose evidence does not occur in the article', async () => {
     const fetchImpl: typeof fetch = () =>
       Promise.resolve(
         completionResponse(
@@ -776,13 +771,8 @@ describe('POST /api/analysis/verify', () => {
     })
 
     expect(result).toEqual({
-      status: 502,
-      body: {
-        error: {
-          code: 'INVALID_ANALYSIS_RESPONSE',
-          message: 'The analysis service returned an invalid response.',
-        },
-      },
+      status: 200,
+      body: { issues: [], partial: false },
     })
   })
 

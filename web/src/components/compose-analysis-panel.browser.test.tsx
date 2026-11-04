@@ -150,6 +150,35 @@ afterEach(async () => {
 })
 
 describe('ComposeAnalysisPanel in a browser', () => {
+  it.each([
+    {
+      state: 'insufficient' as const,
+      message:
+        'The article does not contain enough information for this analysis.',
+    },
+    {
+      state: 'timeout' as const,
+      message: 'Comment check timed out. Try again.',
+    },
+    {
+      state: 'invalid-response' as const,
+      message:
+        'The AI check could not return a usable result. The saved draft is still available.',
+    },
+  ])(
+    'explains the $state comment check failure',
+    async ({ state, message }) => {
+      mountPanel({
+        verification: null,
+        verificationState: state,
+        defaultOpenDetail: 'verification',
+      })
+      await waitFor(() => dialogSnapshot()?.title === 'Comment check')
+
+      expect(captureOutput(dialogStatusMessages())).toEqual([message])
+    },
+  )
+
   it('opens the full summary from its detail button', async () => {
     mountPanel()
     await click(detailButton('Read full summary'))

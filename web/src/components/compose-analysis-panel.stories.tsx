@@ -85,6 +85,30 @@ export const Failed: Story = {
   name: 'The editor preserves the draft after analysis fails.',
 }
 
+export const InsufficientArticle: Story = {
+  args: {
+    summaryState: 'not-requested',
+    verificationState: 'insufficient',
+  },
+  name: 'The editor explains that the article lacks enough information for a comment check.',
+}
+
+export const AnalysisTimedOut: Story = {
+  args: {
+    summaryState: 'not-requested',
+    verificationState: 'timeout',
+  },
+  name: 'The editor explains that the comment check timed out.',
+}
+
+export const AnalysisResponseCouldNotBeProcessed: Story = {
+  args: {
+    summaryState: 'not-requested',
+    verificationState: 'invalid-response',
+  },
+  name: 'The editor explains that the AI check returned no usable result.',
+}
+
 export const StaleAnalysis: Story = {
   args: {
     article: {
