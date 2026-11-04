@@ -24,10 +24,14 @@ import {
   type ComposeAnalysisSaveCommand,
   matchesAnalysisSaveCommand,
 } from '#features/editor/compose-analysis-command'
+import { closeComposeDraft } from '#features/editor/compose-close-command'
 import { ComposeDeliveryCoordinator } from '#features/editor/compose-delivery-coordinator'
 import { createComposeDeliveryDraftPort } from '#features/editor/compose-delivery-draft'
 import { updateDestinationDraft } from '#features/editor/compose-destination'
-import { discardComposeDraft } from '#features/editor/compose-discard-command'
+import {
+  type ComposeDraftExitPort,
+  discardComposeDraft,
+} from '#features/editor/compose-discard-command'
 import {
   clearDraftVerification,
   updateDraftArticle,
@@ -264,11 +268,20 @@ export class ComposeController {
 
   discardDraft(): Promise<void> {
     if (this.#delivery.isBusy) return Promise.resolve()
-    return discardComposeDraft({
+    return discardComposeDraft({ ...this.#exitPort(), store: this.store })
+  }
+
+  // Leaves the draft saved, unlike discardDraft.
+  closeDraft(): Promise<void> {
+    if (this.#delivery.isBusy) return Promise.resolve()
+    return closeComposeDraft(this.#exitPort())
+  }
+
+  #exitPort(): ComposeDraftExitPort {
+    return {
       isLoading: this.state.isLoading,
       draft: this.#draft,
       lease: this.#lease,
-      store: this.store,
       failedImportCleanups: this.#failedImportCleanups,
       pauseCurrentDraft: () => {
         this.#pauseCurrentDraft()
@@ -290,7 +303,7 @@ export class ComposeController {
       setState: (patch) => {
         this.#setState(patch)
       },
-    })
+    }
   }
 
   dispose(): Promise<void> {

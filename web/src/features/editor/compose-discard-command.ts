@@ -11,25 +11,10 @@ import {
 import type { FailedImportCleanup } from '#features/editor/compose-history'
 import type { ComposeState } from '#features/editor/compose-state'
 
-export async function discardComposeDraft({
-  isLoading,
-  draft,
-  lease,
-  store,
-  failedImportCleanups,
-  pauseCurrentDraft,
-  resumeCurrentDraft,
-  flushCurrentDraft,
-  clearActiveDraft,
-  refreshDraftList,
-  getLockState,
-  showError,
-  setState,
-}: {
+export type ComposeDraftExitPort = {
   isLoading: boolean
   draft: BookmarkDraft | null
   lease: DraftLockLease | null
-  store: DraftStore
   failedImportCleanups: Map<string, FailedImportCleanup>
   pauseCurrentDraft: () => void
   resumeCurrentDraft: () => void
@@ -39,17 +24,55 @@ export async function discardComposeDraft({
   getLockState: () => ComposeState['lockState']
   showError: (error: DraftError) => void
   setState: (patch: Partial<ComposeState>) => void
-}): Promise<void> {
-  if (isLoading) return
-  if (draft === null || lease === null) return
+}
 
-  pauseCurrentDraft()
-  const flushed = await flushCurrentDraft()
+// Returns false when the draft stays open because its latest input could not
+// be saved.
+export async function flushBeforeExit(
+  port: ComposeDraftExitPort,
+): Promise<boolean> {
+  port.pauseCurrentDraft()
+  const flushed = await port.flushCurrentDraft()
   if (flushed.isErr()) {
-    resumeCurrentDraft()
-    showError(flushed.error)
-    return
+    port.resumeCurrentDraft()
+    port.showError(flushed.error)
+    return false
   }
+  return true
+}
+
+export async function finishExit(
+  port: ComposeDraftExitPort,
+  errorMessage: ComposeState['errorMessage'],
+): Promise<void> {
+  port.clearActiveDraft()
+  await port.lease?.release()
+  port.setState({
+    activeDraft: null,
+    canEdit: false,
+    lockState: port.getLockState(),
+    saveState: 'saved',
+    errorMessage,
+    discardOpen: false,
+    isLoading: false,
+  })
+  await port.refreshDraftList()
+}
+
+export async function discardComposeDraft(
+  port: ComposeDraftExitPort & { store: DraftStore },
+): Promise<void> {
+  const {
+    draft,
+    lease,
+    store,
+    failedImportCleanups,
+    resumeCurrentDraft,
+    showError,
+  } = port
+  if (port.isLoading) return
+  if (draft === null || lease === null) return
+  if (!(await flushBeforeExit(port))) return
 
   const cleanup = cleanupBeforeDiscard(
     failedImportCleanups.get(draft.id),
@@ -81,16 +104,5 @@ export async function discardComposeDraft({
   }
 
   failedImportCleanups.delete(draft.id)
-  clearActiveDraft()
-  await lease.release()
-  setState({
-    activeDraft: null,
-    canEdit: false,
-    lockState: getLockState(),
-    saveState: 'saved',
-    errorMessage: cleanup.value.errorMessage,
-    discardOpen: false,
-    isLoading: false,
-  })
-  await refreshDraftList()
+  await finishExit(port, cleanup.value.errorMessage)
 }

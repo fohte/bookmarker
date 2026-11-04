@@ -1622,6 +1622,97 @@ describe('ComposeController in a browser', () => {
     expect(captureOutput(actual)).toEqual(expected)
   })
 
+  it('closes a draft without deleting it and releases it for reopening', async () => {
+    const store = createIndexedDbDraftStore()
+    const controller = new ComposeController(store)
+    await controller.start(null)
+    const opened = valueOrThrow(
+      await controller.openSource(
+        {
+          version: 1,
+          url: 'https://example.test/closed-article',
+          partial: true,
+        },
+        { cleanupUrl: '/compose', intake: 'manual' },
+      ),
+    )
+    controller.updateCommonComment('A fictional note kept after closing.')
+
+    await controller.closeDraft()
+    const afterClose = {
+      activeId: controller.state.activeDraft?.id ?? null,
+      canEdit: controller.state.canEdit,
+      lockState: controller.state.lockState,
+      listsClosedDraft: controller.state.drafts.some(
+        (draft) => draft.id === opened.id,
+      ),
+      savedComment:
+        valueOrThrow(await store.getDraft(opened.id))?.commonComment ?? null,
+      url: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+    }
+    await controller.selectDraft(opened.id)
+    const afterReopen = {
+      activeIdMatchesClosedDraft:
+        controller.state.activeDraft?.id === opened.id,
+      canEdit: controller.state.canEdit,
+      lockState: controller.state.lockState,
+    }
+    await controller.dispose()
+
+    expect(captureOutput({ afterClose, afterReopen })).toEqual({
+      afterClose: {
+        activeId: null,
+        canEdit: false,
+        lockState: 'available',
+        listsClosedDraft: true,
+        savedComment: 'A fictional note kept after closing.',
+        url: '/compose',
+      },
+      afterReopen: {
+        activeIdMatchesClosedDraft: true,
+        canEdit: true,
+        lockState: 'owned',
+      },
+    })
+  })
+
+  it('keeps the draft open and editable when saving before close fails', async () => {
+    const baseStore = createIndexedDbDraftStore()
+    const initialDraft = draft()
+    valueOrThrow(await baseStore.addDraft(initialDraft))
+    const writeFailure = new DraftError(
+      'storage-failed',
+      'The draft could not be saved on this device. Your input is still available to retry.',
+    )
+    const store: DraftStore = {
+      ...baseStore,
+      saveDraft: () => errAsync(writeFailure),
+    }
+
+    const controller = new ComposeController(store)
+    await controller.start(initialDraft.id)
+    controller.updateCommonComment('Unsaved user input')
+    await controller.closeDraft()
+    const actual = {
+      activeId: controller.state.activeDraft?.id ?? null,
+      comment: controller.state.activeDraft?.commonComment ?? null,
+      canEdit: controller.state.canEdit,
+      lockState: controller.state.lockState,
+      saveState: controller.state.saveState,
+      errorMessage: controller.state.errorMessage,
+    }
+    await controller.dispose()
+
+    expect(captureOutput(actual)).toEqual({
+      activeId: initialDraft.id,
+      comment: 'Unsaved user input',
+      canEdit: true,
+      lockState: 'owned',
+      saveState: 'failed',
+      errorMessage: writeFailure.message,
+    })
+  })
+
   it('restores the draft URL when deleting a draft fails', async () => {
     const baseStore = createIndexedDbDraftStore()
     const deleteError = new DraftError(

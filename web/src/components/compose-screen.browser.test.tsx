@@ -149,10 +149,12 @@ function closeDialogButton(): HTMLButtonElement {
   return match
 }
 
-function draftSelector(): HTMLSelectElement {
-  const match = document.querySelector('#draft-selection')
-  if (!(match instanceof HTMLSelectElement)) {
-    throw new Error('The saved draft selector was not rendered.')
+function draftButton(scope: string, title: string): HTMLButtonElement {
+  const match = [...document.querySelectorAll(`${scope} button`)].find(
+    (button) => button.textContent.includes(title),
+  )
+  if (!(match instanceof HTMLButtonElement)) {
+    throw new Error(`The ${title} draft was not rendered in ${scope}.`)
   }
   return match
 }
@@ -359,24 +361,62 @@ describe('ComposeScreen in a browser', () => {
     ).toBe('A fictional first article')
   })
 
-  it('keeps saved drafts selectable after discard or while a draft is read-only', async () => {
-    const selectedAfterDiscard: string[] = []
+  it('lists only unfinished drafts on the empty screen and opens the chosen one', async () => {
+    const postedFirstDraft: BookmarkDraft = {
+      ...firstDraft,
+      delivery: [
+        {
+          article: { url: firstDraft.source.url },
+          target: {
+            destination: 'hatena',
+            operationId: '00000000-0000-4000-8000-000000000211',
+            comment: '',
+            options: { tags: [], private: false },
+          },
+          result: {
+            destination: 'hatena',
+            operationId: '00000000-0000-4000-8000-000000000211',
+            status: 'succeeded',
+            retryable: false,
+          },
+        },
+      ],
+    }
+    const selectedWithoutDraft: string[] = []
     mount(
       <ComposeScreen
         {...screenProps({
-          state: noDraftState,
-          onSelectDraft: (id) => selectedAfterDiscard.push(id),
+          state: { ...noDraftState, drafts: [postedFirstDraft, secondDraft] },
+          onSelectDraft: (id) => selectedWithoutDraft.push(id),
         })}
       />,
     )
-    await openDrafts(2)
-    const afterDiscardDisabled = draftSelector().disabled
-    await act(async () => {
-      await userEvent.selectOptions(draftSelector(), secondDraftId)
-    })
-    await waitFor(() => document.querySelector('[role="dialog"]') === null)
-    unmount()
+    const unfinished = 'section[aria-labelledby="unfinished-drafts"]'
+    const unfinishedDrafts = [
+      ...document.querySelectorAll(`${unfinished} button`),
+    ].map((button) => button.textContent)
+    const withoutDraftDisabled = draftButton(
+      unfinished,
+      'A fictional second article',
+    ).disabled
+    await click(draftButton(unfinished, 'A fictional second article'))
 
+    expect(
+      captureOutput({
+        unfinishedDrafts,
+        disabled: withoutDraftDisabled,
+        selectedDraftIds: selectedWithoutDraft,
+      }),
+    ).toEqual({
+      unfinishedDrafts: [
+        'A fictional second articlestories.example.test · not posted',
+      ],
+      disabled: false,
+      selectedDraftIds: [secondDraftId],
+    })
+  })
+
+  it('keeps drafts switchable from the sheet while the open draft is read-only', async () => {
     const selectedWhileReadOnly: string[] = []
     mount(
       <ComposeScreen
@@ -387,36 +427,25 @@ describe('ComposeScreen in a browser', () => {
       />,
     )
     await openDrafts(2)
-    const readOnlyDisabled = draftSelector().disabled
-    await act(async () => {
-      await userEvent.selectOptions(draftSelector(), secondDraftId)
-    })
+    const readOnlyDisabled = draftButton(
+      '[role="dialog"]',
+      'A fictional second article',
+    ).disabled
+    await click(draftButton('[role="dialog"]', 'A fictional second article'))
     await waitFor(() => document.querySelector('[role="dialog"]') === null)
 
     expect(
       captureOutput({
-        afterDiscard: {
-          selectorDisabled: afterDiscardDisabled,
-          selectedDraftIds: selectedAfterDiscard,
-        },
-        whileReadOnly: {
-          selectorDisabled: readOnlyDisabled,
-          selectedDraftIds: selectedWhileReadOnly,
-        },
+        disabled: readOnlyDisabled,
+        selectedDraftIds: selectedWhileReadOnly,
       }),
     ).toEqual({
-      afterDiscard: {
-        selectorDisabled: false,
-        selectedDraftIds: [secondDraftId],
-      },
-      whileReadOnly: {
-        selectorDisabled: false,
-        selectedDraftIds: [secondDraftId],
-      },
+      disabled: false,
+      selectedDraftIds: [secondDraftId],
     })
   })
 
-  it('opens URL entry without a draft and submits the separate draft request', async () => {
+  it('starts a separate draft from the URL on the empty screen', async () => {
     const createdUrls: string[] = []
     mount(
       <NoDraftScreen
@@ -426,26 +455,17 @@ describe('ComposeScreen in a browser', () => {
         }}
       />,
     )
-    await click(buttonByText('Open a draft'))
-    const sourceUrl = document.querySelector<HTMLInputElement>('#source-url')
-    if (sourceUrl === null) {
-      throw new Error('The new article URL field was not rendered.')
-    }
     await act(async () => {
-      await userEvent.fill(sourceUrl, 'https://stories.example.test/new-entry')
-      await userEvent.click(buttonByText('Create draft'))
+      await userEvent.fill(
+        page.getByRole('textbox', { name: 'Bookmark an article' }),
+        'https://stories.example.test/new-entry',
+      )
+      await userEvent.click(buttonByText('Start'))
     })
-    await waitFor(() => document.querySelector('[role="dialog"]') === null)
 
-    expect(
-      captureOutput({
-        createdUrls,
-        managerOpen: document.querySelector('[role="dialog"]') !== null,
-      }),
-    ).toEqual({
-      createdUrls: ['https://stories.example.test/new-entry'],
-      managerOpen: false,
-    })
+    expect(captureOutput(createdUrls)).toEqual([
+      'https://stories.example.test/new-entry',
+    ])
   })
 
   it('keeps URL entry open when creating a draft fails', async () => {
@@ -468,7 +488,7 @@ describe('ComposeScreen in a browser', () => {
         sourceUrl,
         'https://stories.example.test/retry-entry',
       )
-      await userEvent.click(buttonByText('Create draft'))
+      await userEvent.click(buttonByText('Open'))
     })
 
     expect(
@@ -494,7 +514,7 @@ describe('ComposeScreen in a browser', () => {
       />,
     )
     await openDrafts(2)
-    await click(buttonByText('Discard current draft'))
+    await click(buttonByText('Discard'))
     await waitFor(() => document.querySelector('[role="dialog"]') === null)
 
     expect(
@@ -518,12 +538,15 @@ describe('ComposeScreen in a browser', () => {
 
     expect(
       captureOutput({
-        selectorDisabled: draftSelector().disabled,
-        createDisabled: buttonByText('Create draft').disabled,
-        discardDisabled: buttonByText('Discard current draft').disabled,
+        switchDisabled: draftButton(
+          '[role="dialog"]',
+          'A fictional second article',
+        ).disabled,
+        createDisabled: buttonByText('Open').disabled,
+        discardDisabled: buttonByText('Discard').disabled,
       }),
     ).toEqual({
-      selectorDisabled: true,
+      switchDisabled: true,
       createDisabled: true,
       discardDisabled: true,
     })
@@ -762,6 +785,56 @@ describe('ComposeScreen in a browser', () => {
     await click(buttonByText('Retry'))
 
     expect(captureOutput(retries)).toBe(1)
+  })
+
+  it('closes the draft with Done and reopens it in the editor', async () => {
+    let closes = 0
+    function ClosingScreen() {
+      const [activeDraft, setActiveDraft] = useState<BookmarkDraft | null>(
+        firstDraft,
+      )
+      return (
+        <ComposeScreen
+          {...screenProps({
+            state:
+              activeDraft === null
+                ? noDraftState
+                : { ...editingState, activeDraft },
+            defaultResultsOpen: true,
+            onCloseDraft: () => {
+              closes += 1
+              setActiveDraft(null)
+            },
+            onSelectDraft: () => {
+              setActiveDraft(firstDraft)
+            },
+          })}
+        />
+      )
+    }
+    const visibleScreen = () => ({
+      results: document.querySelector('[aria-label="Results"]') !== null,
+      empty: document.querySelector('#start-url') !== null,
+      editor: document.querySelector('[aria-label="Compose"]') !== null,
+    })
+    mount(<ClosingScreen />)
+    const beforeDone = visibleScreen()
+    await click(buttonByText('Done'))
+    const afterDone = { closes, ...visibleScreen() }
+    await click(
+      draftButton(
+        'section[aria-labelledby="unfinished-drafts"]',
+        'A fictional first article',
+      ),
+    )
+
+    expect(
+      captureOutput({ beforeDone, afterDone, afterReopen: visibleScreen() }),
+    ).toEqual({
+      beforeDone: { results: true, empty: false, editor: false },
+      afterDone: { closes: 1, results: false, empty: true, editor: false },
+      afterReopen: { results: false, empty: false, editor: true },
+    })
   })
 
   it('retries saving from the header after saving fails', async () => {

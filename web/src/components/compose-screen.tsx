@@ -22,7 +22,8 @@ import { ComposeArticleDetailsDialog } from '#components/compose-article-details
 import { ComposeCheckSheet } from '#components/compose-check-sheet'
 import type { ComposeDeliveryNoticesProps } from '#components/compose-delivery-notices'
 import { ComposeDestinationsPanel } from '#components/compose-destinations-panel'
-import { ComposeDraftManagerDialog } from '#components/compose-draft-manager-dialog'
+import { ComposeDraftsSheet } from '#components/compose-drafts-sheet'
+import { ComposeEmptyScreen } from '#components/compose-empty-screen'
 import { ComposeHeader } from '#components/compose-header'
 import { ComposePostBar } from '#components/compose-post-bar'
 import { ComposeResults } from '#components/compose-results'
@@ -64,6 +65,7 @@ export type ComposeScreenProps = {
   onRequestDiscard: () => void
   onCancelDiscard: () => void
   onConfirmDiscard: () => void
+  onCloseDraft: () => void
 }
 
 export function ComposeScreen({
@@ -89,9 +91,10 @@ export function ComposeScreen({
   onRequestDiscard,
   onCancelDiscard,
   onConfirmDiscard,
+  onCloseDraft,
 }: ComposeScreenProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
-  const [draftManagerOpen, setDraftManagerOpen] = useState(false)
+  const [draftsOpen, setDraftsOpen] = useState(false)
   const [openDestination, setOpenDestination] = useState<DestinationId | null>(
     null,
   )
@@ -100,6 +103,9 @@ export function ComposeScreen({
   const [resultsDraftId, setResultsDraftId] = useState(
     defaultResultsOpen ? (activeDraft?.id ?? null) : null,
   )
+  // Done keeps the results on screen until the draft has closed; reopening the
+  // draft later starts in the editor.
+  if (activeDraft === null && resultsDraftId !== null) setResultsDraftId(null)
   const showResults = activeDraft !== null && resultsDraftId === activeDraft.id
   const deliveryBusy = state.deliveryState !== 'idle'
   const canEdit = state.canEdit && !deliveryBusy && prePublishReview === null
@@ -108,6 +114,7 @@ export function ComposeScreen({
     !state.isLoading &&
     !deliveryBusy &&
     prePublishReview === null
+  const canSwitchDraft = !deliveryBusy && prePublishReview === null
   const pending =
     activeDraft === null ? [] : getPendingDeliveryComments(activeDraft)
   const pendingCount = pending.filter(
@@ -171,7 +178,7 @@ export function ComposeScreen({
         }
         draftCount={state.drafts.length}
         onOpenDrafts={() => {
-          setDraftManagerOpen(true)
+          setDraftsOpen(true)
         }}
         onRetrySave={onRetrySave}
         saveState={activeDraft === null ? null : state.saveState}
@@ -244,9 +251,7 @@ export function ComposeScreen({
           draft={activeDraft}
           isLoadingMetadata={deliveryControls.isLoadingMetadata}
           metadataErrorMessage={deliveryControls.metadataErrorMessage}
-          onBackToEdit={() => {
-            setResultsDraftId(null)
-          }}
+          onDone={onCloseDraft}
           onRetry={deliveryControls.onRetryDelivery}
           onRetryDeliverySave={deliveryControls.onRetryDeliverySave}
           onRetryMetadata={deliveryControls.onRetryMetadata}
@@ -254,28 +259,23 @@ export function ComposeScreen({
           xIntentHref={deliveryControls.xIntentHref}
           xSelected={xSelected}
         />
+      ) : activeDraft === null && !state.isLoading ? (
+        <ComposeEmptyScreen
+          canCreate={canCreate}
+          canSwitchDraft={canSwitchDraft}
+          drafts={state.drafts}
+          onOpenSource={onOpenSource}
+          onSelectDraft={onSelectDraft}
+          onSourceUrlChange={onSourceUrlChange}
+          sourceUrl={sourceUrl}
+        />
       ) : (
         <>
           <div data-compose-content className="min-h-0 flex-1 overflow-y-auto">
-            {state.isLoading ? (
+            {state.isLoading || activeDraft === null ? (
               <p className="mx-auto max-w-270 p-4 text-sm text-muted-foreground-strong md:px-6 md:py-12">
                 Loading drafts…
               </p>
-            ) : activeDraft === null ? (
-              <div className="mx-auto flex max-w-270 flex-wrap items-center gap-x-3 p-4 text-sm md:px-6 md:py-12">
-                <p className="text-muted-foreground-strong">
-                  No draft is open.
-                </p>
-                <button
-                  className="min-h-11 text-primary"
-                  onClick={() => {
-                    setDraftManagerOpen(true)
-                  }}
-                  type="button"
-                >
-                  Open a draft
-                </button>
-              </div>
             ) : (
               <div className="mx-auto flex max-w-270 flex-col md:flex-row md:flex-wrap md:items-start md:gap-14 md:px-6 md:py-12">
                 <ComposeArticle
@@ -355,22 +355,22 @@ export function ComposeScreen({
           open={detailsOpen}
         />
       )}
-      <ComposeDraftManagerDialog
+      <ComposeDraftsSheet
         activeDraft={activeDraft}
         canCreate={canCreate}
         canDiscard={canEdit}
-        canSwitchDraft={!deliveryBusy && prePublishReview === null}
+        canSwitchDraft={canSwitchDraft}
         drafts={state.drafts}
         intakeError={state.intakeError}
-        onOpenChange={setDraftManagerOpen}
+        onOpenChange={setDraftsOpen}
         onOpenSource={onOpenSource}
         onRequestDiscard={() => {
-          setDraftManagerOpen(false)
+          setDraftsOpen(false)
           onRequestDiscard()
         }}
         onSelectDraft={onSelectDraft}
         onSourceUrlChange={onSourceUrlChange}
-        open={draftManagerOpen}
+        open={draftsOpen}
         sourceUrl={sourceUrl}
       />
 

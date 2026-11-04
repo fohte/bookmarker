@@ -92,6 +92,7 @@ const handlers: Omit<ComposeScreenProps, 'state' | 'sourceUrl'> = {
   onRequestDiscard: () => undefined,
   onCancelDiscard: () => undefined,
   onConfirmDiscard: () => undefined,
+  onCloseDraft: () => undefined,
 }
 
 const meta = {
@@ -149,7 +150,7 @@ export const Empty: Story = {
     state: emptyState,
     sourceUrl: '',
   },
-  name: 'The editor offers to open a draft when none is open.',
+  name: 'The screen asks for an article URL when no draft is open.',
 }
 
 export const Loading: Story = {

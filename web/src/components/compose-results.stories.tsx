@@ -98,7 +98,7 @@ const meta = {
     authenticationRequired: false,
     signInHref: null,
     onRetry: () => undefined,
-    onBackToEdit: () => undefined,
+    onDone: () => undefined,
     onRetryDeliverySave: () => undefined,
     onRetryMetadata: () => undefined,
   },
