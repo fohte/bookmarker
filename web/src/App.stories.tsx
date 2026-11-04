@@ -65,10 +65,13 @@ export const Preview: Story = {
           deliveryErrorMessage: null,
           authenticationRequired: false,
           signInHref: null,
-          onPublish: () => undefined,
+          onRequestPublishReview: () => undefined,
           onRetryDeliverySave: () => undefined,
           onRetryMetadata: () => undefined,
         }}
+        prePublishReview={null}
+        onCancelPrePublishReview={() => undefined}
+        onConfirmPrePublish={() => undefined}
         copyConfirmationDestination={null}
         onRequestCopyCommonComment={() => undefined}
         onCancelCopyCommonComment={() => undefined}

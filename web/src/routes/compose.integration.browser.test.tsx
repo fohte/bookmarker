@@ -88,9 +88,9 @@ async function selectOption({
   await act(async () => option.click())
 }
 
-function response(body: unknown): Response {
+function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
-    status: 200,
+    status,
     headers: { 'content-type': 'application/json' },
   })
 }
@@ -103,6 +103,18 @@ function requestPath(input: RequestInfo | URL): string {
 
 function bodyValue(init: RequestInit | undefined): unknown {
   return typeof init?.body === 'string' ? JSON.parse(init.body) : null
+}
+
+function commentFromBody(body: unknown): string {
+  if (
+    typeof body !== 'object' ||
+    body === null ||
+    !('comment' in body) ||
+    typeof body.comment !== 'string'
+  ) {
+    throw new Error('The comment check request did not include a comment.')
+  }
+  return body.comment
 }
 
 function parsePublishRequest(value: unknown): PublishRequest {
@@ -219,6 +231,7 @@ afterEach(async () => {
 describe('ComposeRoute publishing in a browser', () => {
   it('imports a shared article, analyzes it, saves both comments, and publishes through the screen', async () => {
     const requests: Array<{ path: string; body: unknown }> = []
+    let verificationRequestCount = 0
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = requestPath(input)
       const body = bodyValue(init)
@@ -231,6 +244,27 @@ describe('ComposeRoute publishing in a browser', () => {
       }
       if (path === '/api/analysis/summary') {
         return Promise.resolve(response(summary))
+      }
+      if (path === '/api/analysis/verify') {
+        verificationRequestCount += 1
+        const result =
+          verificationRequestCount % 2 === 1
+            ? response({ error: { code: 'temporary_failure' } }, 503)
+            : response({
+                issues: [
+                  {
+                    kind: 'uncertain',
+                    quote: 'A separate individual comment 😀',
+                    reason: 'The article does not describe this detail.',
+                  },
+                ],
+                partial: false,
+              })
+        return new Promise((resolve) => {
+          window.setTimeout(() => {
+            resolve(result)
+          }, 80)
+        })
       }
       if (path === '/api/publish') {
         const request = parsePublishRequest(body)
@@ -322,12 +356,65 @@ describe('ComposeRoute publishing in a browser', () => {
     await act(async () => {
       const publishButton = [...document.querySelectorAll('button')].find(
         (button) =>
-          button.textContent.trim() === 'Publish selected destinations',
+          button.textContent.trim() === 'Check comments before publishing',
       )
       if (!(publishButton instanceof HTMLButtonElement)) {
         throw new Error('The publish button was not found.')
       }
       await userEvent.click(publishButton)
+    })
+    await waitFor(() =>
+      document.body.textContent.includes('Review comments before publishing'),
+    )
+    await waitFor(() => document.body.textContent.includes('Checking comment…'))
+    const whileChecking = {
+      publishRequests: requests.filter(({ path }) => path === '/api/publish')
+        .length,
+      publishButtonVisible: [...document.querySelectorAll('button')].some(
+        (button) => button.textContent.trim() === 'Publish',
+      ),
+    }
+    await waitFor(() =>
+      document.body.textContent.includes(
+        'The article does not describe this detail.',
+      ),
+    )
+    const prePublishBeforeCancel = {
+      publishRequests: requests.filter(({ path }) => path === '/api/publish')
+        .length,
+      checkRequests: requests.filter(
+        ({ path }) => path === '/api/analysis/verify',
+      ).length,
+      checkComments: requests
+        .filter(({ path }) => path === '/api/analysis/verify')
+        .map(({ body }) => commentFromBody(body)),
+      failureShown: document.body.textContent.includes(
+        'The comment check service is temporarily unavailable.',
+      ),
+    }
+    await act(async () => {
+      await userEvent.click(page.getByRole('button', { name: 'Cancel' }))
+    })
+    await waitFor(
+      () =>
+        !document.body.textContent.includes(
+          'Review comments before publishing',
+        ),
+    )
+    await act(async () => {
+      await userEvent.click(
+        page.getByRole('button', {
+          name: 'Check comments before publishing',
+        }),
+      )
+    })
+    await waitFor(() =>
+      document.body.textContent.includes(
+        'The article does not describe this detail.',
+      ),
+    )
+    await act(async () => {
+      await userEvent.click(page.getByRole('button', { name: 'Publish' }))
     })
     await waitFor(() => document.body.textContent.includes('2 succeeded'))
     await act(async () => {
@@ -357,6 +444,8 @@ describe('ComposeRoute publishing in a browser', () => {
       requestPaths: requests
         .map(({ path }) => path)
         .filter((path) => path !== '/api/destinations'),
+      prePublishBeforeCancel,
+      whileChecking,
       request:
         publishBody === undefined || publishBody === null
           ? null
@@ -377,8 +466,24 @@ describe('ComposeRoute publishing in a browser', () => {
       requestPaths: [
         '/api/articles/extract',
         '/api/analysis/summary',
+        '/api/analysis/verify',
+        '/api/analysis/verify',
+        '/api/analysis/verify',
         '/api/publish',
       ],
+      prePublishBeforeCancel: {
+        publishRequests: 0,
+        checkRequests: 2,
+        checkComments: [
+          'A separate individual comment 😀 ',
+          'A shared comment with trailing spaces  ',
+        ],
+        failureShown: true,
+      },
+      whileChecking: {
+        publishRequests: 0,
+        publishButtonVisible: false,
+      },
       request: {
         article: {
           url: extractedArticle.url,

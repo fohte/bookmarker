@@ -21,6 +21,12 @@ export type ComposeDeliveryPlan = {
   snapshots: BookmarkDraft['delivery']
 }
 
+export type PendingDeliveryComment = {
+  destination: Exclude<PublishTarget['destination'], 'x'>
+  commentTargetId: string
+  comment: string
+}
+
 const operationKey = (
   target: Pick<PublishTarget, 'destination' | 'operationId'>,
 ) => `${target.destination}:${target.operationId}`
@@ -65,6 +71,25 @@ const isSelectedPublishDestination = (
   BookmarkDraft['destinations'][number],
   { destination: PublishTarget['destination'] }
 > => destination.selected && destination.destination !== 'x'
+
+export function getPendingDeliveryComments(
+  draft: BookmarkDraft,
+): PendingDeliveryComment[] {
+  return draft.destinations
+    .filter(isSelectedPublishDestination)
+    .filter(
+      (destination) =>
+        !destinationHasSucceeded(draft.delivery, destination.destination),
+    )
+    .map((destination) => ({
+      destination: destination.destination,
+      commentTargetId:
+        destination.commentMode === 'common'
+          ? 'common'
+          : `destination:${destination.destination}`,
+      comment: effectiveDestinationComment(draft.commonComment, destination),
+    }))
+}
 
 function publishArticle(draft: BookmarkDraft): PublishArticle {
   if (draft.article !== undefined) {

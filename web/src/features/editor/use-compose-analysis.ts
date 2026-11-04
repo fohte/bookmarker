@@ -1,4 +1,9 @@
-import type { Article, BookmarkDraft, DestinationId } from 'api/contracts'
+import type {
+  Article,
+  BookmarkDraft,
+  DestinationId,
+  Verification,
+} from 'api/contracts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
@@ -17,7 +22,14 @@ import {
   sameArticle,
 } from '#features/editor/compose-analysis-command'
 import type { AnalysisDisplayState } from '#features/editor/compose-analysis-state'
+import type { PendingDeliveryComment } from '#features/editor/compose-delivery-command'
 import { effectiveDestinationComment } from '#features/editor/compose-destination'
+
+export type PublishCommentCheck = PendingDeliveryComment & {
+  status: 'checking' | 'success' | 'failed' | 'skipped'
+  verification: Verification | null
+  error: string | null
+}
 
 type VerificationTarget =
   | { id: 'common'; kind: 'common'; label: string; value: string }
@@ -109,6 +121,7 @@ export function useComposeAnalysis(
   )
   const autoExtractionStarted = useRef(new Set<string>())
   const autoSummaryStarted = useRef(new Set<string>())
+  const verificationCache = useRef(new Map<string, Verification>())
 
   const article = useMemo(
     () => manualArticleForAnalysis(draft?.article),
@@ -154,6 +167,10 @@ export function useComposeAnalysis(
 
   useEffect(() => {
     setSelectedTargetId('common')
+  }, [draft?.id])
+
+  useEffect(() => {
+    verificationCache.current.clear()
   }, [draft?.id])
 
   useEffect(() => {
@@ -288,6 +305,15 @@ export function useComposeAnalysis(
       return
     }
     const result = await analysis.verify()
+    result.match(
+      (value) => {
+        verificationCache.current.set(
+          JSON.stringify([draft.id, article, target.value]),
+          value,
+        )
+      },
+      () => undefined,
+    )
     if (target.kind !== 'common') return
 
     result.match(
@@ -303,6 +329,94 @@ export function useComposeAnalysis(
       () => undefined,
     )
   }, [analysis.verify, article, canEdit, draft, saveAnalysisResult, target])
+
+  const verifyPublishComments = useCallback(
+    async (
+      comments: PendingDeliveryComment[],
+      signal: AbortSignal,
+    ): Promise<PublishCommentCheck[]> => {
+      if (draft === null) return []
+
+      return Promise.all(
+        comments.map(async (item): Promise<PublishCommentCheck> => {
+          if (item.comment.trim().length === 0) {
+            return {
+              ...item,
+              status: 'skipped',
+              verification: null,
+              error: null,
+            }
+          }
+          if (article === null || article.text.trim().length === 0) {
+            return {
+              ...item,
+              status: 'failed',
+              verification: null,
+              error: 'Article text is unavailable for comment checking.',
+            }
+          }
+
+          const key = JSON.stringify([draft.id, article, item.comment])
+          const cached = verificationCache.current.get(key)
+          if (cached !== undefined) {
+            return {
+              ...item,
+              status: 'success',
+              verification: cached,
+              error: null,
+            }
+          }
+          if (signal.aborted) {
+            return {
+              ...item,
+              status: 'failed',
+              verification: null,
+              error: 'The comment check was cancelled.',
+            }
+          }
+
+          const result = await operations.verifyComment(article, item.comment, {
+            signal,
+          })
+          return result.match(
+            (verification) => {
+              verificationCache.current.set(key, verification)
+              if (
+                item.commentTargetId === 'common' &&
+                item.comment === draft.commonComment
+              ) {
+                saveAnalysisResult({
+                  kind: 'verification',
+                  expectedDraftId: draft.id,
+                  expectedArticle: article,
+                  expectedComment: { id: 'common', value: item.comment },
+                  verification,
+                })
+              }
+              return {
+                ...item,
+                status: 'success',
+                verification,
+                error: null,
+              }
+            },
+            (error) => ({
+              ...item,
+              status: 'failed',
+              verification: null,
+              error:
+                error.kind === 'authentication-required'
+                  ? 'Sign in to use comment checking.'
+                  : error.kind === 'http' && error.status === 503
+                    ? 'The comment check service is temporarily unavailable.'
+                    : error.message,
+            }),
+          )
+        }),
+      )
+    },
+    [article, draft, operations, saveAnalysisResult],
+  )
 
   const storedSummary = draft?.analysis?.summary
   const summary =
@@ -339,5 +453,6 @@ export function useComposeAnalysis(
     onExtractArticle: () => extractArticle(autoAnalyzeDraftId === draft?.id),
     onSummarizeArticle: summarizeArticle,
     onVerifyComment: verifyComment,
+    onVerifyPublishComments: verifyPublishComments,
   }
 }

@@ -75,7 +75,7 @@ const Harness = ({ draft: activeDraft, state, canEdit }: HarnessProps) => {
         (destination) =>
           destination.destination === 'x' && destination.selected,
       )}
-      onPublish={noop}
+      onRequestPublishReview={noop}
       onRetryDeliverySave={noop}
       onRetryMetadata={onLoadMetadata}
     />
