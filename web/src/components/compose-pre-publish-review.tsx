@@ -10,7 +10,7 @@ import {
 import type { Verification } from 'api/contracts'
 
 import { destinationNames } from '#components/compose-destination-labels'
-import type { PublishCommentCheck } from '#features/editor/use-compose-analysis'
+import type { PublishCommentCheck } from '#features/editor/compose-pre-publish'
 
 export type ComposePrePublishReviewProps = {
   status: 'checking' | 'complete'
@@ -57,13 +57,18 @@ export function ComposePrePublishReview({
             checks.map((check, index) => (
               <section
                 key={`${check.destination}:${String(index)}`}
+                data-prepublish-destination={check.destination}
+                data-prepublish-status={check.status}
                 className="space-y-1 border-t border-border pt-3 first:border-0 first:pt-0"
               >
                 <h3 className="text-sm font-medium">
                   {destinationNames[check.destination]} comment
                 </h3>
                 {check.comment.length > 0 && (
-                  <p className="whitespace-pre-wrap break-words text-sm">
+                  <p
+                    data-prepublish-comment
+                    className="whitespace-pre-wrap break-words text-sm"
+                  >
                     {check.comment}
                   </p>
                 )}
@@ -98,6 +103,7 @@ export function ComposePrePublishReview({
                         {check.verification.issues.map((issue, issueIndex) => (
                           <li
                             key={`${issue.kind}:${String(issueIndex)}`}
+                            data-prepublish-issue
                             className="rounded-md border border-border p-2"
                           >
                             <p className="font-medium">

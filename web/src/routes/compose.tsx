@@ -3,15 +3,14 @@ import {
   type DestinationId,
   ShareInputSchema,
 } from 'api/contracts'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
-import type { ComposePrePublishReviewProps } from '#components/compose-pre-publish-review'
 import { ComposeScreen } from '#components/compose-screen'
-import { getPendingDeliveryComments } from '#features/editor/compose-delivery-command'
 import { currentUrlWithoutDraft } from '#features/editor/compose-history'
 import { useComposeAnalysis } from '#features/editor/use-compose-analysis'
 import { useComposeController } from '#features/editor/use-compose-controller'
 import { useComposeDelivery } from '#features/editor/use-compose-delivery'
+import { useComposePrePublishReview } from '#features/editor/use-compose-pre-publish-review'
 import { useShareIntake } from '#features/share/use-share-intake'
 
 export function ComposeRoute() {
@@ -22,12 +21,6 @@ export function ComposeRoute() {
     null,
   )
   const [articleTextError, setArticleTextError] = useState<string | null>(null)
-  const [prePublishReview, setPrePublishReview] = useState<Omit<
-    ComposePrePublishReviewProps,
-    'onCancel' | 'onPublish'
-  > | null>(null)
-  const prePublishController = useRef<AbortController | null>(null)
-  const prePublishStarted = useRef(false)
   const controller = useComposeController()
   const analysis = useComposeAnalysis({
     draft: controller.state.activeDraft,
@@ -39,6 +32,14 @@ export function ComposeRoute() {
     draft: controller.state.activeDraft,
     state: controller.state,
     canEdit: controller.state.canEdit && !controller.state.isLoading,
+  })
+  const prePublish = useComposePrePublishReview({
+    draft: controller.state.activeDraft,
+    metadata: delivery.metadata,
+    verifyComments: analysis.onVerifyPublishComments,
+    publish: (metadata) => {
+      void controller.publishSelectedDestinations(metadata)
+    },
   })
   const openSharedSource = useCallback(
     async (
@@ -63,65 +64,9 @@ export function ComposeRoute() {
     reportIntakeError: controller.reportIntakeError,
   })
 
-  const startPrePublishReview = () => {
-    const draft = controller.state.activeDraft
-    if (
-      draft === null ||
-      delivery.metadata === null ||
-      prePublishStarted.current
-    )
-      return
-
-    prePublishStarted.current = true
-    const abortController = new AbortController()
-    prePublishController.current = abortController
-    const comments = getPendingDeliveryComments(draft)
-    const pendingChecks = comments.map((comment) => ({
-      ...comment,
-      status:
-        comment.comment.trim().length === 0
-          ? ('skipped' as const)
-          : ('checking' as const),
-      verification: null,
-      error: null,
-    }))
-    setPrePublishReview({ status: 'checking', checks: pendingChecks })
-
-    void analysis
-      .onVerifyPublishComments(comments, abortController.signal)
-      .then((checks) => {
-        if (abortController.signal.aborted) return
-        setPrePublishReview({ status: 'complete', checks })
-      })
-  }
-
-  const cancelPrePublishReview = () => {
-    prePublishController.current?.abort()
-    prePublishController.current = null
-    prePublishStarted.current = false
-    setPrePublishReview(null)
-  }
-
-  const confirmPrePublish = () => {
-    if (prePublishReview?.status !== 'complete' || delivery.metadata === null)
-      return
-
-    prePublishController.current = null
-    prePublishStarted.current = false
-    setPrePublishReview(null)
-    void controller.publishSelectedDestinations(delivery.metadata)
-  }
-
   useEffect(() => {
     setArticleTextError(null)
   }, [controller.state.activeDraft?.id])
-
-  useEffect(
-    () => () => {
-      prePublishController.current?.abort()
-    },
-    [],
-  )
 
   const openManualSource = async (): Promise<boolean> => {
     const parsed = ShareInputSchema.safeParse({
@@ -182,22 +127,22 @@ export function ComposeRoute() {
       deliveryControls={{
         isLoadingMetadata: delivery.isLoadingMetadata,
         metadataErrorMessage: delivery.metadataErrorMessage,
-        canPublish: delivery.canPublish && prePublishReview === null,
+        canPublish: delivery.canPublish && prePublish.review === null,
         canOpenX: delivery.canOpenX,
         xIntentHref: delivery.xIntentHref,
         deliveryState: delivery.deliveryState,
         deliveryErrorMessage: delivery.deliveryErrorMessage,
         authenticationRequired: delivery.authenticationRequired,
         signInHref: delivery.signInHref,
-        onRequestPublishReview: startPrePublishReview,
+        onRequestPublishReview: prePublish.requestReview,
         onRetryDeliverySave: () => {
           void controller.retryDeliverySave()
         },
         onRetryMetadata: delivery.onLoadMetadata,
       }}
-      prePublishReview={prePublishReview}
-      onCancelPrePublishReview={cancelPrePublishReview}
-      onConfirmPrePublish={confirmPrePublish}
+      prePublishReview={prePublish.review}
+      onCancelPrePublishReview={prePublish.cancelReview}
+      onConfirmPrePublish={prePublish.publishAfterReview}
       {...(delivery.metadata === null
         ? {}
         : { destinationMetadata: delivery.metadata })}

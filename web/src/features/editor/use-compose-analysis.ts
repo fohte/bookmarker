@@ -24,11 +24,21 @@ import {
 import type { AnalysisDisplayState } from '#features/editor/compose-analysis-state'
 import type { PendingDeliveryComment } from '#features/editor/compose-delivery-command'
 import { effectiveDestinationComment } from '#features/editor/compose-destination'
+import {
+  createInitialPublishCommentChecks,
+  type PublishCommentCheck,
+  saveCommonVerificationResult,
+  verificationCacheKey,
+} from '#features/editor/compose-pre-publish'
 
-export type PublishCommentCheck = PendingDeliveryComment & {
-  status: 'checking' | 'success' | 'failed' | 'skipped'
-  verification: Verification | null
-  error: string | null
+function rememberVerification(
+  cache: Map<string, Verification>,
+  draftId: string,
+  article: Article,
+  comment: string,
+  verification: Verification,
+): void {
+  cache.set(verificationCacheKey(draftId, article, comment), verification)
 }
 
 type VerificationTarget =
@@ -306,25 +316,23 @@ export function useComposeAnalysis(
     }
     const result = await analysis.verify()
     result.match(
-      (value) => {
-        verificationCache.current.set(
-          JSON.stringify([draft.id, article, target.value]),
-          value,
-        )
-      },
-      () => undefined,
-    )
-    if (target.kind !== 'common') return
-
-    result.match(
       (verification) => {
-        saveAnalysisResult({
-          kind: 'verification',
-          expectedDraftId: draft.id,
-          expectedArticle: article,
-          expectedComment: { id: 'common', value: target.value },
+        rememberVerification(
+          verificationCache.current,
+          draft.id,
+          article,
+          target.value,
           verification,
-        })
+        )
+        if (target.kind === 'common') {
+          saveCommonVerificationResult(
+            saveAnalysisResult,
+            draft,
+            article,
+            target.value,
+            verification,
+          )
+        }
       },
       () => undefined,
     )
@@ -337,16 +345,10 @@ export function useComposeAnalysis(
     ): Promise<PublishCommentCheck[]> => {
       if (draft === null) return []
 
+      const initialChecks = createInitialPublishCommentChecks(comments)
       return Promise.all(
-        comments.map(async (item): Promise<PublishCommentCheck> => {
-          if (item.comment.trim().length === 0) {
-            return {
-              ...item,
-              status: 'skipped',
-              verification: null,
-              error: null,
-            }
-          }
+        initialChecks.map(async (item): Promise<PublishCommentCheck> => {
+          if (item.status === 'skipped') return item
           if (article === null || article.text.trim().length === 0) {
             return {
               ...item,
@@ -356,7 +358,7 @@ export function useComposeAnalysis(
             }
           }
 
-          const key = JSON.stringify([draft.id, article, item.comment])
+          const key = verificationCacheKey(draft.id, article, item.comment)
           const cached = verificationCache.current.get(key)
           if (cached !== undefined) {
             return {
@@ -380,18 +382,21 @@ export function useComposeAnalysis(
           })
           return result.match(
             (verification) => {
-              verificationCache.current.set(key, verification)
-              if (
-                item.commentTargetId === 'common' &&
-                item.comment === draft.commonComment
-              ) {
-                saveAnalysisResult({
-                  kind: 'verification',
-                  expectedDraftId: draft.id,
-                  expectedArticle: article,
-                  expectedComment: { id: 'common', value: item.comment },
+              rememberVerification(
+                verificationCache.current,
+                draft.id,
+                article,
+                item.comment,
+                verification,
+              )
+              if (item.commentTargetId === 'common') {
+                saveCommonVerificationResult(
+                  saveAnalysisResult,
+                  draft,
+                  article,
+                  item.comment,
                   verification,
-                })
+                )
               }
               return {
                 ...item,

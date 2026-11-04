@@ -49,6 +49,11 @@ export const Checking: Story = {
   name: 'The editor checks the selected destination comment.',
 }
 
+export const NoPendingComments: Story = {
+  args: { status: 'complete', checks: [] },
+  name: 'The editor has no API destination comments to check.',
+}
+
 export const NoIssues: Story = {
   name: 'The editor finds no issues in the comment.',
 }
