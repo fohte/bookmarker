@@ -1,9 +1,4 @@
-import type {
-  Article,
-  BookmarkDraft,
-  DestinationId,
-  Verification,
-} from 'api/contracts'
+import type { Article, BookmarkDraft, Verification } from 'api/contracts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
@@ -24,7 +19,6 @@ import {
 import type { AnalysisDisplayState } from '#features/editor/compose-analysis-state'
 import { commentCheckErrorMessage } from '#features/editor/compose-comment-check-error'
 import type { PendingDeliveryComment } from '#features/editor/compose-delivery-command'
-import { effectiveDestinationComment } from '#features/editor/compose-destination'
 import {
   createInitialPublishCommentChecks,
   type PublishCommentCheck,
@@ -34,15 +28,6 @@ import {
   saveCommonVerificationResult,
   verificationCacheKey,
 } from '#features/editor/compose-verification-cache'
-
-type VerificationTarget =
-  | { id: 'common'; kind: 'common'; label: string; value: string }
-  | {
-      id: `destination:${DestinationId}`
-      kind: 'custom'
-      label: string
-      value: string
-    }
 
 type PendingSummary = {
   draftId: string
@@ -134,7 +119,6 @@ export function useComposeAnalysis(
   },
   operations: AnalysisOperations = analysisOperations,
 ) {
-  const [selectedTargetId, setSelectedTargetId] = useState('common')
   const [pendingSummary, setPendingSummary] = useState<PendingSummary | null>(
     null,
   )
@@ -146,47 +130,13 @@ export function useComposeAnalysis(
     () => manualArticleForAnalysis(draft?.article),
     [draft?.article],
   )
-  const targets = useMemo<VerificationTarget[]>(() => {
-    if (draft === null) return []
-
-    return [
-      {
-        id: 'common',
-        kind: 'common',
-        label: 'Common comment',
-        value: draft.commonComment,
-      },
-      ...draft.destinations.flatMap((destination) =>
-        destination.commentMode === 'custom'
-          ? [
-              {
-                id: `destination:${destination.destination}` as const,
-                kind: 'custom' as const,
-                label: `${destination.destination} custom comment`,
-                value: effectiveDestinationComment(
-                  draft.commonComment,
-                  destination,
-                ),
-              },
-            ]
-          : [],
-      ),
-    ]
-  }, [draft])
-  const target =
-    targets.find((item) => item.id === selectedTargetId) ?? targets[0] ?? null
   const analysisOptions: ArticleAnalysisOptions = {
     draftId: draft?.id ?? '',
     shareInput: draft?.source ?? null,
     article,
     articleRevision: article === null ? '' : JSON.stringify(article),
-    comment: target === null ? null : { id: target.id, value: target.value },
   }
   const analysis = useArticleAnalysis(analysisOptions, operations)
-
-  useEffect(() => {
-    setSelectedTargetId('common')
-  }, [draft?.id])
 
   useEffect(() => {
     verificationCache.current.clear()
@@ -319,34 +269,6 @@ export function useComposeAnalysis(
     )
   }, [analysis.summarize, article, canEdit, draft, saveAnalysisResult])
 
-  const verifyComment = useCallback(async () => {
-    if (draft === null || !canEdit || article === null || target === null) {
-      return
-    }
-    const result = await analysis.verify()
-    result.match(
-      (verification) => {
-        rememberVerification(
-          verificationCache.current,
-          draft.id,
-          article,
-          target.value,
-          verification,
-        )
-        if (target.kind === 'common') {
-          saveCommonVerificationResult(
-            saveAnalysisResult,
-            draft,
-            article,
-            target.value,
-            verification,
-          )
-        }
-      },
-      () => undefined,
-    )
-  }, [analysis.verify, article, canEdit, draft, saveAnalysisResult, target])
-
   const verifyPublishComments = useCallback(
     async (
       comments: PendingDeliveryComment[],
@@ -442,32 +364,13 @@ export function useComposeAnalysis(
     analysis.summary,
     storedSummary !== undefined,
   )
-  const storedVerification =
-    target?.kind === 'common' ? draft?.analysis?.verification : undefined
-  const verification =
-    analysis.verification.status === 'success'
-      ? analysis.verification.value
-      : (storedVerification ?? null)
-  const verificationState = displayStoredState(
-    analysis.verification,
-    storedVerification !== undefined,
-  )
-
   return {
     article,
     extractionState: displayState(analysis.extraction),
     summary,
     summaryState,
-    verification,
-    verificationState,
-    isCustomComment: target?.kind === 'custom',
-    canVerifyComment: (target?.value.trim().length ?? 0) > 0,
-    verificationTargets: targets.map(({ id, label }) => ({ id, label })),
-    selectedVerificationTargetId: target?.id ?? 'common',
-    onVerificationTargetChange: setSelectedTargetId,
     onExtractArticle: () => extractArticle(autoAnalyzeDraftId === draft?.id),
     onSummarizeArticle: summarizeArticle,
-    onVerifyComment: verifyComment,
     onVerifyPublishComments: verifyPublishComments,
   }
 }

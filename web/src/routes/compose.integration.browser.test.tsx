@@ -306,7 +306,13 @@ describe('ComposeRoute publishing in a browser', () => {
       document.body.textContent.includes(extractedArticle.title),
     )
     await act(async () => {
-      await userEvent.click(button('button[aria-label="Open article details"]'))
+      const editButton = [...document.querySelectorAll('button')].find(
+        (button) => button.textContent.trim() === 'Edit title and text',
+      )
+      if (!(editButton instanceof HTMLButtonElement)) {
+        throw new Error('The article edit button was not found.')
+      }
+      await userEvent.click(editButton)
     })
     await waitFor(
       () =>
@@ -338,7 +344,7 @@ describe('ComposeRoute publishing in a browser', () => {
 
     await act(async () => {
       await userEvent.fill(
-        textarea('#common-comment'),
+        textarea('#main-comment'),
         'A shared comment with trailing spaces  ',
       )
       await userEvent.click(input('input[aria-label="Select Hatena Bookmark"]'))
@@ -363,7 +369,7 @@ describe('ComposeRoute publishing in a browser', () => {
 
     await waitFor(() =>
       [...document.querySelectorAll('[role="status"]')].some(
-        (status) => status.textContent.trim() === 'Saved on this device',
+        (status) => status.textContent.trim() === 'saved',
       ),
     )
     await act(async () => {
@@ -667,7 +673,7 @@ describe('ComposeRoute publishing in a browser', () => {
     })
   })
 
-  it('keeps the primary compose flow visible without document scrolling at mini sizes', async () => {
+  it('keeps the article, comment, and publish button visible without document scrolling at mini sizes', async () => {
     await page.viewport(420, 600)
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const path = requestPath(input)
@@ -712,15 +718,6 @@ describe('ComposeRoute publishing in a browser', () => {
           rect.bottom <= window.innerHeight
         )
       }
-      const contentRect = document
-        .querySelector('[data-compose-content]')
-        ?.getBoundingClientRect()
-      const destinationChoices = Array.from(
-        document.querySelectorAll<HTMLInputElement>(
-          'input[aria-label^="Select "]',
-        ),
-      )
-
       return {
         viewport: { width: window.innerWidth, height: window.innerHeight },
         documentHasVerticalScroll:
@@ -728,23 +725,8 @@ describe('ComposeRoute publishing in a browser', () => {
         documentHasHorizontalScroll:
           scrollingElement.scrollWidth > scrollingElement.clientWidth,
         visible: {
-          article: withinViewport('[data-compose-article-header]'),
-          summary: withinViewport('[data-compose-section="analysis"]'),
-          comment: withinViewport('#common-comment'),
-          verification: withinViewport('[data-compose-verification-status]'),
-          destinations: withinViewport('[data-compose-section="destinations"]'),
-          destinationChoices:
-            contentRect !== undefined &&
-            destinationChoices.length === 4 &&
-            destinationChoices.every((element) => {
-              const rect = element.getBoundingClientRect()
-              return (
-                rect.top >= contentRect.top &&
-                rect.bottom <= contentRect.bottom &&
-                rect.left >= 0 &&
-                rect.right <= window.innerWidth
-              )
-            }),
+          article: withinViewport('section[aria-label="Article"] h2'),
+          comment: withinViewport('#main-comment'),
           publish: withinViewport('[data-compose-publish]'),
         },
       }
@@ -759,29 +741,13 @@ describe('ComposeRoute publishing in a browser', () => {
         viewport: { width: 420, height: 600 },
         documentHasVerticalScroll: false,
         documentHasHorizontalScroll: false,
-        visible: {
-          article: true,
-          summary: true,
-          comment: true,
-          verification: true,
-          destinations: true,
-          destinationChoices: true,
-          publish: true,
-        },
+        visible: { article: true, comment: true, publish: true },
       },
       {
         viewport: { width: 390, height: 600 },
         documentHasVerticalScroll: false,
         documentHasHorizontalScroll: false,
-        visible: {
-          article: true,
-          summary: true,
-          comment: true,
-          verification: true,
-          destinations: true,
-          destinationChoices: true,
-          publish: true,
-        },
+        visible: { article: true, comment: true, publish: true },
       },
     ])
   })

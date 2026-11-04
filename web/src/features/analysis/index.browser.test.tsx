@@ -1,4 +1,4 @@
-import type { Article, ShareInput, Summary, Verification } from 'api/contracts'
+import type { Article, ShareInput, Summary } from 'api/contracts'
 import { type Result, ResultAsync } from 'neverthrow'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -35,14 +35,11 @@ const summary: Summary = {
   partial: false,
 }
 
-const verification: Verification = { issues: [], partial: false }
-
 const options: ArticleAnalysisOptions = {
   draftId: 'fictional-draft-one',
   shareInput,
   article,
   articleRevision: 1,
-  comment: { id: 'fictional-comment-one', value: 'The lantern is green.' },
 }
 
 const jsonResponse = (body: unknown, status = 200): Response =>
@@ -117,11 +114,7 @@ afterEach(() => {
 
 describe('useArticleAnalysis', () => {
   it('aborts draft-scoped requests and hides their late success or failure', async () => {
-    const pending = [
-      deferred<Response>(),
-      deferred<Response>(),
-      deferred<Response>(),
-    ]
+    const pending = [deferred<Response>(), deferred<Response>()]
     const signals: AbortSignal[] = []
     let requestIndex = 0
     vi.stubGlobal(
@@ -137,11 +130,9 @@ describe('useArticleAnalysis', () => {
 
     let extractionRequest!: Promise<Result<Article, AnalysisClientError>>
     let summaryRequest!: Promise<Result<Summary, AnalysisClientError>>
-    let verificationRequest!: Promise<Result<Verification, AnalysisClientError>>
     await act(async () => {
       extractionRequest = current.extract()
       summaryRequest = current.summarize()
-      verificationRequest = current.verify()
       await Promise.resolve()
     })
 
@@ -150,22 +141,16 @@ describe('useArticleAnalysis', () => {
     let results!: [
       Result<Article, AnalysisClientError>,
       Result<Summary, AnalysisClientError>,
-      Result<Verification, AnalysisClientError>,
     ]
     await act(async () => {
       pending[0]?.resolve(jsonResponse(article))
-      pending[1]?.resolve(jsonResponse(summary))
-      pending[2]?.resolve(
+      pending[1]?.resolve(
         jsonResponse(
           { error: { code: 'busy', message: 'Fixture error.' } },
           503,
         ),
       )
-      results = await Promise.all([
-        extractionRequest,
-        summaryRequest,
-        verificationRequest,
-      ])
+      results = await Promise.all([extractionRequest, summaryRequest])
     })
 
     expect(
@@ -173,89 +158,15 @@ describe('useArticleAnalysis', () => {
         states: {
           extraction: current.extraction,
           summary: current.summary,
-          verification: current.verification,
         },
-        results: [
-          resultKind(results[0]),
-          resultKind(results[1]),
-          resultKind(results[2]),
-        ],
+        results: [resultKind(results[0]), resultKind(results[1])],
         aborted: signals.map((signal) => signal.aborted),
       }),
     ).toEqual({
       states: {
         extraction: { status: 'stale' },
         summary: { status: 'stale' },
-        verification: { status: 'stale' },
       },
-      results: ['cancelled', 'cancelled', 'cancelled'],
-      aborted: [true, true, true],
-    })
-  })
-
-  it('suppresses verification results when the comment value or identifier changes', async () => {
-    const first = deferred<Response>()
-    const second = deferred<Response>()
-    const pending = [first, second]
-    const signals: AbortSignal[] = []
-    let requestIndex = 0
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
-        const signal = init?.signal
-        if (signal !== undefined && signal !== null) signals.push(signal)
-        const request = pending[requestIndex]
-        requestIndex += 1
-        return request?.promise ?? Promise.resolve(jsonResponse(null, 500))
-      }),
-    )
-
-    let firstRequest!: Promise<Result<Verification, AnalysisClientError>>
-    await act(async () => {
-      firstRequest = current.verify()
-      await Promise.resolve()
-    })
-    render({
-      ...options,
-      comment: {
-        id: options.comment?.id ?? '',
-        value: 'A changed fictional claim.',
-      },
-    })
-
-    let firstResult!: Result<Verification, AnalysisClientError>
-    await act(async () => {
-      first.resolve(jsonResponse(verification))
-      firstResult = await firstRequest
-    })
-
-    let secondRequest!: Promise<Result<Verification, AnalysisClientError>>
-    await act(async () => {
-      secondRequest = current.verify()
-      await Promise.resolve()
-    })
-    render({
-      ...options,
-      comment: {
-        id: 'fictional-comment-two',
-        value: 'A changed fictional claim.',
-      },
-    })
-
-    let secondResult!: Result<Verification, AnalysisClientError>
-    await act(async () => {
-      second.resolve(jsonResponse(verification))
-      secondResult = await secondRequest
-    })
-
-    expect(
-      observe({
-        state: current.verification,
-        results: [resultKind(firstResult), resultKind(secondResult)],
-        aborted: signals.map((signal) => signal.aborted),
-      }),
-    ).toEqual({
-      state: { status: 'stale' },
       results: ['cancelled', 'cancelled'],
       aborted: [true, true],
     })

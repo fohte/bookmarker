@@ -44,16 +44,8 @@ export const Preview: Story = {
           extractionState: 'not-requested',
           summary: null,
           summaryState: 'unavailable',
-          verification: null,
-          verificationState: 'unavailable',
-          verificationTargets: [],
-          selectedVerificationTargetId: 'common',
-          isCustomComment: false,
-          canVerifyComment: false,
           onExtractArticle: () => undefined,
           onSummarizeArticle: () => undefined,
-          onVerifyComment: () => undefined,
-          onVerificationTargetChange: () => undefined,
         }}
         deliveryControls={{
           isLoadingMetadata: true,
