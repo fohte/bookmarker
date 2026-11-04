@@ -11,6 +11,21 @@ import {
 import type { FailedImportCleanup } from '#features/editor/compose-history'
 import type { ComposeState } from '#features/editor/compose-state'
 
+export type ComposeDraftExitPort = {
+  isLoading: boolean
+  draft: BookmarkDraft | null
+  lease: DraftLockLease | null
+  failedImportCleanups: Map<string, FailedImportCleanup>
+  pauseCurrentDraft: () => void
+  resumeCurrentDraft: () => void
+  flushCurrentDraft: () => Promise<Result<void, DraftError>>
+  clearActiveDraft: () => void
+  refreshDraftList: () => Promise<void>
+  getLockState: () => ComposeState['lockState']
+  showError: (error: DraftError) => void
+  setState: (patch: Partial<ComposeState>) => void
+}
+
 export async function discardComposeDraft({
   isLoading,
   draft,
@@ -25,21 +40,7 @@ export async function discardComposeDraft({
   getLockState,
   showError,
   setState,
-}: {
-  isLoading: boolean
-  draft: BookmarkDraft | null
-  lease: DraftLockLease | null
-  store: DraftStore
-  failedImportCleanups: Map<string, FailedImportCleanup>
-  pauseCurrentDraft: () => void
-  resumeCurrentDraft: () => void
-  flushCurrentDraft: () => Promise<Result<void, DraftError>>
-  clearActiveDraft: () => void
-  refreshDraftList: () => Promise<void>
-  getLockState: () => ComposeState['lockState']
-  showError: (error: DraftError) => void
-  setState: (patch: Partial<ComposeState>) => void
-}): Promise<void> {
+}: ComposeDraftExitPort & { store: DraftStore }): Promise<void> {
   if (isLoading) return
   if (draft === null || lease === null) return
 

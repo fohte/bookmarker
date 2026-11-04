@@ -129,6 +129,12 @@ export function useComposeController() {
     return Promise.resolve()
   }, [])
 
+  const closeDraft = useCallback(() => {
+    const controller = controllerRef.current
+    if (controller !== null) return controller.closeDraft()
+    return Promise.resolve()
+  }, [])
+
   return {
     state,
     openSource,
@@ -146,5 +152,6 @@ export function useComposeController() {
     requestDiscard,
     cancelDiscard,
     discardDraft,
+    closeDraft,
   }
 }
