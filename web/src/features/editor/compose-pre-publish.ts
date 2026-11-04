@@ -19,7 +19,7 @@ export type PrePublishReview = {
   checks: PublishCommentCheck[]
 }
 
-export const groupPendingDeliveryComments = (
+const groupPendingDeliveryComments = (
   comments: PendingDeliveryComment[],
   keyForComment: (comment: PendingDeliveryComment) => string = ({ comment }) =>
     comment,
