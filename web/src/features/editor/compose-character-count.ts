@@ -4,7 +4,7 @@ export type CharacterCount = { length: number; max: number }
 
 const HATENA_MAX_CHARACTERS = 100
 const X_MAX_CHARACTERS = 280
-// X and Mastodon count every link as a fixed-length shortened URL.
+// X and Mastodon count the appended article URL as a fixed-length shortened URL.
 const X_URL_CHARACTERS = 23
 const MASTODON_DEFAULT_URL_CHARACTERS = 23
 
