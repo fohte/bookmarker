@@ -49,6 +49,41 @@ export type ComposeArticleAnalysis = {
   onSummarizeArticle: () => void
 }
 
+function analysisActionFor({
+  canEdit,
+  hasArticleText,
+  article,
+  extractionState,
+  summary,
+  summaryState,
+  onExtractArticle,
+  onSummarizeArticle,
+}: ComposeArticleAnalysis & { canEdit: boolean; hasArticleText: boolean }) {
+  if (!hasArticleText) {
+    return {
+      message:
+        stateMessage(extractionState, 'Article extraction') ??
+        'The article text is not loaded yet.',
+      label: retryableAnalysisStates.has(extractionState)
+        ? 'Retry extract'
+        : 'Extract text',
+      disabled: !canEdit || article === null || extractionState === 'loading',
+      onClick: onExtractArticle,
+    }
+  }
+  if (summary !== null && summaryState === 'success') return null
+
+  let label = 'Refresh summary'
+  if (retryableAnalysisStates.has(summaryState)) label = 'Retry summary'
+  else if (summary === null) label = 'Summarize'
+  return {
+    message: stateMessage(summaryState, 'Summary'),
+    label,
+    disabled: !canEdit || summaryState === 'loading',
+    onClick: onSummarizeArticle,
+  }
+}
+
 export function ComposeArticle({
   draft,
   canEdit,
@@ -69,29 +104,16 @@ export function ComposeArticle({
   const [summaryExpanded, setSummaryExpanded] = useState(defaultSummaryExpanded)
   const title = getComposeDraftTitle(draft, 'Untitled article')
   const hasArticleText = (article?.text.trim().length ?? 0) > 0
-  const analysisAction = !hasArticleText
-    ? {
-        message:
-          stateMessage(extractionState, 'Article extraction') ??
-          'The article text is not loaded yet.',
-        label: retryableAnalysisStates.has(extractionState)
-          ? 'Retry extract'
-          : 'Extract text',
-        disabled: !canEdit || article === null || extractionState === 'loading',
-        onClick: onExtractArticle,
-      }
-    : summary === null || summaryState !== 'success'
-      ? {
-          message: stateMessage(summaryState, 'Summary'),
-          label: retryableAnalysisStates.has(summaryState)
-            ? 'Retry summary'
-            : summary === null
-              ? 'Summarize'
-              : 'Refresh summary',
-          disabled: !canEdit || summaryState === 'loading',
-          onClick: onSummarizeArticle,
-        }
-      : null
+  const analysisAction = analysisActionFor({
+    canEdit,
+    hasArticleText,
+    article,
+    extractionState,
+    summary,
+    summaryState,
+    onExtractArticle,
+    onSummarizeArticle,
+  })
   const partialNote =
     summary?.partial === true
       ? 'Summary of partial article text'
