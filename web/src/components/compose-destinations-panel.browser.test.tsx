@@ -284,7 +284,10 @@ describe('ComposeDestinationsPanel in a browser', () => {
 
     await click(buttonLabelled('Edit Raindrop post and settings'))
     const status = document.querySelector('[role="status"]')?.textContent
-    await click(field('#raindrop-collection', HTMLButtonElement))
+    const collectionField = () =>
+      field('#raindrop-collection', HTMLButtonElement)
+    const savedCollectionLabel = collectionField().textContent
+    await click(collectionField())
     const unknownOption = page.getByRole('option', {
       exact: true,
       name: 'Saved collection ID 918 (not in the available list)',
@@ -304,13 +307,17 @@ describe('ComposeDestinationsPanel in a browser', () => {
     expect(
       captureOutput({
         status,
+        savedCollectionLabel,
         unknownOptionDisabled,
+        chosenCollectionLabel: collectionField().textContent,
         updates,
       }),
     ).toEqual({
       status:
         'Saved collection ID 918 is not available. Choose an available collection.',
+      savedCollectionLabel: 'Collection 918',
       unknownOptionDisabled: 'true',
+      chosenCollectionLabel: 'Fictional reading collection',
       updates: [
         {
           destination: 'raindrop',

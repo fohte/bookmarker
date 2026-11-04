@@ -3,6 +3,7 @@ import { CheckIcon, ChevronDownIcon } from 'lucide-react'
 
 import {
   destinationNames,
+  raindropCollectionLabel,
   visibilityLabels,
 } from '#components/compose-destination-labels'
 import { ComposeDestinationSettings } from '#components/compose-destination-settings'
@@ -31,16 +32,14 @@ function settingsSummary(
           : [`CW: ${destination.options.spoilerText}`]),
         ...(destination.options.sensitive ? ['sensitive'] : []),
       ]
-    case 'raindrop': {
-      const { collectionId, tags } = destination.options
-      const collection =
-        collectionId === -1
-          ? 'Unsorted'
-          : (metadata?.destinations.raindrop.collections?.find(
-              (item) => item.id === collectionId,
-            )?.title ?? `Collection ${String(collectionId)}`)
-      return [collection, ...tagList(tags)]
-    }
+    case 'raindrop':
+      return [
+        raindropCollectionLabel(
+          destination.options.collectionId,
+          metadata?.destinations.raindrop.collections,
+        ),
+        ...tagList(destination.options.tags),
+      ]
     case 'x':
       return []
   }

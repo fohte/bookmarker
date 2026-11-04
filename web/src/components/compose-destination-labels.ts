@@ -13,3 +13,14 @@ export const visibilityLabels = {
   private: 'Followers only',
   direct: 'Mentioned people only',
 } as const
+
+export function raindropCollectionLabel(
+  collectionId: number,
+  collections: readonly { id: number; title: string }[] | undefined,
+): string {
+  if (collectionId === -1) return 'Unsorted'
+  return (
+    collections?.find((collection) => collection.id === collectionId)?.title ??
+    `Collection ${String(collectionId)}`
+  )
+}

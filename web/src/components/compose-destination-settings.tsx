@@ -7,7 +7,10 @@ import {
 } from '@fohte/ui/select'
 import type { DestinationDraft, DestinationMetadata } from 'api/contracts'
 
-import { visibilityLabels } from '#components/compose-destination-labels'
+import {
+  raindropCollectionLabel,
+  visibilityLabels,
+} from '#components/compose-destination-labels'
 import { ComposeDestinationTagsField } from '#components/compose-destination-tags-field'
 import { ComposeSwitch } from '#components/compose-switch'
 import { isRaindropCollectionAvailable } from '#features/editor/compose-destination'
@@ -171,7 +174,12 @@ export function ComposeDestinationSettings({
                 className="h-11 w-full"
                 id="raindrop-collection"
               >
-                <SelectValue />
+                <SelectValue>
+                  {raindropCollectionLabel(
+                    destination.options.collectionId,
+                    collections,
+                  )}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="-1">Unsorted</SelectItem>
