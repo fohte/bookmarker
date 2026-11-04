@@ -303,13 +303,26 @@ describe('ComposeDestinationsPanel in a browser', () => {
         })
         .click(),
     )
+    const chosenCollectionLabel = collectionField().textContent
+    await click(collectionField())
+    await act(async () =>
+      page.getByRole('option', { exact: true, name: 'Unsorted' }).click(),
+    )
 
+    const raindrop = (collectionId: number) => ({
+      destination: 'raindrop',
+      selected: true,
+      commentMode: 'common',
+      customComment: '',
+      options: { collectionId, tags: [] },
+    })
     expect(
       captureOutput({
         status,
         savedCollectionLabel,
         unknownOptionDisabled,
-        chosenCollectionLabel: collectionField().textContent,
+        chosenCollectionLabel,
+        unsortedLabel: collectionField().textContent,
         updates,
       }),
     ).toEqual({
@@ -318,15 +331,8 @@ describe('ComposeDestinationsPanel in a browser', () => {
       savedCollectionLabel: 'Collection 918',
       unknownOptionDisabled: 'true',
       chosenCollectionLabel: 'Fictional reading collection',
-      updates: [
-        {
-          destination: 'raindrop',
-          selected: true,
-          commentMode: 'common',
-          customComment: '',
-          options: { collectionId: 71, tags: [] },
-        },
-      ],
+      unsortedLabel: 'Unsorted',
+      updates: [raindrop(71), raindrop(-1)],
     })
   })
 })
