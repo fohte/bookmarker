@@ -529,6 +529,118 @@ describe('ComposeScreen in a browser', () => {
     })
   })
 
+  it('requests the comment check with Meta+Enter only when a destination is selected', async () => {
+    const requestsFor = async (destinations: BookmarkDraft['destinations']) => {
+      let requests = 0
+      const activeDraft = { ...firstDraft, destinations }
+      mount(
+        <ComposeScreen
+          {...screenProps({
+            state: { ...editingState, activeDraft },
+            deliveryControls: {
+              ...composeScreenStoryMeta.args.deliveryControls,
+              onRequestPublishReview: () => {
+                requests += 1
+              },
+            },
+          })}
+        />,
+      )
+      await act(async () => {
+        await userEvent.click(page.getByRole('textbox', { name: 'comment' }))
+        await userEvent.keyboard('{Meta>}{Enter}{/Meta}')
+      })
+      unmount()
+      return requests
+    }
+
+    expect(
+      captureOutput({
+        selected: await requestsFor([
+          {
+            destination: 'hatena',
+            selected: true,
+            commentMode: 'common',
+            customComment: '',
+            options: { tags: [], private: false },
+          },
+        ]),
+        nothingSelected: await requestsFor([]),
+      }),
+    ).toEqual({ selected: 1, nothingSelected: 0 })
+  })
+
+  it('closes the check sheet and opens the destination row to edit its comment', async () => {
+    let cancelled = 0
+    function ReviewingScreen() {
+      const [reviewOpen, setReviewOpen] = useState(true)
+      return (
+        <ComposeScreen
+          {...screenProps({
+            state: {
+              ...editingState,
+              activeDraft: {
+                ...firstDraft,
+                destinations: [
+                  {
+                    destination: 'hatena',
+                    selected: true,
+                    commentMode: 'custom',
+                    customComment: 'A fictional individual comment.',
+                    options: { tags: [], private: false },
+                  },
+                ],
+              },
+            },
+            prePublishReview: reviewOpen
+              ? {
+                  status: 'complete',
+                  checks: [
+                    {
+                      destinations: ['hatena'],
+                      commentTargetIds: ['destination:hatena'],
+                      comment: 'A fictional individual comment.',
+                      status: 'success',
+                      verification: {
+                        issues: [
+                          {
+                            kind: 'uncertain',
+                            quote: 'individual',
+                            reason: 'The article does not mention it.',
+                          },
+                        ],
+                        partial: false,
+                      },
+                      error: null,
+                    },
+                  ],
+                }
+              : null,
+            onCancelPrePublishReview: () => {
+              cancelled += 1
+              setReviewOpen(false)
+            },
+          })}
+        />
+      )
+    }
+    mount(<ReviewingScreen />)
+    await click(buttonByText('Edit Hatena comment'))
+    await waitFor(() => document.querySelector('[data-compose-check]') === null)
+
+    expect(
+      captureOutput({
+        cancelled,
+        expandedRows: [
+          ...document.querySelectorAll('button[aria-expanded="true"]'),
+        ].map((row) => row.getAttribute('aria-label')),
+      }),
+    ).toEqual({
+      cancelled: 1,
+      expandedRows: ['Edit Hatena post and settings'],
+    })
+  })
+
   it('retries saving from the header after saving fails', async () => {
     let retries = 0
     mount(

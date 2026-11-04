@@ -58,6 +58,7 @@ export const Preview: Story = {
           authenticationRequired: false,
           signInHref: null,
           onRequestPublishReview: () => undefined,
+          onRetryDelivery: () => undefined,
           onRetryDeliverySave: () => undefined,
           onRetryMetadata: () => undefined,
         }}

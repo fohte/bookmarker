@@ -129,6 +129,11 @@ export function ComposeRoute() {
         authenticationRequired: delivery.authenticationRequired,
         signInHref: delivery.signInHref,
         onRequestPublishReview: prePublish.requestReview,
+        onRetryDelivery: () => {
+          if (delivery.metadata !== null) {
+            void controller.publishSelectedDestinations(delivery.metadata)
+          }
+        },
         onRetryDeliverySave: () => {
           void controller.retryDeliverySave()
         },

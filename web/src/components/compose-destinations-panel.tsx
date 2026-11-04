@@ -3,7 +3,6 @@ import type {
   DestinationId,
   DestinationMetadata,
 } from 'api/contracts'
-import { useState } from 'react'
 
 import { ComposeDestinationRow } from '#components/compose-destination-row'
 import {
@@ -17,7 +16,8 @@ export function ComposeDestinationsPanel({
   articleUrl,
   canEdit,
   metadata,
-  defaultOpenDestination = null,
+  openDestination,
+  onOpenDestinationChange,
   onDestinationChange,
 }: {
   destinations: DestinationDraft[]
@@ -25,13 +25,10 @@ export function ComposeDestinationsPanel({
   articleUrl: string
   canEdit: boolean
   metadata?: DestinationMetadata
-  defaultOpenDestination?: DestinationId | null
+  openDestination: DestinationId | null
+  onOpenDestinationChange: (destination: DestinationId | null) => void
   onDestinationChange: (destination: DestinationDraft) => void
 }) {
-  const [openDestination, setOpenDestination] = useState<DestinationId | null>(
-    defaultOpenDestination,
-  )
-
   return (
     <section aria-labelledby="post-to" className="border-t border-border">
       <h2
@@ -51,7 +48,7 @@ export function ComposeDestinationsPanel({
             {...(metadata === undefined ? {} : { metadata })}
             onDestinationChange={onDestinationChange}
             onOpenChange={(open) => {
-              setOpenDestination(open ? destinationId : null)
+              onOpenDestinationChange(open ? destinationId : null)
             }}
             open={openDestination === destinationId}
           />

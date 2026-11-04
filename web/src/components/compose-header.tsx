@@ -9,12 +9,15 @@ const saveStatusLabels: Record<ComposeState['saveState'], string> = {
 export function ComposeHeader({
   draftCount,
   saveState,
+  deliverySummary = null,
   canRetrySave,
   onOpenDrafts,
   onRetrySave,
 }: {
   draftCount: number
   saveState: ComposeState['saveState'] | null
+  // Replaces the save state on the results screen, where nothing is edited.
+  deliverySummary?: string | null
   canRetrySave: boolean
   onOpenDrafts: () => void
   onRetrySave: () => void
@@ -45,7 +48,15 @@ export function ComposeHeader({
             <path d="m6 9 6 6 6-6" />
           </svg>
         </button>
-        {saveState !== null && (
+        {deliverySummary !== null && (
+          <span
+            className="px-2 font-mono text-xs text-muted-foreground-strong md:px-0"
+            role="status"
+          >
+            {deliverySummary}
+          </span>
+        )}
+        {deliverySummary === null && saveState !== null && (
           <div className="flex items-center gap-3 px-2 font-mono text-xs md:px-0">
             <span
               className={

@@ -31,6 +31,11 @@ export const SaveFailed: Story = {
   name: 'The header offers a retry after saving fails.',
 }
 
+export const Posted: Story = {
+  args: { deliverySummary: '2 of 3 posted' },
+  name: 'The header shows how many destinations were posted on the results screen.',
+}
+
 export const NoDraft: Story = {
   args: { draftCount: 2, saveState: null },
   name: 'The header shows only the draft count when no draft is open.',

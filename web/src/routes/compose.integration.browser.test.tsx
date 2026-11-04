@@ -131,10 +131,12 @@ function button(selector: string): HTMLButtonElement {
   return match
 }
 
+function checkSheetOpen(): boolean {
+  return document.querySelector('[data-compose-check]') !== null
+}
+
 function deliveryStatusLabels(): string[] {
-  const list = document.querySelector(
-    '[aria-label="Delivery results by destination"]',
-  )
+  const list = document.querySelector('[aria-label="Results by destination"]')
   if (!(list instanceof HTMLUListElement)) return []
   return [...list.querySelectorAll('[role="status"]')].map((status) =>
     status.textContent.trim(),
@@ -327,36 +329,26 @@ describe('ComposeRoute publishing in a browser', () => {
         (status) => status.textContent.trim() === 'saved',
       ),
     )
+    const postButtonLabel = button('[data-compose-publish]').textContent
     await act(async () => {
-      const publishButton = [...document.querySelectorAll('button')].find(
-        (button) =>
-          button.textContent.trim() === 'Check comments before publishing',
-      )
-      if (!(publishButton instanceof HTMLButtonElement)) {
-        throw new Error('The publish button was not found.')
-      }
-      await userEvent.click(publishButton)
+      await userEvent.click(button('[data-compose-publish]'))
     })
-    await waitFor(() =>
-      document.body.textContent.includes('Review comments before publishing'),
+    await waitFor(() => checkSheetOpen())
+    await waitFor(
+      () =>
+        document.querySelector('[data-prepublish-status="checking"]') !== null,
     )
-    await waitFor(() => document.body.textContent.includes('Checking comment…'))
     const whileChecking = {
       publishRequests: requests.filter(({ path }) => path === '/api/publish')
         .length,
-      publishButtonVisible: [...document.querySelectorAll('button')].some(
-        (button) => button.textContent.trim() === 'Publish',
-      ),
+      sheetActions: [
+        ...document.querySelectorAll('[data-compose-check] footer > *'),
+      ].map((action) => action.textContent.trim()),
     }
     await act(async () => {
-      await userEvent.click(page.getByRole('button', { name: 'Cancel' }))
+      await userEvent.click(page.getByRole('button', { name: 'Back to edit' }))
     })
-    await waitFor(
-      () =>
-        !document.body.textContent.includes(
-          'Review comments before publishing',
-        ),
-    )
+    await waitFor(() => !checkSheetOpen())
     await new Promise((resolve) => window.setTimeout(resolve, 120))
     const cancelledWhileChecking = {
       checkRequests: requests.filter(
@@ -364,19 +356,13 @@ describe('ComposeRoute publishing in a browser', () => {
       ).length,
       abortedRequests: verificationSignals.filter((signal) => signal.aborted)
         .length,
-      reviewClosedAfterResponse: !document.body.textContent.includes(
-        'Review comments before publishing',
-      ),
+      reviewClosedAfterResponse: !checkSheetOpen(),
       publishRequests: requests.filter(({ path }) => path === '/api/publish')
         .length,
     }
 
     await act(async () => {
-      await userEvent.click(
-        page.getByRole('button', {
-          name: 'Check comments before publishing',
-        }),
-      )
+      await userEvent.click(button('[data-compose-publish]'))
     })
     await waitFor(() =>
       document.body.textContent.includes(
@@ -400,29 +386,21 @@ describe('ComposeRoute publishing in a browser', () => {
         (issue) => issue.textContent.trim(),
       ),
     }))
+    const sheetActionsWithConcerns = [
+      ...document.querySelectorAll('[data-compose-check] footer > *'),
+    ].map((action) => action.textContent.trim())
     await act(async () => {
-      await userEvent.click(page.getByRole('button', { name: 'Cancel' }))
+      await userEvent.click(page.getByRole('button', { name: 'Back to edit' }))
     })
-    await waitFor(
-      () =>
-        !document.body.textContent.includes(
-          'Review comments before publishing',
-        ),
-    )
+    await waitFor(() => !checkSheetOpen())
     const cancelledAfterResults = {
       publishRequests: requests.filter(({ path }) => path === '/api/publish')
         .length,
-      reviewClosed: !document.body.textContent.includes(
-        'Review comments before publishing',
-      ),
+      reviewClosed: !checkSheetOpen(),
     }
 
     await act(async () => {
-      await userEvent.click(
-        page.getByRole('button', {
-          name: 'Check comments before publishing',
-        }),
-      )
+      await userEvent.click(button('[data-compose-publish]'))
     })
     await waitFor(() =>
       document.body.textContent.includes(
@@ -430,22 +408,17 @@ describe('ComposeRoute publishing in a browser', () => {
       ),
     )
     await act(async () => {
-      await userEvent.click(page.getByRole('button', { name: 'Publish' }))
-    })
-    await waitFor(() => document.body.textContent.includes('2 succeeded'))
-    await act(async () => {
-      await userEvent.click(
-        button('button[aria-label="Open delivery details"]'),
-      )
+      await userEvent.click(page.getByRole('button', { name: 'Post anyway' }))
     })
     await waitFor(() => {
       const labels = deliveryStatusLabels()
       return (
-        labels.length === 2 &&
-        labels[0] === 'Succeeded' &&
-        labels[1] === 'Succeeded'
+        labels.length === 2 && labels[0] === 'posted' && labels[1] === 'posted'
       )
     })
+    const resultsHeader = document.querySelector(
+      'header [role="status"]',
+    )?.textContent
 
     const draftId = new URLSearchParams(window.location.search).get('draft')
     if (draftId === null)
@@ -460,8 +433,10 @@ describe('ComposeRoute publishing in a browser', () => {
       requestPaths: requests
         .map(({ path }) => path)
         .filter((path) => path !== '/api/destinations'),
+      postButtonLabel,
       cancelledWhileChecking,
       resultPairing,
+      sheetActionsWithConcerns,
       cancelledAfterResults,
       whileChecking,
       request:
@@ -477,6 +452,7 @@ describe('ComposeRoute publishing in a browser', () => {
         summary: stored.value?.analysis?.summary ?? null,
         delivery: normalizeDelivery(stored.value?.delivery ?? []),
       },
+      resultsHeader,
       deliveryStatusLabels: deliveryStatusLabels(),
     }
 
@@ -490,6 +466,7 @@ describe('ComposeRoute publishing in a browser', () => {
         '/api/analysis/verify',
         '/api/publish',
       ],
+      postButtonLabel: 'Check and post to 2 · then X',
       cancelledWhileChecking: {
         checkRequests: 2,
         abortedRequests: 2,
@@ -500,9 +477,9 @@ describe('ComposeRoute publishing in a browser', () => {
         {
           destinations: ['hatena'],
           status: 'failed',
-          comment: 'A separate individual comment 😀 ',
+          comment: null,
           error:
-            'Check failed: The comment check service is temporarily unavailable. You can still publish.',
+            'Check failed: The comment check service is temporarily unavailable. You can still post.',
           messages: [],
           issues: [],
         },
@@ -512,18 +489,18 @@ describe('ComposeRoute publishing in a browser', () => {
           comment: 'A shared comment with trailing spaces  ',
           error: null,
           messages: [
-            '1 item(s) to review.',
             '1 potential issue was omitted because its citation could not be verified.',
           ],
           issues: [
-            'uncertain: A shared comment with trailing spaces  The article does not describe this detail.',
+            'Not clear from the articleThe article does not describe this detail.',
           ],
         },
       ],
+      sheetActionsWithConcerns: ['Back to edit', 'Post anyway'],
       cancelledAfterResults: { publishRequests: 0, reviewClosed: true },
       whileChecking: {
         publishRequests: 0,
-        publishButtonVisible: false,
+        sheetActions: ['Back to edit'],
       },
       request: {
         article: {
@@ -624,7 +601,8 @@ describe('ComposeRoute publishing in a browser', () => {
           },
         ],
       },
-      deliveryStatusLabels: ['Succeeded', 'Succeeded'],
+      resultsHeader: '2 of 2 posted',
+      deliveryStatusLabels: ['posted', 'posted'],
     })
   })
 

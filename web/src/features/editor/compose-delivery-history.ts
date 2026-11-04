@@ -10,3 +10,16 @@ export function destinationHasSucceeded(
       snapshot.result?.status === 'succeeded',
   )
 }
+
+const resultDestinations = ['hatena', 'mastodon', 'raindrop'] as const
+
+export function latestDeliverySnapshots(
+  delivery: BookmarkDraft['delivery'],
+): BookmarkDraft['delivery'] {
+  return resultDestinations.flatMap((destination) => {
+    const latest = delivery
+      .filter((snapshot) => snapshot.target.destination === destination)
+      .at(-1)
+    return latest === undefined ? [] : [latest]
+  })
+}
