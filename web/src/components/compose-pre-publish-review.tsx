@@ -19,10 +19,19 @@ export type ComposePrePublishReviewProps = {
   onPublish: () => void
 }
 
-const verificationMessage = (verification: Verification): string =>
-  verification.issues.length === 0
-    ? 'No issues found in the available article text.'
-    : `${String(verification.issues.length)} item(s) to review.`
+const omittedIssueMessage = (count: number): string =>
+  `${String(count)} potential ${count === 1 ? 'issue was' : 'issues were'} omitted because ${count === 1 ? 'its citation' : 'their citations'} could not be verified.`
+
+const verificationMessage = (verification: Verification): string => {
+  const omittedIssueCount = verification.omittedIssueCount ?? 0
+  if (verification.issues.length > 0) {
+    return `${String(verification.issues.length)} item(s) to review.`
+  }
+  if (omittedIssueCount > 0) {
+    return `No verifiable issues were found. ${omittedIssueMessage(omittedIssueCount)}`
+  }
+  return 'No issues found in the available article text.'
+}
 
 export function ComposePrePublishReview({
   status,
@@ -98,6 +107,17 @@ export function ComposePrePublishReview({
                         Based on partial article text.
                       </p>
                     )}
+                    {check.verification.issues.length > 0 &&
+                      (check.verification.omittedIssueCount ?? 0) > 0 && (
+                        <p
+                          className="text-xs text-muted-foreground"
+                          role="status"
+                        >
+                          {omittedIssueMessage(
+                            check.verification.omittedIssueCount ?? 0,
+                          )}
+                        </p>
+                      )}
                     {check.verification.issues.length > 0 && (
                       <ul className="space-y-2 text-sm">
                         {check.verification.issues.map((issue, issueIndex) => (

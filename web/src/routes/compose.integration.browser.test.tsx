@@ -232,7 +232,6 @@ describe('ComposeRoute publishing in a browser', () => {
   it('imports a shared article, analyzes it, saves both comments, and publishes through the screen', async () => {
     const requests: Array<{ path: string; body: unknown }> = []
     const verificationSignals: AbortSignal[] = []
-    let verificationRequestCount = 0
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = requestPath(input)
       const body = bodyValue(init)
@@ -247,22 +246,32 @@ describe('ComposeRoute publishing in a browser', () => {
         return Promise.resolve(response(summary))
       }
       if (path === '/api/analysis/verify') {
-        verificationRequestCount += 1
         if (init?.signal != null) {
           verificationSignals.push(init.signal)
         }
+        const comment = commentFromBody(body)
         const result =
-          verificationRequestCount % 2 === 1
-            ? response({ error: { code: 'temporary_failure' } }, 503)
+          comment === 'A separate individual comment 😀 '
+            ? response(
+                {
+                  error: {
+                    code: 'ARTICLE_INSUFFICIENT',
+                    message:
+                      'The article does not contain enough information for analysis.',
+                  },
+                },
+                422,
+              )
             : response({
                 issues: [
                   {
                     kind: 'uncertain',
-                    quote: commentFromBody(body),
+                    quote: comment,
                     reason: 'The article does not describe this detail.',
                   },
                 ],
                 partial: false,
+                omittedIssueCount: 1,
               })
         return new Promise((resolve) => {
           window.setTimeout(() => {
@@ -423,6 +432,9 @@ describe('ComposeRoute publishing in a browser', () => {
       comment:
         section.querySelector('[data-prepublish-comment]')?.textContent ?? null,
       error: section.querySelector('[role="alert"]')?.textContent ?? null,
+      messages: [...section.querySelectorAll('[role="status"]')].map((status) =>
+        status.textContent.trim(),
+      ),
       issues: [...section.querySelectorAll('[data-prepublish-issue]')].map(
         (issue) => issue.textContent.trim(),
       ),
@@ -529,7 +541,8 @@ describe('ComposeRoute publishing in a browser', () => {
           status: 'failed',
           comment: 'A separate individual comment 😀 ',
           error:
-            'Check failed: The comment check service is temporarily unavailable. You can still publish.',
+            'Check failed: The article does not contain enough information for comment checking. You can still publish.',
+          messages: [],
           issues: [],
         },
         {
@@ -537,6 +550,10 @@ describe('ComposeRoute publishing in a browser', () => {
           status: 'success',
           comment: 'A shared comment with trailing spaces  ',
           error: null,
+          messages: [
+            '1 item(s) to review.',
+            '1 potential issue was omitted because its citation could not be verified.',
+          ],
           issues: [
             'uncertain: A shared comment with trailing spaces  The article does not describe this detail.',
           ],
