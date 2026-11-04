@@ -255,12 +255,11 @@ describe('ComposeRoute publishing in a browser', () => {
             ? response(
                 {
                   error: {
-                    code: 'ARTICLE_INSUFFICIENT',
-                    message:
-                      'The article does not contain enough information for analysis.',
+                    code: 'temporary_failure',
+                    message: 'The comment check service failed.',
                   },
                 },
-                422,
+                503,
               )
             : response({
                 issues: [
@@ -541,7 +540,7 @@ describe('ComposeRoute publishing in a browser', () => {
           status: 'failed',
           comment: 'A separate individual comment 😀 ',
           error:
-            'Check failed: The article does not contain enough information for comment checking. You can still publish.',
+            'Check failed: The comment check service is temporarily unavailable. You can still publish.',
           messages: [],
           issues: [],
         },

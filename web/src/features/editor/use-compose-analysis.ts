@@ -22,24 +22,18 @@ import {
   sameArticle,
 } from '#features/editor/compose-analysis-command'
 import type { AnalysisDisplayState } from '#features/editor/compose-analysis-state'
+import { commentCheckErrorMessage } from '#features/editor/compose-comment-check-error'
 import type { PendingDeliveryComment } from '#features/editor/compose-delivery-command'
 import { effectiveDestinationComment } from '#features/editor/compose-destination'
 import {
   createInitialPublishCommentChecks,
   type PublishCommentCheck,
+} from '#features/editor/compose-pre-publish'
+import {
+  rememberVerification,
   saveCommonVerificationResult,
   verificationCacheKey,
-} from '#features/editor/compose-pre-publish'
-
-function rememberVerification(
-  cache: Map<string, Verification>,
-  draftId: string,
-  article: Article,
-  comment: string,
-  verification: Verification,
-): void {
-  cache.set(verificationCacheKey(draftId, article, comment), verification)
-}
+} from '#features/editor/compose-verification-cache'
 
 type VerificationTarget =
   | { id: 'common'; kind: 'common'; label: string; value: string }
@@ -99,35 +93,6 @@ const displayErrorState = (
     }
   }
   return 'failed'
-}
-
-const publishCommentCheckError = (error: AnalysisClientError): string => {
-  if (error.kind === 'authentication-required') {
-    return 'Sign in to use comment checking.'
-  }
-  if (error.kind === 'invalid-response') {
-    return 'The AI check could not return a usable result.'
-  }
-  if (error.kind !== 'http') return error.message
-  if (error.status === 503) {
-    return 'The comment check service is temporarily unavailable.'
-  }
-  if (error.code === 'ARTICLE_INSUFFICIENT') {
-    return 'The article does not contain enough information for comment checking.'
-  }
-  if (
-    error.code === 'ANALYSIS_TIMEOUT' ||
-    error.code === 'ARTICLE_FETCH_TIMEOUT'
-  ) {
-    return 'The comment check timed out. Try again.'
-  }
-  if (
-    error.code === 'INVALID_ANALYSIS_RESPONSE' ||
-    error.code === 'ANALYSIS_UPSTREAM_FAILURE'
-  ) {
-    return 'The AI check could not return a usable result.'
-  }
-  return error.message
 }
 
 const displayStoredState = <T>(
@@ -453,7 +418,7 @@ export function useComposeAnalysis(
               ...item,
               status: 'failed',
               verification: null,
-              error: publishCommentCheckError(error),
+              error: commentCheckErrorMessage(error),
             }),
           )
         }),

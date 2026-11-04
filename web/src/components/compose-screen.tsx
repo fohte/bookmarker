@@ -25,11 +25,9 @@ import {
 } from '#components/compose-delivery-panel'
 import { ComposeDestinationsPanel } from '#components/compose-destinations-panel'
 import { ComposeDraftPanel } from '#components/compose-draft-panel'
-import {
-  ComposePrePublishReview,
-  type ComposePrePublishReviewProps,
-} from '#components/compose-pre-publish-review'
+import { ComposePrePublishReview } from '#components/compose-pre-publish-review'
 import type { ComposeState } from '#features/editor/compose-controller'
+import type { PrePublishReview } from '#features/editor/compose-pre-publish'
 
 export type ComposeScreenProps = {
   state: ComposeState
@@ -44,10 +42,7 @@ export type ComposeScreenProps = {
   onDestinationChange: (destination: DestinationDraft) => void
   analysis: Omit<ComposeAnalysisPanelProps, 'canEdit'>
   deliveryControls: Omit<ComposeDeliveryPanelProps, 'delivery'>
-  prePublishReview: Omit<
-    ComposePrePublishReviewProps,
-    'onCancel' | 'onPublish'
-  > | null
+  prePublishReview: PrePublishReview | null
   onCancelPrePublishReview: () => void
   onConfirmPrePublish: () => void
   destinationMetadata?: DestinationMetadata

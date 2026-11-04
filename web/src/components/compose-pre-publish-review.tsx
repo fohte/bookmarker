@@ -10,11 +10,9 @@ import {
 import type { Verification } from 'api/contracts'
 
 import { destinationNames } from '#components/compose-destination-labels'
-import type { PublishCommentCheck } from '#features/editor/compose-pre-publish'
+import type { PrePublishReview } from '#features/editor/compose-pre-publish'
 
-export type ComposePrePublishReviewProps = {
-  status: 'checking' | 'complete'
-  checks: PublishCommentCheck[]
+export type ComposePrePublishReviewProps = PrePublishReview & {
   onCancel: () => void
   onPublish: () => void
 }

@@ -1,7 +1,10 @@
 import type { BookmarkDraft, DestinationMetadata } from 'api/contracts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { getPendingDeliveryComments } from '#features/editor/compose-delivery-command'
+import {
+  getPendingDeliveryComments,
+  type PendingDeliveryComment,
+} from '#features/editor/compose-delivery-command'
 import {
   createInitialPublishCommentChecks,
   type PrePublishReview,
@@ -12,7 +15,7 @@ type UseComposePrePublishReviewOptions = {
   draft: BookmarkDraft | null
   metadata: DestinationMetadata | null
   verifyComments: (
-    comments: ReturnType<typeof getPendingDeliveryComments>,
+    comments: PendingDeliveryComment[],
     signal: AbortSignal,
   ) => Promise<PublishCommentCheck[]>
   publish: (metadata: DestinationMetadata) => void
