@@ -81,7 +81,9 @@ const customVerification: Verification = {
 }
 
 const draft = (
-  analysis = { verification: savedCommonVerification },
+  analysis: BookmarkDraft['analysis'] = {
+    verification: savedCommonVerification,
+  },
 ): BookmarkDraft => ({
   version: 1,
   id: '00000000-0000-4000-8000-000000000101',
@@ -220,7 +222,7 @@ describe('useComposeAnalysis', () => {
       expectedState: 'invalid-response',
     },
   ])(
-    'maps $code and preserves the saved verification after failure',
+    'maps $code and preserves the saved summary after failure',
     async ({ code, status, expectedState }) => {
       vi.stubGlobal(
         'fetch',
@@ -235,23 +237,23 @@ describe('useComposeAnalysis', () => {
       )
 
       await mount({
-        draft: draft(undefined),
+        draft: draft({ summary }),
         canEdit: true,
         autoAnalyzeDraftId: null,
         saveAnalysisResult: () => true,
       })
       await act(async () => {
-        await current.onVerifyComment()
+        await current.onSummarizeArticle()
       })
 
       expect(
         captureOutput({
-          verification: current.verification,
-          verificationState: current.verificationState,
+          summary: current.summary,
+          summaryState: current.summaryState,
         }),
       ).toEqual({
-        verification: savedCommonVerification,
-        verificationState: expectedState,
+        summary,
+        summaryState: expectedState,
       })
     },
   )
@@ -419,92 +421,73 @@ describe('useComposeAnalysis', () => {
     })
   })
 
-  it('keeps custom verification session-only and restores only common verification', async () => {
+  it('saves only the common comment result from the pre-publish check', async () => {
     const savedCommands: ComposeAnalysisSaveCommand[] = []
-    const saveAnalysisResult = vi.fn((command: ComposeAnalysisSaveCommand) => {
-      savedCommands.push(command)
-      return true
-    })
-    const responses = [freshCommonVerification, customVerification]
+    const checkingDraft: BookmarkDraft = {
+      ...draft(),
+      destinations: [
+        ...draft().destinations,
+        {
+          destination: 'mastodon',
+          selected: true,
+          commentMode: 'common',
+          customComment: '',
+          options: { visibility: 'public', spoilerText: '', sensitive: false },
+        },
+      ],
+    }
     vi.stubGlobal(
       'fetch',
-      vi.fn(() => Promise.resolve(jsonResponse(responses.shift()))),
+      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+        const body: unknown =
+          typeof init?.body === 'string' ? JSON.parse(init.body) : null
+        const isCommon =
+          typeof body === 'object' &&
+          body !== null &&
+          'comment' in body &&
+          body.comment === checkingDraft.commonComment
+        return Promise.resolve(
+          jsonResponse(isCommon ? freshCommonVerification : customVerification),
+        )
+      }),
     )
 
-    const props: HookProps = {
-      draft: draft(),
+    await mount({
+      draft: checkingDraft,
       canEdit: true,
       autoAnalyzeDraftId: null,
-      saveAnalysisResult,
-    }
-    await mount(props)
-
+      saveAnalysisResult: (command) => {
+        savedCommands.push(command)
+        return true
+      },
+    })
+    let checks!: Awaited<ReturnType<typeof current.onVerifyPublishComments>>
     await act(async () => {
-      await current.onVerifyComment()
+      checks = await current.onVerifyPublishComments(
+        getPendingDeliveryComments(checkingDraft),
+        new AbortController().signal,
+      )
     })
-    const commonResult = {
-      verification: current.verification,
-      verificationState: current.verificationState,
-    }
 
-    act(() => {
-      current.onVerificationTargetChange('destination:hatena')
-    })
-    await act(async () => {
-      await current.onVerifyComment()
-    })
-    const customResult = {
-      isCustomComment: current.isCustomComment,
-      verification: current.verification,
-      verificationState: current.verificationState,
-    }
-
-    act(() => {
-      current.onVerificationTargetChange('common')
-    })
-    const commonAfterCustom = {
-      verification: current.verification,
-      verificationState: current.verificationState,
-    }
-
-    unmount()
-    await mount(props)
-    act(() => {
-      current.onVerificationTargetChange('destination:hatena')
-    })
-    const customAfterReload = {
-      isCustomComment: current.isCustomComment,
-      verification: current.verification,
-      verificationState: current.verificationState,
-    }
-
-    expect(
-      captureOutput({
-        customResult,
-        commonResult,
-        commonAfterCustom,
-        customAfterReload,
-        savedCommands,
-      }),
-    ).toEqual({
-      customResult: {
-        isCustomComment: true,
-        verification: customVerification,
-        verificationState: 'success',
-      },
-      commonResult: {
-        verification: freshCommonVerification,
-        verificationState: 'success',
-      },
-      commonAfterCustom: {
-        verification: savedCommonVerification,
-        verificationState: 'success',
-      },
-      customAfterReload: {
-        isCustomComment: true,
-        verification: null,
-        verificationState: 'not-requested',
-      },
+    expect(captureOutput({ checks, savedCommands })).toEqual({
+      checks: [
+        {
+          destinations: ['hatena'],
+          commentTargetIds: ['destination:hatena'],
+          comment: 'The paper kite has a golden tail.',
+          status: 'success',
+          verification: customVerification,
+          error: null,
+        },
+        {
+          destinations: ['mastodon'],
+          commentTargetIds: ['common'],
+          comment: 'The paper kite is blue.',
+          status: 'success',
+          verification: freshCommonVerification,
+          error: null,
+        },
+      ],
       savedCommands: [
         {
           kind: 'verification',

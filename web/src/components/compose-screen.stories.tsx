@@ -80,16 +80,8 @@ const handlers: Omit<ComposeScreenProps, 'state' | 'sourceUrl'> = {
     extractionState: 'not-requested',
     summary: null,
     summaryState: 'not-requested',
-    verification: null,
-    verificationState: 'not-requested',
-    verificationTargets: [{ id: 'common', label: 'Common comment' }],
-    selectedVerificationTargetId: 'common',
-    isCustomComment: false,
-    canVerifyComment: true,
     onExtractArticle: () => undefined,
     onSummarizeArticle: () => undefined,
-    onVerifyComment: () => undefined,
-    onVerificationTargetChange: () => undefined,
   },
   prePublishReview: null,
   onCancelPrePublishReview: () => undefined,
@@ -160,7 +152,15 @@ export const Empty: Story = {
     state: emptyState,
     sourceUrl: '',
   },
-  name: 'The editor invites the reader to create a first draft.',
+  name: 'The editor offers to open a draft when none is open.',
+}
+
+export const Loading: Story = {
+  args: {
+    state: { ...emptyState, isLoading: true },
+    sourceUrl: '',
+  },
+  name: 'The editor shows that saved drafts are loading.',
 }
 
 export const Saving: Story = {
@@ -341,8 +341,6 @@ const compactStoryArgs = {
       partial: false,
     },
     summaryState: 'success' as const,
-    verification: { issues: [], partial: false },
-    verificationState: 'success' as const,
   },
   sourceUrl: '',
 }
@@ -364,20 +362,9 @@ export const StaleAnalysis: Story = {
         partial: false,
       },
       summaryState: 'stale',
-      verification: {
-        issues: [
-          {
-            kind: 'uncertain',
-            quote: 'A detail from the earlier article text.',
-            reason: 'The saved check should be rerun against the revised text.',
-          },
-        ],
-        partial: false,
-      },
-      verificationState: 'stale',
     },
   },
-  name: 'The editor keeps saved results visible while analysis is out of date.',
+  name: 'The editor keeps the saved summary visible while it is out of date.',
 }
 
 function viewportStory(width: number, height: number) {
@@ -405,22 +392,16 @@ function viewportStory(width: number, height: number) {
   }
 }
 
-export const Mini420x600: Story = {
-  ...viewportStory(420, 600),
+export const Phone390x844: Story = {
+  ...viewportStory(390, 844),
   args: compactStoryArgs,
-  name: 'The compact editor keeps primary actions visible at 420 × 600 px.',
+  name: 'On a phone, the editor stacks the article, comment, and destinations in one scrolling column.',
 }
 
-export const Mini390x600: Story = {
-  ...viewportStory(390, 600),
+export const Desktop1280x900: Story = {
+  ...viewportStory(1280, 900),
   args: compactStoryArgs,
-  name: 'The compact editor fits the same workflow at 390 × 600 px.',
-}
-
-export const Desktop960x680: Story = {
-  ...viewportStory(960, 680),
-  args: compactStoryArgs,
-  name: 'The editor places summary and comment side by side at 960 × 680 px.',
+  name: 'On a wide screen, the editor places the article beside the comment and destinations.',
 }
 
 const mixedOutcomeDraft: BookmarkDraft = {

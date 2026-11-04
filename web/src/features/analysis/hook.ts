@@ -1,4 +1,4 @@
-import type { Article, ShareInput, Summary, Verification } from 'api/contracts'
+import type { Article, ShareInput, Summary } from 'api/contracts'
 import { err, type Result, type ResultAsync } from 'neverthrow'
 import {
   type Dispatch,
@@ -29,7 +29,6 @@ export type ArticleAnalysisOptions = {
   shareInput: ShareInput | null
   article: Article | null
   articleRevision: string | number
-  comment: { id: string; value: string } | null
 }
 
 type StoredState<T> = {
@@ -150,28 +149,14 @@ const useAnalysisOperation = <T>(key: string) => {
 }
 
 export const useArticleAnalysis = (
-  {
-    draftId,
-    shareInput,
-    article,
-    articleRevision,
-    comment,
-  }: ArticleAnalysisOptions,
+  { draftId, shareInput, article, articleRevision }: ArticleAnalysisOptions,
   operations: AnalysisOperations = defaultOperations,
 ) => {
   const extractionKey = JSON.stringify([draftId, shareInput])
   const summaryKey = JSON.stringify([draftId, articleRevision, article])
-  const verificationKey = JSON.stringify([
-    draftId,
-    articleRevision,
-    article,
-    comment?.id ?? null,
-    comment?.value ?? null,
-  ])
 
   const extraction = useAnalysisOperation<Article>(extractionKey)
   const summary = useAnalysisOperation<Summary>(summaryKey)
-  const verification = useAnalysisOperation<Verification>(verificationKey)
 
   const extract = useCallback(
     () =>
@@ -193,32 +178,18 @@ export const useArticleAnalysis = (
     [article, operations, summary.run],
   )
 
-  const verify = useCallback(
-    () =>
-      verification.run((signal) =>
-        article === null || comment === null
-          ? invalidInputAsync<Verification>()
-          : operations.verifyComment(article, comment.value, { signal }),
-      ),
-    [article, comment, operations, verification.run],
-  )
-
   const cancelAll = useCallback(() => {
     extraction.cancel()
     summary.cancel()
-    verification.cancel()
-  }, [extraction.cancel, summary.cancel, verification.cancel])
+  }, [extraction.cancel, summary.cancel])
 
   return {
     extraction: extraction.state,
     summary: summary.state,
-    verification: verification.state,
     extract,
     summarize,
-    verify,
     cancelExtraction: extraction.cancel,
     cancelSummary: summary.cancel,
-    cancelVerification: verification.cancel,
     cancelAll,
   }
 }
