@@ -89,7 +89,12 @@ export const verifyComment = (
         (issue.evidence === undefined ||
           citationMatches(article.text, issue.evidence)),
     )
+    const omittedIssueCount = parsed.value.issues.length - issues.length
 
-    return ok({ issues, partial: article.partial })
+    return ok({
+      issues,
+      partial: article.partial,
+      ...(omittedIssueCount > 0 ? { omittedIssueCount } : {}),
+    })
   })
 }

@@ -109,6 +109,16 @@ export const AnalysisResponseCouldNotBeProcessed: Story = {
   name: 'The editor explains that the AI check returned no usable result.',
 }
 
+export const UnverifiedIssuesOmitted: Story = {
+  args: {
+    defaultOpenDetail: 'verification',
+    summaryState: 'not-requested',
+    verification: { issues: [], partial: false, omittedIssueCount: 2 },
+    verificationState: 'success',
+  },
+  name: 'The editor explains that it omitted findings with unverified citations.',
+}
+
 export const StaleAnalysis: Story = {
   args: {
     article: {

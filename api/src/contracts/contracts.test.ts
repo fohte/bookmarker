@@ -175,6 +175,19 @@ describe('Article, Summary, and Verification', () => {
       },
     })
   })
+
+  it('validates the count of omitted unverified issues', () => {
+    expect(
+      VerificationSchema.safeParse({
+        issues: [],
+        partial: false,
+        omittedIssueCount: 2,
+      }),
+    ).toEqual({
+      success: true,
+      data: { issues: [], partial: false, omittedIssueCount: 2 },
+    })
+  })
 })
 
 describe('DestinationDraft', () => {

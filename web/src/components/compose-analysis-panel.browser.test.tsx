@@ -179,6 +179,34 @@ describe('ComposeAnalysisPanel in a browser', () => {
     },
   )
 
+  it('explains when citation checks caused potential findings to be omitted', async () => {
+    mountPanel({
+      verification: { issues: [], partial: false, omittedIssueCount: 2 },
+      verificationState: 'success',
+      defaultOpenDetail: 'verification',
+    })
+    await waitFor(() => dialogSnapshot()?.title === 'Comment check')
+
+    expect(captureOutput(dialogStatusMessages())).toEqual([
+      'No verifiable issues were found. 2 potential issues were omitted because their citations could not be verified.',
+    ])
+  })
+
+  it('offers a retry after article extraction times out', () => {
+    mountPanel({
+      article: { ...article, text: '' },
+      extractionState: 'timeout',
+    })
+
+    expect(
+      captureOutput(
+        Array.from(document.querySelectorAll('button'), (button) =>
+          button.textContent.trim(),
+        ),
+      ),
+    ).toEqual(['Retry extract', 'Refresh', 'Details', 'Check', 'Details'])
+  })
+
   it('opens the full summary from its detail button', async () => {
     mountPanel()
     await click(detailButton('Read full summary'))

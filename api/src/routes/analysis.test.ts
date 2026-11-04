@@ -743,7 +743,7 @@ describe('POST /api/analysis/verify', () => {
 
     expect(result).toEqual({
       status: 200,
-      body: { issues: [], partial: false },
+      body: { issues: [], omittedIssueCount: 1, partial: false },
     })
   })
 
@@ -772,7 +772,7 @@ describe('POST /api/analysis/verify', () => {
 
     expect(result).toEqual({
       status: 200,
-      body: { issues: [], partial: false },
+      body: { issues: [], omittedIssueCount: 1, partial: false },
     })
   })
 

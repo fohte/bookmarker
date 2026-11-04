@@ -170,6 +170,37 @@ afterEach(() => {
 })
 
 describe('useComposeAnalysis', () => {
+  it('maps article fetch timeouts to the extraction timeout state', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          jsonResponse(
+            {
+              error: {
+                code: 'ARTICLE_FETCH_TIMEOUT',
+                message: 'The article could not be loaded in time.',
+              },
+            },
+            504,
+          ),
+        ),
+      ),
+    )
+
+    await mount({
+      draft: draft(undefined),
+      canEdit: true,
+      autoAnalyzeDraftId: null,
+      saveAnalysisResult: () => true,
+    })
+    await act(async () => {
+      await current.onExtractArticle()
+    })
+
+    expect(captureOutput(current.extractionState)).toBe('timeout')
+  })
+
   it.each([
     {
       code: 'ARTICLE_INSUFFICIENT',

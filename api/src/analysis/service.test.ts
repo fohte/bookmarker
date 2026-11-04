@@ -106,6 +106,7 @@ describe('verifyComment', () => {
           },
         ],
         partial: true,
+        omittedIssueCount: 1,
       },
     })
   })
