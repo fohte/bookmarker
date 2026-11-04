@@ -17,8 +17,8 @@ const meta = {
     status: 'complete',
     checks: [
       {
-        destination: 'mastodon',
-        commentTargetId: 'common',
+        destinations: ['mastodon'],
+        commentTargetIds: ['common'],
         comment: 'A fictional comment.',
         status: 'success',
         verification: { issues: [], partial: false },
@@ -37,8 +37,8 @@ export const Checking: Story = {
     status: 'checking',
     checks: [
       {
-        destination: 'mastodon',
-        commentTargetId: 'common',
+        destinations: ['mastodon'],
+        commentTargetIds: ['common'],
         comment: 'A fictional comment.',
         status: 'checking',
         verification: null,
@@ -51,19 +51,35 @@ export const Checking: Story = {
 
 export const NoPendingComments: Story = {
   args: { status: 'complete', checks: [] },
-  name: 'The editor has no API destination comments to check.',
+  name: 'The editor has no selected destination comments to check.',
 }
 
 export const NoIssues: Story = {
   name: 'The editor finds no issues in the comment.',
 }
 
+export const SharedCommentAcrossDestinations: Story = {
+  args: {
+    checks: [
+      {
+        destinations: ['mastodon', 'x'],
+        commentTargetIds: ['common'],
+        comment: 'A fictional shared comment.',
+        status: 'success',
+        verification: { issues: [], partial: false },
+        error: null,
+      },
+    ],
+  },
+  name: 'The editor checks one shared comment for multiple destinations.',
+}
+
 export const IssuesFound: Story = {
   args: {
     checks: [
       {
-        destination: 'hatena',
-        commentTargetId: 'destination:hatena',
+        destinations: ['hatena'],
+        commentTargetIds: ['destination:hatena'],
         comment: 'A fictional custom comment.',
         status: 'success',
         verification: {
@@ -88,8 +104,8 @@ export const IssuesWithUnverifiedCitations: Story = {
   args: {
     checks: [
       {
-        destination: 'hatena',
-        commentTargetId: 'destination:hatena',
+        destinations: ['hatena'],
+        commentTargetIds: ['destination:hatena'],
         comment: 'A fictional custom comment.',
         status: 'success',
         verification: {
@@ -114,8 +130,8 @@ export const UnverifiedPotentialIssues: Story = {
   args: {
     checks: [
       {
-        destination: 'mastodon',
-        commentTargetId: 'common',
+        destinations: ['mastodon'],
+        commentTargetIds: ['common'],
         comment: 'A fictional comment.',
         status: 'success',
         verification: {
@@ -134,8 +150,8 @@ export const CheckFailed: Story = {
   args: {
     checks: [
       {
-        destination: 'mastodon',
-        commentTargetId: 'common',
+        destinations: ['mastodon'],
+        commentTargetIds: ['common'],
         comment: 'A fictional comment.',
         status: 'failed',
         verification: null,
@@ -150,8 +166,8 @@ export const InsufficientArticle: Story = {
   args: {
     checks: [
       {
-        destination: 'mastodon',
-        commentTargetId: 'common',
+        destinations: ['mastodon'],
+        commentTargetIds: ['common'],
         comment: 'A fictional comment.',
         status: 'failed',
         verification: null,
@@ -167,8 +183,8 @@ export const CheckTimedOut: Story = {
   args: {
     checks: [
       {
-        destination: 'mastodon',
-        commentTargetId: 'common',
+        destinations: ['mastodon'],
+        commentTargetIds: ['common'],
         comment: 'A fictional comment.',
         status: 'failed',
         verification: null,
@@ -183,8 +199,8 @@ export const InvalidCheckResponse: Story = {
   args: {
     checks: [
       {
-        destination: 'mastodon',
-        commentTargetId: 'common',
+        destinations: ['mastodon'],
+        commentTargetIds: ['common'],
         comment: 'A fictional comment.',
         status: 'failed',
         verification: null,

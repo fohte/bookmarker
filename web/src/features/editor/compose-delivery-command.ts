@@ -1,6 +1,7 @@
 import type {
   BookmarkDraft,
   DeliveryResult,
+  DestinationId,
   DestinationMetadata,
   PublishArticle,
   PublishRequest,
@@ -22,7 +23,7 @@ export type ComposeDeliveryPlan = {
 }
 
 export type PendingDeliveryComment = {
-  destination: Exclude<PublishTarget['destination'], 'x'>
+  destination: DestinationId
   commentTargetId: string
   comment: string
 }
@@ -76,9 +77,10 @@ export function getPendingDeliveryComments(
   draft: BookmarkDraft,
 ): PendingDeliveryComment[] {
   return draft.destinations
-    .filter(isSelectedPublishDestination)
+    .filter((destination) => destination.selected)
     .filter(
       (destination) =>
+        destination.destination === 'x' ||
         !destinationHasSucceeded(draft.delivery, destination.destination),
     )
     .map((destination) => ({

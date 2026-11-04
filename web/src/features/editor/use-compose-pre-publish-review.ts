@@ -38,14 +38,37 @@ export function useComposePrePublishReview({
     const operation = new AbortController()
     controller.current = operation
     const comments = getPendingDeliveryComments(draft)
+    const initialChecks = createInitialPublishCommentChecks(comments)
     setReview({
       status: 'checking',
-      checks: createInitialPublishCommentChecks(comments),
+      checks: initialChecks,
     })
-    void verifyComments(comments, operation.signal).then((checks) => {
-      if (operation.signal.aborted) return
-      setReview({ status: 'complete', checks })
-    })
+    void verifyComments(comments, operation.signal).then(
+      (checks) => {
+        if (operation.signal.aborted) return
+        setReview({ status: 'complete', checks })
+      },
+      (error: unknown) => {
+        if (operation.signal.aborted) return
+        const message =
+          error instanceof Error && error.message.length > 0
+            ? error.message
+            : 'The comment check could not be completed.'
+        setReview({
+          status: 'complete',
+          checks: initialChecks.map((check) =>
+            check.status === 'skipped'
+              ? check
+              : {
+                  ...check,
+                  status: 'failed',
+                  verification: null,
+                  error: message,
+                },
+          ),
+        })
+      },
+    )
   }, [draft, metadata, verifyComments])
 
   const cancelReview = useCallback(() => {

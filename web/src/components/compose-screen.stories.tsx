@@ -132,8 +132,8 @@ export const ReviewingComments: Story = {
       status: 'complete',
       checks: [
         {
-          destination: 'hatena',
-          commentTargetId: 'destination:hatena',
+          destinations: ['hatena'],
+          commentTargetIds: ['destination:hatena'],
           comment: 'A fictional individual comment.',
           status: 'success',
           verification: {

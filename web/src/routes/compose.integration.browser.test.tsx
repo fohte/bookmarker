@@ -343,6 +343,7 @@ describe('ComposeRoute publishing in a browser', () => {
       )
       await userEvent.click(input('input[aria-label="Select Hatena Bookmark"]'))
       await userEvent.click(input('input[aria-label="Select Mastodon"]'))
+      await userEvent.click(input('input[aria-label="Select X"]'))
       await userEvent.click(
         button('button[aria-label="Open Hatena Bookmark settings"]'),
       )
@@ -423,10 +424,10 @@ describe('ComposeRoute publishing in a browser', () => {
     )
     const resultPairing = [
       ...document.querySelectorAll<HTMLElement>(
-        '[data-prepublish-destination]',
+        '[data-prepublish-destinations]',
       ),
     ].map((section) => ({
-      destination: section.dataset['prepublishDestination'] ?? null,
+      destinations: section.dataset['prepublishDestinations']?.split(',') ?? [],
       status: section.dataset['prepublishStatus'] ?? null,
       comment:
         section.querySelector('[data-prepublish-comment]')?.textContent ?? null,
@@ -536,7 +537,7 @@ describe('ComposeRoute publishing in a browser', () => {
       },
       resultPairing: [
         {
-          destination: 'hatena',
+          destinations: ['hatena'],
           status: 'failed',
           comment: 'A separate individual comment 😀 ',
           error:
@@ -545,7 +546,7 @@ describe('ComposeRoute publishing in a browser', () => {
           issues: [],
         },
         {
-          destination: 'mastodon',
+          destinations: ['mastodon', 'x'],
           status: 'success',
           comment: 'A shared comment with trailing spaces  ',
           error: null,
@@ -610,6 +611,12 @@ describe('ComposeRoute publishing in a browser', () => {
               spoilerText: '',
               sensitive: false,
             },
+          },
+          {
+            destination: 'x',
+            selected: true,
+            commentMode: 'common',
+            customComment: '',
           },
         ],
         summary,

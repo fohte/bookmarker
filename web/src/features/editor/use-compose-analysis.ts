@@ -354,7 +354,13 @@ export function useComposeAnalysis(
     ): Promise<PublishCommentCheck[]> => {
       if (draft === null) return []
 
-      const initialChecks = createInitialPublishCommentChecks(comments)
+      const initialChecks = createInitialPublishCommentChecks(
+        comments,
+        ({ comment }) =>
+          article === null
+            ? JSON.stringify([draft.id, comment])
+            : verificationCacheKey(draft.id, article, comment),
+      )
       return Promise.all(
         initialChecks.map(async (item): Promise<PublishCommentCheck> => {
           if (item.status === 'skipped') return item
@@ -398,7 +404,7 @@ export function useComposeAnalysis(
                 item.comment,
                 verification,
               )
-              if (item.commentTargetId === 'common') {
+              if (item.commentTargetIds.includes('common')) {
                 saveCommonVerificationResult(
                   saveAnalysisResult,
                   draft,

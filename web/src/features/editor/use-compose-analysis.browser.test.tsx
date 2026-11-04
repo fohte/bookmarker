@@ -305,8 +305,8 @@ describe('useComposeAnalysis', () => {
 
       expect(captureOutput(checks)).toEqual([
         {
-          destination: 'hatena',
-          commentTargetId: 'destination:hatena',
+          destinations: ['hatena'],
+          commentTargetIds: ['destination:hatena'],
           comment: 'The paper kite has a golden tail.',
           status: 'failed',
           verification: null,

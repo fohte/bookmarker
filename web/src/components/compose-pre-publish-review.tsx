@@ -58,18 +58,21 @@ export function ComposePrePublishReview({
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
           {checks.length === 0 ? (
             <p className="text-sm text-muted-foreground" role="status">
-              No API destination comments are pending.
+              No selected destination comments are pending.
             </p>
           ) : (
             checks.map((check, index) => (
               <section
-                key={`${check.destination}:${String(index)}`}
-                data-prepublish-destination={check.destination}
+                key={`${check.destinations.join(',')}:${String(index)}`}
+                data-prepublish-destinations={check.destinations.join(',')}
                 data-prepublish-status={check.status}
                 className="space-y-1 border-t border-border pt-3 first:border-0 first:pt-0"
               >
                 <h3 className="text-sm font-medium">
-                  {destinationNames[check.destination]} comment
+                  {check.destinations
+                    .map((destination) => destinationNames[destination])
+                    .join(', ')}{' '}
+                  {check.destinations.length === 1 ? 'comment' : 'comments'}
                 </h3>
                 {check.comment.length > 0 && (
                   <p
