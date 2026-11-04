@@ -10,6 +10,7 @@ import { currentUrlWithoutDraft } from '#features/editor/compose-history'
 import { useComposeAnalysis } from '#features/editor/use-compose-analysis'
 import { useComposeController } from '#features/editor/use-compose-controller'
 import { useComposeDelivery } from '#features/editor/use-compose-delivery'
+import { useComposePrePublishReview } from '#features/editor/use-compose-pre-publish-review'
 import { useShareIntake } from '#features/share/use-share-intake'
 
 export function ComposeRoute() {
@@ -31,6 +32,14 @@ export function ComposeRoute() {
     draft: controller.state.activeDraft,
     state: controller.state,
     canEdit: controller.state.canEdit && !controller.state.isLoading,
+  })
+  const prePublish = useComposePrePublishReview({
+    draft: controller.state.activeDraft,
+    metadata: delivery.metadata,
+    verifyComments: analysis.onVerifyPublishComments,
+    publish: (metadata) => {
+      void controller.publishSelectedDestinations(metadata)
+    },
   })
   const openSharedSource = useCallback(
     async (
@@ -118,23 +127,22 @@ export function ComposeRoute() {
       deliveryControls={{
         isLoadingMetadata: delivery.isLoadingMetadata,
         metadataErrorMessage: delivery.metadataErrorMessage,
-        canPublish: delivery.canPublish,
+        canPublish: delivery.canPublish && prePublish.review === null,
         canOpenX: delivery.canOpenX,
         xIntentHref: delivery.xIntentHref,
         deliveryState: delivery.deliveryState,
         deliveryErrorMessage: delivery.deliveryErrorMessage,
         authenticationRequired: delivery.authenticationRequired,
         signInHref: delivery.signInHref,
-        onPublish: () => {
-          if (delivery.metadata !== null) {
-            void controller.publishSelectedDestinations(delivery.metadata)
-          }
-        },
+        onRequestPublishReview: prePublish.requestReview,
         onRetryDeliverySave: () => {
           void controller.retryDeliverySave()
         },
         onRetryMetadata: delivery.onLoadMetadata,
       }}
+      prePublishReview={prePublish.review}
+      onCancelPrePublishReview={prePublish.cancelReview}
+      onConfirmPrePublish={prePublish.publishAfterReview}
       {...(delivery.metadata === null
         ? {}
         : { destinationMetadata: delivery.metadata })}

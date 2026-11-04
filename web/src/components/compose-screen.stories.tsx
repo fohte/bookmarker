@@ -71,7 +71,7 @@ const handlers: Omit<ComposeScreenProps, 'state' | 'sourceUrl'> = {
     deliveryErrorMessage: null,
     authenticationRequired: false,
     signInHref: null,
-    onPublish: () => undefined,
+    onRequestPublishReview: () => undefined,
     onRetryDeliverySave: () => undefined,
     onRetryMetadata: () => undefined,
   },
@@ -91,6 +91,9 @@ const handlers: Omit<ComposeScreenProps, 'state' | 'sourceUrl'> = {
     onVerifyComment: () => undefined,
     onVerificationTargetChange: () => undefined,
   },
+  prePublishReview: null,
+  onCancelPrePublishReview: () => undefined,
+  onConfirmPrePublish: () => undefined,
   copyConfirmationDestination: null,
   onRequestCopyCommonComment: () => undefined,
   onCancelCopyCommonComment: () => undefined,
@@ -120,6 +123,36 @@ export const Editing: Story = {
     sourceUrl: '',
   },
   name: 'The editor shows a saved article and common comment.',
+}
+
+export const ReviewingComments: Story = {
+  args: {
+    state: savedState,
+    prePublishReview: {
+      status: 'complete',
+      checks: [
+        {
+          destinations: ['hatena'],
+          commentTargetIds: ['destination:hatena'],
+          comment: 'A fictional individual comment.',
+          status: 'success',
+          verification: {
+            issues: [
+              {
+                kind: 'uncertain',
+                quote: 'A detail in the comment.',
+                reason: 'The article does not include that detail.',
+              },
+            ],
+            partial: false,
+          },
+          error: null,
+        },
+      ],
+    },
+    sourceUrl: '',
+  },
+  name: 'The editor shows comment check results before publishing.',
 }
 
 export const Empty: Story = {

@@ -1,4 +1,9 @@
-import type { Article, BookmarkDraft, DestinationId } from 'api/contracts'
+import type {
+  Article,
+  BookmarkDraft,
+  DestinationId,
+  Verification,
+} from 'api/contracts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
@@ -17,7 +22,18 @@ import {
   sameArticle,
 } from '#features/editor/compose-analysis-command'
 import type { AnalysisDisplayState } from '#features/editor/compose-analysis-state'
+import { commentCheckErrorMessage } from '#features/editor/compose-comment-check-error'
+import type { PendingDeliveryComment } from '#features/editor/compose-delivery-command'
 import { effectiveDestinationComment } from '#features/editor/compose-destination'
+import {
+  createInitialPublishCommentChecks,
+  type PublishCommentCheck,
+} from '#features/editor/compose-pre-publish'
+import {
+  rememberVerification,
+  saveCommonVerificationResult,
+  verificationCacheKey,
+} from '#features/editor/compose-verification-cache'
 
 type VerificationTarget =
   | { id: 'common'; kind: 'common'; label: string; value: string }
@@ -124,6 +140,7 @@ export function useComposeAnalysis(
   )
   const autoExtractionStarted = useRef(new Set<string>())
   const autoSummaryStarted = useRef(new Set<string>())
+  const verificationCache = useRef(new Map<string, Verification>())
 
   const article = useMemo(
     () => manualArticleForAnalysis(draft?.article),
@@ -169,6 +186,10 @@ export function useComposeAnalysis(
 
   useEffect(() => {
     setSelectedTargetId('common')
+  }, [draft?.id])
+
+  useEffect(() => {
+    verificationCache.current.clear()
   }, [draft?.id])
 
   useEffect(() => {
@@ -303,21 +324,114 @@ export function useComposeAnalysis(
       return
     }
     const result = await analysis.verify()
-    if (target.kind !== 'common') return
-
     result.match(
       (verification) => {
-        saveAnalysisResult({
-          kind: 'verification',
-          expectedDraftId: draft.id,
-          expectedArticle: article,
-          expectedComment: { id: 'common', value: target.value },
+        rememberVerification(
+          verificationCache.current,
+          draft.id,
+          article,
+          target.value,
           verification,
-        })
+        )
+        if (target.kind === 'common') {
+          saveCommonVerificationResult(
+            saveAnalysisResult,
+            draft,
+            article,
+            target.value,
+            verification,
+          )
+        }
       },
       () => undefined,
     )
   }, [analysis.verify, article, canEdit, draft, saveAnalysisResult, target])
+
+  const verifyPublishComments = useCallback(
+    async (
+      comments: PendingDeliveryComment[],
+      signal: AbortSignal,
+    ): Promise<PublishCommentCheck[]> => {
+      if (draft === null) return []
+
+      const initialChecks = createInitialPublishCommentChecks(
+        comments,
+        ({ comment }) =>
+          article === null
+            ? JSON.stringify([draft.id, comment])
+            : verificationCacheKey(draft.id, article, comment),
+      )
+      return Promise.all(
+        initialChecks.map(async (item): Promise<PublishCommentCheck> => {
+          if (item.status === 'skipped') return item
+          if (article === null || article.text.trim().length === 0) {
+            return {
+              ...item,
+              status: 'failed',
+              verification: null,
+              error: 'Article text is unavailable for comment checking.',
+            }
+          }
+
+          const key = verificationCacheKey(draft.id, article, item.comment)
+          const cached = verificationCache.current.get(key)
+          if (cached !== undefined) {
+            return {
+              ...item,
+              status: 'success',
+              verification: cached,
+              error: null,
+            }
+          }
+          if (signal.aborted) {
+            return {
+              ...item,
+              status: 'failed',
+              verification: null,
+              error: 'The comment check was cancelled.',
+            }
+          }
+
+          const result = await operations.verifyComment(article, item.comment, {
+            signal,
+          })
+          return result.match(
+            (verification) => {
+              rememberVerification(
+                verificationCache.current,
+                draft.id,
+                article,
+                item.comment,
+                verification,
+              )
+              if (item.commentTargetIds.includes('common')) {
+                saveCommonVerificationResult(
+                  saveAnalysisResult,
+                  draft,
+                  article,
+                  item.comment,
+                  verification,
+                )
+              }
+              return {
+                ...item,
+                status: 'success',
+                verification,
+                error: null,
+              }
+            },
+            (error) => ({
+              ...item,
+              status: 'failed',
+              verification: null,
+              error: commentCheckErrorMessage(error),
+            }),
+          )
+        }),
+      )
+    },
+    [article, draft, operations, saveAnalysisResult],
+  )
 
   const storedSummary = draft?.analysis?.summary
   const summary =
@@ -354,5 +468,6 @@ export function useComposeAnalysis(
     onExtractArticle: () => extractArticle(autoAnalyzeDraftId === draft?.id),
     onSummarizeArticle: summarizeArticle,
     onVerifyComment: verifyComment,
+    onVerifyPublishComments: verifyPublishComments,
   }
 }

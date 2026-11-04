@@ -25,7 +25,9 @@ import {
 } from '#components/compose-delivery-panel'
 import { ComposeDestinationsPanel } from '#components/compose-destinations-panel'
 import { ComposeDraftPanel } from '#components/compose-draft-panel'
+import { ComposePrePublishReview } from '#components/compose-pre-publish-review'
 import type { ComposeState } from '#features/editor/compose-controller'
+import type { PrePublishReview } from '#features/editor/compose-pre-publish'
 
 export type ComposeScreenProps = {
   state: ComposeState
@@ -40,6 +42,9 @@ export type ComposeScreenProps = {
   onDestinationChange: (destination: DestinationDraft) => void
   analysis: Omit<ComposeAnalysisPanelProps, 'canEdit'>
   deliveryControls: Omit<ComposeDeliveryPanelProps, 'delivery'>
+  prePublishReview: PrePublishReview | null
+  onCancelPrePublishReview: () => void
+  onConfirmPrePublish: () => void
   destinationMetadata?: DestinationMetadata
   copyConfirmationDestination: DestinationId | null
   onRequestCopyCommonComment: (destination: DestinationId) => void
@@ -65,6 +70,9 @@ export function ComposeScreen({
   onDestinationChange,
   analysis,
   deliveryControls,
+  prePublishReview,
+  onCancelPrePublishReview,
+  onConfirmPrePublish,
   destinationMetadata,
   copyConfirmationDestination,
   onRequestCopyCommonComment,
@@ -78,9 +86,12 @@ export function ComposeScreen({
 }: ComposeScreenProps) {
   const activeDraft = state.activeDraft
   const deliveryBusy = state.deliveryState !== 'idle'
-  const canEdit = state.canEdit && !deliveryBusy
+  const canEdit = state.canEdit && !deliveryBusy && prePublishReview === null
   const canCreate =
-    state.lockState !== 'unsupported' && !state.isLoading && !deliveryBusy
+    state.lockState !== 'unsupported' &&
+    !state.isLoading &&
+    !deliveryBusy &&
+    prePublishReview === null
 
   return (
     <main
@@ -93,7 +104,7 @@ export function ComposeScreen({
         articleTextError={articleTextError}
         canCreate={canCreate}
         canEdit={canEdit}
-        canSwitchDraft={!deliveryBusy}
+        canSwitchDraft={!deliveryBusy && prePublishReview === null}
         drafts={state.drafts}
         intakeError={state.intakeError}
         onArticleTextChange={onArticleTextChange}
@@ -214,6 +225,14 @@ export function ComposeScreen({
           ) ?? false
         }
       />
+
+      {prePublishReview !== null && (
+        <ComposePrePublishReview
+          {...prePublishReview}
+          onCancel={onCancelPrePublishReview}
+          onPublish={onConfirmPrePublish}
+        />
+      )}
 
       <Dialog
         open={state.discardOpen}

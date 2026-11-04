@@ -71,7 +71,7 @@ const controls: Omit<ComposeDeliveryPanelProps, 'delivery'> = {
   deliveryErrorMessage: null,
   authenticationRequired: false,
   signInHref: null,
-  onPublish: () => undefined,
+  onRequestPublishReview: () => undefined,
   onRetryDeliverySave: () => undefined,
   onRetryMetadata: () => undefined,
 }

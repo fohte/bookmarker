@@ -29,18 +29,18 @@ export type ComposeDeliveryPanelProps = {
   authenticationRequired: boolean
   signInHref: string | null
   defaultResultsOpen?: boolean
-  onPublish: () => void
+  onRequestPublishReview: () => void
   onRetryDeliverySave: () => void
   onRetryMetadata: () => void
 }
 
 const publishButtonLabels: Record<ComposeDeliveryState, string> = {
-  idle: 'Publish selected destinations',
+  idle: 'Check comments before publishing',
   'saving-input': 'Saving latest edits…',
   'saving-pending': 'Saving send attempt…',
   sending: 'Publishing…',
   'saving-results': 'Saving results…',
-  'result-save-failed': 'Publish selected destinations',
+  'result-save-failed': 'Check comments before publishing',
 }
 
 export function ComposeDeliveryPanel({
@@ -56,7 +56,7 @@ export function ComposeDeliveryPanel({
   authenticationRequired,
   signInHref,
   defaultResultsOpen,
-  onPublish,
+  onRequestPublishReview,
   onRetryDeliverySave,
   onRetryMetadata,
 }: ComposeDeliveryPanelProps) {
@@ -176,7 +176,7 @@ export function ComposeDeliveryPanel({
           data-compose-publish
           className="min-w-0 flex-1"
           disabled={!canPublish}
-          onClick={onPublish}
+          onClick={onRequestPublishReview}
           size="sm"
         >
           {publishButtonLabels[deliveryState]}

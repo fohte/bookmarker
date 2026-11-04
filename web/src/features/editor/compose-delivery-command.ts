@@ -1,6 +1,7 @@
 import type {
   BookmarkDraft,
   DeliveryResult,
+  DestinationId,
   DestinationMetadata,
   PublishArticle,
   PublishRequest,
@@ -19,6 +20,12 @@ import { unconfirmedDeliveryResult } from '#features/publish/unconfirmed-deliver
 export type ComposeDeliveryPlan = {
   request: PublishRequest
   snapshots: BookmarkDraft['delivery']
+}
+
+export type PendingDeliveryComment = {
+  destination: DestinationId
+  commentTargetId: string
+  comment: string
 }
 
 const operationKey = (
@@ -65,6 +72,26 @@ const isSelectedPublishDestination = (
   BookmarkDraft['destinations'][number],
   { destination: PublishTarget['destination'] }
 > => destination.selected && destination.destination !== 'x'
+
+export function getPendingDeliveryComments(
+  draft: BookmarkDraft,
+): PendingDeliveryComment[] {
+  return draft.destinations
+    .filter((destination) => destination.selected)
+    .filter(
+      (destination) =>
+        destination.destination === 'x' ||
+        !destinationHasSucceeded(draft.delivery, destination.destination),
+    )
+    .map((destination) => ({
+      destination: destination.destination,
+      commentTargetId:
+        destination.commentMode === 'common'
+          ? 'common'
+          : `destination:${destination.destination}`,
+      comment: effectiveDestinationComment(draft.commonComment, destination),
+    }))
+}
 
 function publishArticle(draft: BookmarkDraft): PublishArticle {
   if (draft.article !== undefined) {

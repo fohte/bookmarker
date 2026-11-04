@@ -17,6 +17,7 @@ import {
   verifyComment as requestVerifyComment,
 } from '#features/analysis/index'
 import type { ComposeAnalysisSaveCommand } from '#features/editor/compose-analysis-command'
+import { getPendingDeliveryComments } from '#features/editor/compose-delivery-command'
 import { useComposeAnalysis } from '#features/editor/use-compose-analysis'
 
 const article: Article = {
@@ -252,6 +253,66 @@ describe('useComposeAnalysis', () => {
         verification: savedCommonVerification,
         verificationState: expectedState,
       })
+    },
+  )
+
+  it.each([
+    {
+      code: 'ARTICLE_INSUFFICIENT',
+      status: 422,
+      expectedError:
+        'The article does not contain enough information for comment checking.',
+    },
+    {
+      code: 'ANALYSIS_TIMEOUT',
+      status: 504,
+      expectedError: 'The comment check timed out. Try again.',
+    },
+    {
+      code: 'INVALID_ANALYSIS_RESPONSE',
+      status: 502,
+      expectedError: 'The AI check could not return a usable result.',
+    },
+  ])(
+    'explains $code when a pre-publish comment check fails',
+    async ({ code, status, expectedError }) => {
+      const checkingDraft = draft()
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() =>
+          Promise.resolve(
+            jsonResponse(
+              { error: { code, message: 'A fictional analysis failure.' } },
+              status,
+            ),
+          ),
+        ),
+      )
+
+      await mount({
+        draft: checkingDraft,
+        canEdit: true,
+        autoAnalyzeDraftId: null,
+        saveAnalysisResult: () => true,
+      })
+      let checks!: Awaited<ReturnType<typeof current.onVerifyPublishComments>>
+      await act(async () => {
+        checks = await current.onVerifyPublishComments(
+          getPendingDeliveryComments(checkingDraft),
+          new AbortController().signal,
+        )
+      })
+
+      expect(captureOutput(checks)).toEqual([
+        {
+          destinations: ['hatena'],
+          commentTargetIds: ['destination:hatena'],
+          comment: 'The paper kite has a golden tail.',
+          status: 'failed',
+          verification: null,
+          error: expectedError,
+        },
+      ])
     },
   )
 
