@@ -3,7 +3,7 @@ import '#index.css'
 import type { DestinationDraft, DestinationMetadata } from 'api/contracts'
 import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
 
 import { ComposeDestinationsPanel } from '#components/compose-destinations-panel'
@@ -171,16 +171,63 @@ describe('ComposeDestinationsPanel in a browser', () => {
     )
     await click(buttonLabelled('Remove tag saved'))
 
-    expect(
-      updates.map((update) =>
-        update.destination === 'hatena' ? update.options : null,
+    const hatena = (tags: string[], isPrivate: boolean) => ({
+      destination: 'hatena',
+      selected: true,
+      commentMode: 'common',
+      customComment: '',
+      options: { tags, private: isPrivate },
+    })
+    expect(updates).toEqual([
+      hatena(['saved', 'paper'], false),
+      hatena(['saved', 'paper', 'lantern'], false),
+      hatena(['saved', 'paper', 'lantern', 'glow'], false),
+      hatena(['saved', 'paper', 'lantern', 'glow'], true),
+      hatena(['paper', 'lantern', 'glow'], true),
+    ])
+  })
+
+  it('updates Mastodon visibility, content warning, and sensitivity', async () => {
+    const updates = mountPanel([
+      {
+        destination: 'mastodon',
+        selected: true,
+        commentMode: 'common',
+        customComment: '',
+        options: { visibility: 'public', spoilerText: '', sensitive: false },
+      },
+    ])
+
+    await click(buttonLabelled('Edit Mastodon post and settings'))
+    await click(field('#mastodon-visibility', HTMLButtonElement))
+    await act(async () =>
+      page.getByRole('option', { exact: true, name: 'Unlisted' }).click(),
+    )
+    await act(async () =>
+      userEvent.fill(
+        field('#mastodon-cw', HTMLInputElement),
+        'Fictional spoiler',
       ),
-    ).toEqual([
-      { tags: ['saved', 'paper'], private: false },
-      { tags: ['saved', 'paper', 'lantern'], private: false },
-      { tags: ['saved', 'paper', 'lantern', 'glow'], private: false },
-      { tags: ['saved', 'paper', 'lantern', 'glow'], private: true },
-      { tags: ['paper', 'lantern', 'glow'], private: true },
+    )
+    await click(
+      page.getByRole('switch', { name: 'Mark as sensitive' }).element(),
+    )
+
+    const mastodon = (
+      visibility: string,
+      spoilerText: string,
+      sensitive: boolean,
+    ) => ({
+      destination: 'mastodon',
+      selected: true,
+      commentMode: 'common',
+      customComment: '',
+      options: { visibility, spoilerText, sensitive },
+    })
+    expect(updates).toEqual([
+      mastodon('unlisted', '', false),
+      mastodon('unlisted', 'Fictional spoiler', false),
+      mastodon('unlisted', 'Fictional spoiler', true),
     ])
   })
 
@@ -242,7 +289,9 @@ describe('ComposeDestinationsPanel in a browser', () => {
       exact: true,
       name: 'Saved collection ID 918 (not in the available list)',
     })
-    await expect.element(unknownOption).toHaveAttribute('aria-disabled', 'true')
+    const unknownOptionDisabled = (
+      await vi.waitFor(() => unknownOption.element())
+    ).getAttribute('aria-disabled')
     await act(async () =>
       page
         .getByRole('option', {
@@ -255,14 +304,22 @@ describe('ComposeDestinationsPanel in a browser', () => {
     expect(
       captureOutput({
         status,
-        updates: updates.map((update) =>
-          update.destination === 'raindrop' ? update.options : null,
-        ),
+        unknownOptionDisabled,
+        updates,
       }),
     ).toEqual({
       status:
         'Saved collection ID 918 is not available. Choose an available collection.',
-      updates: [{ collectionId: 71, tags: [] }],
+      unknownOptionDisabled: 'true',
+      updates: [
+        {
+          destination: 'raindrop',
+          selected: true,
+          commentMode: 'common',
+          customComment: '',
+          options: { collectionId: 71, tags: [] },
+        },
+      ],
     })
   })
 })
