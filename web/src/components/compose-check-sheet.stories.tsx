@@ -1,12 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import type { ComponentProps } from 'react'
 
-import {
-  ComposeCheckSheet,
-  type ComposeCheckSheetProps,
-} from '#components/compose-check-sheet'
+import { ComposeCheckSheet } from '#components/compose-check-sheet'
 import type { PublishCommentCheck } from '#features/editor/compose-pre-publish'
 
-const controls: Omit<ComposeCheckSheetProps, 'status' | 'checks'> = {
+const controls: Omit<
+  ComponentProps<typeof ComposeCheckSheet>,
+  'status' | 'checks'
+> = {
   postHref: null,
   onBackToEdit: () => undefined,
   onPost: () => undefined,

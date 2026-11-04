@@ -15,7 +15,7 @@ import type {
 } from '#features/editor/compose-pre-publish'
 import { markQuotes } from '#features/editor/compose-quote-marks'
 
-export type ComposeCheckSheetProps = PrePublishReview & {
+type ComposeCheckSheetProps = PrePublishReview & {
   // Set when only X is selected: posting then means opening its composer.
   postHref: string | null
   onBackToEdit: () => void
