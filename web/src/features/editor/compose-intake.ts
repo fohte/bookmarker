@@ -12,6 +12,7 @@ import {
 } from '#features/drafts/draft-error'
 import { hasDraftLockSupport } from '#features/drafts/draft-lock'
 import type { DraftStore } from '#features/drafts/draft-store'
+import { latestDeliverySnapshots } from '#features/editor/compose-delivery-history'
 import { createNewDraft } from '#features/editor/compose-draft'
 import {
   cleanupDraftNavigation,
@@ -20,6 +21,14 @@ import {
   prepareImportNavigation,
 } from '#features/editor/compose-history'
 import type { ComposeState } from '#features/editor/compose-state'
+
+const isFullyPosted = (draft: BookmarkDraft) => {
+  const latest = latestDeliverySnapshots(draft.delivery)
+  return (
+    latest.length > 0 &&
+    latest.every((snapshot) => snapshot.result?.status === 'succeeded')
+  )
+}
 
 type ComposeIntakePort = {
   store: DraftStore
@@ -133,6 +142,22 @@ export class ComposeIntake {
       )
     }
 
+    // Continuing a draft would drop newly shared text, so only URL-only links do.
+    if (options.intake === 'share' && input.sharedText === undefined) {
+      const listing = await this.port.store.listDrafts()
+      if (listing.isErr()) {
+        this.port.resumeCurrentDraft()
+        return err(listing.error)
+      }
+
+      const unfinished = listing.value.drafts.find(
+        (draft) => draft.source.url === input.url && !isFullyPosted(draft),
+      )
+      if (unfinished !== undefined) {
+        return this.#showDraft(unfinished.id, options, importNavigation)
+      }
+    }
+
     const candidate = createNewDraft(input, options.intake)
     if (candidate.isErr()) {
       this.port.resumeCurrentDraft()
@@ -163,7 +188,15 @@ export class ComposeIntake {
       return err(saved.error)
     }
 
-    const activated = await this.port.activateDraft(saved.value.id)
+    return this.#showDraft(saved.value.id, options, importNavigation)
+  }
+
+  async #showDraft(
+    draftId: string,
+    options: { cleanupUrl: string; intake: 'manual' | 'share' },
+    importNavigation: ImportNavigation | null,
+  ): Promise<Result<BookmarkDraft, DraftError>> {
+    const activated = await this.port.activateDraft(draftId)
     if (activated.isErr()) return err(activated.error)
 
     const cleaned = cleanupDraftNavigation(

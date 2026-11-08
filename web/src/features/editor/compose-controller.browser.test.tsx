@@ -1271,6 +1271,116 @@ describe('ComposeController in a browser', () => {
     })
   })
 
+  describe('when a URL-only link for a saved article opens again', () => {
+    const urlOnlyInput: ShareInput = {
+      version: 1,
+      url: 'https://example.test/shared-article',
+      partial: false,
+    }
+
+    const savedDraft = (
+      delivery: BookmarkDraft['delivery'] = [],
+    ): BookmarkDraft => ({ ...draft(), source: urlOnlyInput, delivery })
+
+    const openLink = async (store: DraftStore, input = urlOnlyInput) => {
+      const controller = new ComposeController(store)
+      await controller.start(null)
+      window.history.replaceState({ tab: 'compose' }, '', '/compose?url=shared')
+      const result = await controller.openSource(input, shareOptions)
+      return { controller, result }
+    }
+
+    it('restores what was typed before the editor closed', async () => {
+      const store = createIndexedDbDraftStore()
+      const first = await openLink(store)
+      first.controller.updateCommonComment('Written before closing')
+      await first.controller.dispose()
+
+      const second = await openLink(store)
+      const actual = {
+        errorCode: second.result.isErr() ? second.result.error.code : null,
+        activeComment: second.controller.state.activeDraft?.commonComment,
+        canEdit: second.controller.state.canEdit,
+        savedComments: valueOrThrow(await store.listDrafts()).drafts.map(
+          (saved) => saved.commonComment,
+        ),
+      }
+      await second.controller.dispose()
+
+      expect(captureOutput(actual)).toEqual({
+        errorCode: null,
+        activeComment: 'Written before closing',
+        canEdit: true,
+        savedComments: ['Written before closing'],
+      })
+    })
+
+    it.each([
+      {
+        name: 'continues the draft when a delivery failed',
+        status: 'failed' as const,
+        expected: { continuesSavedDraft: true, savedDraftCount: 1 },
+      },
+      {
+        name: 'starts a new draft once every destination was posted',
+        status: 'succeeded' as const,
+        expected: { continuesSavedDraft: false, savedDraftCount: 2 },
+      },
+    ])('$name', async ({ status, expected }) => {
+      const store = createIndexedDbDraftStore()
+      valueOrThrow(
+        await store.addDraft(
+          savedDraft([
+            {
+              article: { url: urlOnlyInput.url },
+              target: {
+                destination: 'hatena',
+                operationId,
+                comment: 'Sent comment',
+                options: { tags: [], private: false },
+              },
+              result: {
+                destination: 'hatena',
+                operationId,
+                status,
+                retryable: false,
+              },
+            },
+          ]),
+        ),
+      )
+
+      const { controller } = await openLink(store)
+      const actual = {
+        continuesSavedDraft: controller.state.activeDraft?.id === firstDraftId,
+        savedDraftCount: valueOrThrow(await store.listDrafts()).drafts.length,
+      }
+      await controller.dispose()
+
+      expect(captureOutput(actual)).toEqual(expected)
+    })
+
+    it('starts a new draft for a link that carries article text', async () => {
+      const store = createIndexedDbDraftStore()
+      valueOrThrow(await store.addDraft(savedDraft()))
+
+      const { controller } = await openLink(store, {
+        ...urlOnlyInput,
+        sharedText: 'Newly shared text',
+      })
+      const actual = {
+        continuesSavedDraft: controller.state.activeDraft?.id === firstDraftId,
+        savedDraftCount: valueOrThrow(await store.listDrafts()).drafts.length,
+      }
+      await controller.dispose()
+
+      expect(captureOutput(actual)).toEqual({
+        continuesSavedDraft: false,
+        savedDraftCount: 2,
+      })
+    })
+  })
+
   it('does not recreate a discarded share after cleanup fails', async () => {
     const store = createIndexedDbDraftStore()
     const controller = new ComposeController(store)

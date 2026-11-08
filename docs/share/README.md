@@ -7,6 +7,8 @@ Share links use one of two forms:
 - URL only: `/compose?url=<encoded article URL>`
 - Article text: `/compose#share=<encodeURIComponent(JSON.stringify(ShareInput))>`
 
+Opening a URL-only link continues the draft for that article unless every destination has been posted. A link with article text always starts a new draft.
+
 The article text is carried in the fragment, which browsers do not send in the HTTP request. It remains visible in the address bar and browser history, so use the URL-only entrypoint when the text is sensitive. The parser accepts at most 8,192 UTF-16 code units of `sharedText` and at most 16,384 encoded bytes for the complete fragment. These are app limits, not browser guarantees. Oversized text is kept in full on the clipboard and omitted from the link; the shortcut reports `requiresPaste` instead of truncating it.
 
 ## iPhone and iPad

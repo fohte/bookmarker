@@ -189,6 +189,9 @@ export function useComposeAnalysis(
       autoAnalyzeDraftId !== draft?.id ||
       !canEdit ||
       draft.analysis?.summary !== undefined ||
+      // Extraction replaces the article, so a reopened draft keeps any title or text the user wrote.
+      draft.article?.source !== 'shared' ||
+      draft.article.title !== (draft.source.title ?? '') ||
       autoExtractionStarted.current.has(autoAnalyzeDraftId)
     ) {
       return
