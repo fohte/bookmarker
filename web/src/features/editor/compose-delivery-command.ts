@@ -66,7 +66,7 @@ function createNewPublishTarget(
   }
 }
 
-const isSelectedPublishDestination = (
+export const isSelectedPublishDestination = (
   destination: BookmarkDraft['destinations'][number],
 ): destination is Extract<
   BookmarkDraft['destinations'][number],

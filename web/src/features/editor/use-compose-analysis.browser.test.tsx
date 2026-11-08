@@ -503,6 +503,54 @@ describe('useComposeAnalysis', () => {
     })
   })
 
+  it.each([
+    {
+      field: 'title',
+      editedArticle: { ...article, title: 'A title the user wrote' },
+    },
+    {
+      field: 'text',
+      editedArticle: {
+        ...article,
+        text: 'Text the user wrote.',
+        source: 'manual' as const,
+      },
+    },
+  ])(
+    'does not replace the $field the user edited when a draft is reopened',
+    async ({ editedArticle }) => {
+      const requests: unknown[] = []
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((input: RequestInfo | URL) => {
+          requests.push(input)
+          return Promise.resolve(jsonResponse(extractedArticle))
+        }),
+      )
+      const reopenedDraft = { ...draft(undefined), article: editedArticle }
+
+      const Harness = () => {
+        useComposeAnalysis({
+          draft: reopenedDraft,
+          canEdit: true,
+          autoAnalyzeDraftId: reopenedDraft.id,
+          saveAnalysisResult: () => true,
+        })
+        return null
+      }
+
+      container = document.createElement('div')
+      document.body.append(container)
+      root = createRoot(container)
+      await act(async () => {
+        root?.render(<Harness />)
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+
+      expect(requests).toEqual([])
+    },
+  )
+
   it('automatically extracts and summarizes a newly shared article once', async () => {
     const requests: Array<{ path: string; body: unknown }> = []
     const savedCommands: ComposeAnalysisSaveCommand[] = []
