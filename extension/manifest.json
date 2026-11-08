@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Bookmarker",
+  "version": "0.1.0",
+  "description": "Open the article in the current tab in the Bookmarker editor.",
+  "action": {
+    "default_title": "Open in Bookmarker"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["activeTab"]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "extension",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#*": "./src/*.ts"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "conc pnpm:test:type pnpm:test:unit",
+    "test:type": "tsc --noEmit",
+    "test:unit": "vitest run"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.2.9",
+    "esbuild": "0.28.2"
+  }
+}

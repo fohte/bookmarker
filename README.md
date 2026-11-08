@@ -1,6 +1,6 @@
 # Bookmarker
 
-Bookmarker is a personal tool for collecting and managing bookmarks across multiple services. The repository contains a web SPA and a Node.js API workspace.
+Bookmarker is a personal tool for collecting and managing bookmarks across multiple services. The repository contains a web SPA, a Node.js API workspace, and a Chrome extension.
 
 ## Getting started
 
