@@ -95,7 +95,7 @@ async function click(target: Element): Promise<void> {
 // act() stays queued until act() settles, so waiting there can never see it.
 async function chooseOption(name: string): Promise<void> {
   const option = page.getByRole('option', { exact: true, name })
-  await expect.element(option).toBeVisible()
+  await vi.waitFor(() => option.element())
   await act(async () => option.click())
 }
 
