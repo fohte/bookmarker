@@ -31,7 +31,7 @@ Do not put OAuth credentials or the token in the repository, shell history, appl
 - Each POST sends `operationId` as `Idempotency-Key`. Mastodon retains idempotency keys for up to one hour, so this is not a permanent duplicate guarantee.
 - The adapter never retries a write or follows redirects. It uses a 10-second timeout and limits each response body to 64 KiB.
 - A `401`/`403` is reported as an authorization failure, `429` as a rate-limit failure, and other `4xx` responses except `408` as rejected input. These are failed deliveries; only `429` is marked retryable for a later manual retry. Provider response bodies are not exposed.
-- A network failure, timeout, `408`, redirect, `5xx`, oversized or unreadable response, or invalid success payload is `unknown` and cannot be retried by the application. Check the account before making a new operation because Mastodon may have accepted the post.
+- A network failure, timeout, `408`, redirect, `5xx`, oversized or unreadable response, or invalid success payload is also a failed delivery and is not retryable. Check the account before making a new operation because Mastodon may have accepted the post.
 - Instance character limits are metadata only. The API does not truncate comments; an instance that rejects a long post returns a safe rejection result.
 
 Mastodon documents response rate-limit headers and may return `429`. The adapter reports that response as `rate_limited` and does not perform an automatic retry. See [rate limits](https://docs.joinmastodon.org/api/rate-limits/).
