@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "web",
-    "api"
+    "api",
+    "extension"
   ],
   "packageManager": "pnpm@12.7.0",
   "type": "module",

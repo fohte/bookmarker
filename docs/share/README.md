@@ -36,9 +36,33 @@ Run the Safari article shortcut from Safari after signing in to the article site
 
 If Bookmarker requires sign-in, sign in before opening a shared link. An authentication redirect can drop a fragment or carry it into another URL, depending on the redirect. Avoid placing sensitive text in the fragment; use the URL-only shortcut and paste text manually when needed.
 
-## macOS browser bookmarklet
+## Chrome extension
 
-1. Create a bookmark in Safari or Chrome and edit its address to the contents of [`mac-bookmarklet.txt`](./mac-bookmarklet.txt).
+The extension adds a toolbar button that opens the compose page for the current tab's URL, in a new tab next to the article. It reads the URL only when you click the button and does not read the page text. Paste article text manually if you want to include it.
+
+Build the extension for your deployment:
+
+```sh
+BOOKMARKER_ORIGIN=https://bookmark-app.example.invalid pnpm --filter extension run build
+```
+
+Replace `bookmark-app.example.invalid` with the host for your deployment. `BOOKMARKER_ORIGIN` must use `https://`; `http://localhost` is also accepted for local development. The value is written only to the ignored `extension/dist/` directory.
+
+Then load the build output into Chrome:
+
+1. Open `chrome://extensions`.
+2. Enable **Developer mode**.
+3. Click **Load unpacked** and select the `extension/dist` directory.
+4. Pin Bookmarker from the Extensions menu in the toolbar.
+5. Open an article and click the Bookmarker button.
+
+After rebuilding, click the reload icon on the extension's card in `chrome://extensions`.
+
+The article URL is sent to your Bookmarker deployment, so avoid the button on URLs that contain session tokens. Chrome hides the URL of restricted pages such as `chrome://extensions`; on those pages the compose page reports the shared link as invalid.
+
+## macOS Safari bookmarklet
+
+1. Create a bookmark in Safari and edit its address to the contents of [`mac-bookmarklet.txt`](./mac-bookmarklet.txt).
 2. Replace `bookmark-app.example.invalid` with the host for your deployment.
 3. Open an article and select the bookmark to open its URL-only compose link in a new tab. If the browser blocks the new tab, copy the URL from the prompt into the address bar.
 

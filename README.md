@@ -1,6 +1,6 @@
 # Bookmarker
 
-Bookmarker is a personal tool for collecting and managing bookmarks across multiple services. The repository contains a web SPA and a Node.js API workspace.
+Bookmarker is a personal tool for collecting and managing bookmarks across multiple services. The repository contains a web SPA, a Node.js API workspace, and a Chrome extension.
 
 ## Getting started
 
@@ -32,10 +32,12 @@ Run `pnpm --filter api dev` in the terminal where `.env` was loaded. The API bin
 
 Outside local development, place the API behind an Access proxy that injects a signed `Cf-Access-Jwt-Assertion` header. Configure `APP_ORIGIN`, the HTTPS `CF_ACCESS_ISSUER` origin, and `CF_ACCESS_AUD`; only exact `GET /health` and `HEAD /health` requests bypass JWT verification. Invalid or missing configuration returns `503` on other paths, and write requests also require `application/json` plus an `Origin` exactly matching `APP_ORIGIN`.
 
-Run tests and build both workspaces:
+Run tests and build the web and API workspaces:
 
 ```sh
 pnpm test
 pnpm --filter web build
 pnpm --filter api build
 ```
+
+To build the Chrome extension for your deployment, see [Share entrypoints](docs/share/README.md#chrome-extension).

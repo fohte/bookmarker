@@ -10,6 +10,9 @@
     "api": {
       "entry": ["scripts/authorize-hatena.[t]s!"]
     },
+    "extension": {
+      "entry": ["src/background.ts!", "build.[m]js!"]
+    },
     "web": {
       "ignoreDependencies": [
         "reg-suit",
