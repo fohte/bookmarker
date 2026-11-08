@@ -370,6 +370,12 @@ export const Phone390x844: Story = {
   name: 'On a phone, the editor stacks the article, comment, and destinations in one scrolling column.',
 }
 
+export const ToolbarPopup420x600: Story = {
+  ...viewportStory(420, 600),
+  args: compactStoryArgs,
+  name: 'In the browser toolbar popup, the editor keeps the post button in view while the column scrolls.',
+}
+
 export const Desktop1280x900: Story = {
   ...viewportStory(1280, 900),
   args: compactStoryArgs,
