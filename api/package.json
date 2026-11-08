@@ -18,7 +18,7 @@
     "dev": "tsx watch --import @fohte/service-kit/otel-register src/index.ts"
   },
   "dependencies": {
-    "@fohte/service-kit": "0.1.14",
+    "@fohte/service-kit": "0.1.16",
     "@hono/node-server": "2.1.5",
     "@mozilla/readability": "0.6.0",
     "@opentelemetry/api": "1.9.1",
