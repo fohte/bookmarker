@@ -42,7 +42,7 @@ If Bookmarker requires sign-in, sign in before opening a shared link. An authent
 
 The extension adds a toolbar button that opens the compose page for the current tab's URL in a popup. It reads the URL only when you click the button and does not read the page text. Paste article text manually if you want to include it.
 
-Chrome closes the popup when you click elsewhere. Your edits are saved as you type, and opening the popup on the same article continues that draft.
+Chrome closes the popup when you click elsewhere. Your edits are saved as you type, and opening the popup on the same article continues that draft until every selected API destination has been posted.
 
 If your Bookmarker session has expired, the popup shows a sign-in link that opens the compose page in a tab, because sign-in pages generally refuse to load inside a frame.
 
