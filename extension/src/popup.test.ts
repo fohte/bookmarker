@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
-type Probe = () => Promise<{ type: ResponseType }>
+type Probe = (
+  ...request: Parameters<typeof fetch>
+) => Promise<{ type: ResponseType }>
 
 const openPopup = async (activeTab: { url?: string }, probe: Probe) => {
   const elements = {
@@ -63,6 +65,19 @@ describe('toolbar popup', () => {
         hidden: false,
       },
     })
+  })
+
+  it('checks sign-in with the session cookie and without following the redirect', async () => {
+    const probe = vi.fn<Probe>(signedIn)
+
+    await openPopup({ url: 'https://example.com/story' }, probe)
+
+    expect(probe.mock.calls).toEqual([
+      [
+        new URL('https://bookmark-app.example.invalid/'),
+        { credentials: 'include', redirect: 'manual' },
+      ],
+    ])
   })
 
   it('still shows the editor when the sign-in check cannot reach the deployment', async () => {

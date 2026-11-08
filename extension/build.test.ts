@@ -46,6 +46,10 @@ it('embeds the deployment origin in the popup and its permissions', async () => 
     })
   })
 
+  expect(await readFile(join(workDir, 'dist/popup.html'), 'utf8')).toBe(
+    await readFile(packagePath('popup.html'), 'utf8'),
+  )
+
   const manifest: unknown = JSON.parse(
     await readFile(join(workDir, 'dist/manifest.json'), 'utf8'),
   )
