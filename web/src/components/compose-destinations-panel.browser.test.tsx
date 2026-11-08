@@ -91,6 +91,14 @@ async function click(target: Element): Promise<void> {
   await act(async () => userEvent.click(target))
 }
 
+// Base UI opens the popup from an animation frame. An update that lands inside
+// act() stays queued until act() settles, so waiting there can never see it.
+async function chooseOption(name: string): Promise<void> {
+  const option = page.getByRole('option', { exact: true, name })
+  await expect.element(option).toBeVisible()
+  await act(async () => option.click())
+}
+
 beforeEach(() => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
 })
@@ -208,9 +216,7 @@ describe('ComposeDestinationsPanel in a browser', () => {
 
     await click(buttonLabelled('Edit Mastodon post and settings'))
     await click(field('#mastodon-visibility', HTMLButtonElement))
-    await act(async () =>
-      page.getByRole('option', { exact: true, name: 'Unlisted' }).click(),
-    )
+    await chooseOption('Unlisted')
     await act(async () =>
       userEvent.fill(
         field('#mastodon-cw', HTMLInputElement),
@@ -303,19 +309,10 @@ describe('ComposeDestinationsPanel in a browser', () => {
     const unknownOptionDisabled = (
       await vi.waitFor(() => unknownOption.element())
     ).getAttribute('aria-disabled')
-    await act(async () =>
-      page
-        .getByRole('option', {
-          exact: true,
-          name: 'Fictional reading collection',
-        })
-        .click(),
-    )
+    await chooseOption('Fictional reading collection')
     const chosenCollectionLabel = collectionField().textContent
     await click(collectionField())
-    await act(async () =>
-      page.getByRole('option', { exact: true, name: 'Unsorted' }).click(),
-    )
+    await chooseOption('Unsorted')
 
     const raindrop = (collectionId: number) => ({
       destination: 'raindrop',
