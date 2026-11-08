@@ -11,7 +11,7 @@
       "entry": ["scripts/authorize-hatena.[t]s!"]
     },
     "extension": {
-      "entry": ["src/background.ts!", "build.[m]js!"]
+      "entry": ["src/popup.ts!", "build.[m]js!"]
     },
     "web": {
       "ignoreDependencies": [

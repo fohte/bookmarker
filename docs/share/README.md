@@ -40,7 +40,11 @@ If Bookmarker requires sign-in, sign in before opening a shared link. An authent
 
 ## Chrome extension
 
-The extension adds a toolbar button that opens the compose page for the current tab's URL, in a new tab next to the article. It reads the URL only when you click the button and does not read the page text. Paste article text manually if you want to include it.
+The extension adds a toolbar button that opens the compose page for the current tab's URL in a popup. It reads the URL only when you click the button and does not read the page text. Paste article text manually if you want to include it.
+
+Chrome closes the popup when you click elsewhere. Your edits are saved as you type, and opening the popup on the same article continues that draft until every selected API destination has been posted.
+
+If your Bookmarker session has expired, the popup shows a sign-in link that opens the compose page in a tab, because sign-in pages generally refuse to load inside a frame.
 
 Build the extension for your deployment:
 
@@ -48,7 +52,7 @@ Build the extension for your deployment:
 BOOKMARKER_ORIGIN=https://bookmark-app.example.invalid pnpm --filter extension run build
 ```
 
-Replace `bookmark-app.example.invalid` with the host for your deployment. `BOOKMARKER_ORIGIN` must use `https://`; `http://localhost` is also accepted for local development. The value is written only to the ignored `extension/dist/` directory.
+Replace `bookmark-app.example.invalid` with the host for your deployment. `BOOKMARKER_ORIGIN` must use `https://`; `http://localhost` is also accepted for local development. The value is written only to the ignored `extension/dist/` directory. The build also adds it to the extension's host permissions, which Chrome requires to send your sign-in cookie to the embedded compose page and to give it the same drafts as the site.
 
 Then load the build output into Chrome:
 

@@ -8,17 +8,16 @@ import { runInNewContext } from 'node:vm'
 
 import { expect, it, onTestFinished, vi } from 'vitest'
 
-type ClickedTab = { url: string; index: number }
-
 const packagePath = (file: string) =>
   fileURLToPath(new URL(file, import.meta.url))
 
-it('embeds the deployment origin in the service worker', async () => {
+it('embeds the deployment origin in the popup and its permissions', async () => {
   // The build writes to its working directory; a temporary one keeps a real extension/dist intact.
   const workDir = await mkdtemp(join(tmpdir(), 'extension-build-'))
   onTestFinished(() => rm(workDir, { recursive: true }))
-  await cp(packagePath('src/background.ts'), join(workDir, 'src/background.ts'))
+  await cp(packagePath('src/popup.ts'), join(workDir, 'src/popup.ts'))
   await cp(packagePath('manifest.json'), join(workDir, 'manifest.json'))
+  await cp(packagePath('popup.html'), join(workDir, 'popup.html'))
 
   await promisify(execFile)(process.execPath, [packagePath('build.mjs')], {
     cwd: workDir,
@@ -28,30 +27,43 @@ it('embeds the deployment origin in the service worker', async () => {
     },
   })
 
-  let clicked: ((tab: ClickedTab) => void) | undefined
-  const createTab = vi.fn()
-  // The context has no `process`, as in a service worker, so a missing substitution fails on click.
-  runInNewContext(await readFile(join(workDir, 'dist/background.js'), 'utf8'), {
+  const editor = { src: '', hidden: true }
+  // The context has no `process`, as in an extension page, so a missing substitution fails on open.
+  runInNewContext(await readFile(join(workDir, 'dist/popup.js'), 'utf8'), {
     URL,
     chrome: {
-      action: {
-        onClicked: {
-          addListener: (listener: (tab: ClickedTab) => void) => {
-            clicked = listener
-          },
-        },
+      tabs: {
+        query: () => Promise.resolve([{ url: 'https://example.com/story' }]),
       },
-      tabs: { create: createTab },
     },
+    document: { querySelector: () => editor },
+    fetch: () => Promise.resolve({ type: 'basic' }),
   })
-  clicked?.({ url: 'https://example.com/story', index: 2 })
+  await vi.waitFor(() => {
+    expect(editor).toEqual({
+      src: 'https://other-app.example.invalid/compose?url=https%3A%2F%2Fexample.com%2Fstory',
+      hidden: false,
+    })
+  })
 
-  expect(createTab.mock.calls).toEqual([
-    [
-      {
-        url: 'https://other-app.example.invalid/compose?url=https%3A%2F%2Fexample.com%2Fstory',
-        index: 3,
-      },
-    ],
-  ])
+  expect(await readFile(join(workDir, 'dist/popup.html'), 'utf8')).toBe(
+    await readFile(packagePath('popup.html'), 'utf8'),
+  )
+
+  const manifest: unknown = JSON.parse(
+    await readFile(join(workDir, 'dist/manifest.json'), 'utf8'),
+  )
+  expect(manifest).toEqual({
+    manifest_version: 3,
+    name: 'Bookmarker',
+    version: '0.1.0',
+    description:
+      'Open the article in the current tab in the Bookmarker editor.',
+    action: {
+      default_title: 'Open in Bookmarker',
+      default_popup: 'popup.html',
+    },
+    permissions: ['activeTab'],
+    host_permissions: ['https://other-app.example.invalid/*'],
+  })
 })

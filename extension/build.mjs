@@ -1,4 +1,4 @@
-import { copyFile } from 'node:fs/promises'
+import { copyFile, readFile, writeFile } from 'node:fs/promises'
 
 import * as esbuild from 'esbuild'
 
@@ -13,11 +13,16 @@ if (origin === undefined) {
 }
 
 await esbuild.build({
-  entryPoints: ['src/background.ts'],
+  entryPoints: ['src/popup.ts'],
   bundle: true,
   format: 'iife',
   outdir: 'dist',
   define: { 'process.env.BOOKMARKER_ORIGIN': JSON.stringify(origin) },
 })
 
-await copyFile('manifest.json', 'dist/manifest.json')
+const manifest = JSON.parse(await readFile('manifest.json', 'utf8'))
+// Without this, Chrome treats the embedded editor as third-party: its sign-in cookie is withheld and its drafts are partitioned.
+manifest.host_permissions = [`${origin}/*`]
+await writeFile('dist/manifest.json', JSON.stringify(manifest, null, 2))
+
+await copyFile('popup.html', 'dist/popup.html')
