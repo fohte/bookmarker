@@ -12,7 +12,8 @@ import {
 } from '#features/drafts/draft-error'
 import { hasDraftLockSupport } from '#features/drafts/draft-lock'
 import type { DraftStore } from '#features/drafts/draft-store'
-import { latestDeliverySnapshots } from '#features/editor/compose-delivery-history'
+import { isSelectedPublishDestination } from '#features/editor/compose-delivery-command'
+import { destinationHasSucceeded } from '#features/editor/compose-delivery-history'
 import { createNewDraft } from '#features/editor/compose-draft'
 import {
   cleanupDraftNavigation,
@@ -23,10 +24,12 @@ import {
 import type { ComposeState } from '#features/editor/compose-state'
 
 const isFullyPosted = (draft: BookmarkDraft) => {
-  const latest = latestDeliverySnapshots(draft.delivery)
+  const selected = draft.destinations.filter(isSelectedPublishDestination)
   return (
-    latest.length > 0 &&
-    latest.every((snapshot) => snapshot.result?.status === 'succeeded')
+    selected.length > 0 &&
+    selected.every(({ destination }) =>
+      destinationHasSucceeded(draft.delivery, destination),
+    )
   )
 }
 
@@ -198,6 +201,8 @@ export class ComposeIntake {
   ): Promise<Result<BookmarkDraft, DraftError>> {
     const activated = await this.port.activateDraft(draftId)
     if (activated.isErr()) return err(activated.error)
+    // Activating the draft that is already open returns early and leaves the intake's pause in place.
+    this.port.resumeCurrentDraft()
 
     const cleaned = cleanupDraftNavigation(
       options.cleanupUrl,
