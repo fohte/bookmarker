@@ -1282,6 +1282,48 @@ describe('ComposeController in a browser', () => {
       delivery: BookmarkDraft['delivery'] = [],
     ): BookmarkDraft => ({ ...draft(), source: urlOnlyInput, delivery })
 
+    const hatenaSnapshot = (
+      status: 'failed' | 'succeeded',
+    ): BookmarkDraft['delivery'][number] => ({
+      article: { url: urlOnlyInput.url },
+      target: {
+        destination: 'hatena',
+        operationId,
+        comment: 'Sent comment',
+        options: { tags: [], private: false },
+      },
+      result: {
+        destination: 'hatena',
+        operationId,
+        status,
+        retryable: false,
+      },
+    })
+
+    const mastodonOptions = {
+      visibility: 'public' as const,
+      spoilerText: '',
+      sensitive: false,
+    }
+
+    const mastodonFailure: BookmarkDraft['delivery'] = [
+      {
+        article: { url: urlOnlyInput.url },
+        target: {
+          destination: 'mastodon',
+          operationId: secondDraftId,
+          comment: 'Sent comment',
+          options: mastodonOptions,
+        },
+        result: {
+          destination: 'mastodon',
+          operationId: secondDraftId,
+          status: 'failed',
+          retryable: false,
+        },
+      },
+    ]
+
     const openLink = async (store: DraftStore, input = urlOnlyInput) => {
       const controller = new ComposeController(store)
       await controller.start(null)
@@ -1328,27 +1370,7 @@ describe('ComposeController in a browser', () => {
       },
     ])('$name', async ({ status, expected }) => {
       const store = createIndexedDbDraftStore()
-      valueOrThrow(
-        await store.addDraft(
-          savedDraft([
-            {
-              article: { url: urlOnlyInput.url },
-              target: {
-                destination: 'hatena',
-                operationId,
-                comment: 'Sent comment',
-                options: { tags: [], private: false },
-              },
-              result: {
-                destination: 'hatena',
-                operationId,
-                status,
-                retryable: false,
-              },
-            },
-          ]),
-        ),
-      )
+      valueOrThrow(await store.addDraft(savedDraft([hatenaSnapshot(status)])))
 
       const { controller } = await openLink(store)
       const actual = {
@@ -1358,6 +1380,113 @@ describe('ComposeController in a browser', () => {
       await controller.dispose()
 
       expect(captureOutput(actual)).toEqual(expected)
+    })
+
+    it.each([
+      {
+        name: 'continues the draft when another selected destination failed',
+        mastodonDelivery: mastodonFailure,
+      },
+      {
+        name: 'continues the draft when another selected destination was never posted',
+        mastodonDelivery: [],
+      },
+    ])('$name', async ({ mastodonDelivery }) => {
+      const store = createIndexedDbDraftStore()
+      const base = savedDraft([
+        hatenaSnapshot('succeeded'),
+        ...mastodonDelivery,
+      ])
+      valueOrThrow(
+        await store.addDraft({
+          ...base,
+          destinations: [
+            ...base.destinations,
+            {
+              destination: 'mastodon',
+              selected: true,
+              commentMode: 'common',
+              customComment: '',
+              options: mastodonOptions,
+            },
+          ],
+        }),
+      )
+
+      const { controller } = await openLink(store)
+      const actual = {
+        continuesSavedDraft: controller.state.activeDraft?.id === firstDraftId,
+        savedDraftCount: valueOrThrow(await store.listDrafts()).drafts.length,
+      }
+      await controller.dispose()
+
+      expect(captureOutput(actual)).toEqual({
+        continuesSavedDraft: true,
+        savedDraftCount: 1,
+      })
+    })
+
+    it('keeps the open draft editable when its own link opens again', async () => {
+      const store = createIndexedDbDraftStore()
+      const { controller } = await openLink(store)
+      window.history.replaceState({ tab: 'compose' }, '', '/compose?url=shared')
+
+      const result = await controller.openSource(urlOnlyInput, shareOptions)
+      const actual = {
+        errorCode: result.isErr() ? result.error.code : null,
+        canEdit: controller.state.canEdit,
+        isLoading: controller.state.isLoading,
+        savedDraftCount: valueOrThrow(await store.listDrafts()).drafts.length,
+      }
+      await controller.dispose()
+
+      expect(captureOutput(actual)).toEqual({
+        errorCode: null,
+        canEdit: true,
+        isLoading: false,
+        savedDraftCount: 1,
+      })
+    })
+
+    it('keeps the open draft editable when saved drafts cannot be listed', async () => {
+      const baseStore = createIndexedDbDraftStore()
+      valueOrThrow(await baseStore.addDraft(savedDraft()))
+      let failListing = false
+      const listingFailure = new DraftError(
+        'storage-failed',
+        'The saved drafts could not be read.',
+      )
+      const store: DraftStore = {
+        ...baseStore,
+        listDrafts: () =>
+          failListing ? errAsync(listingFailure) : baseStore.listDrafts(),
+      }
+      const controller = new ComposeController(store)
+      await controller.start(firstDraftId)
+      window.history.replaceState({ tab: 'compose' }, '', '/compose?url=shared')
+
+      failListing = true
+      const result = await controller.openSource(
+        { ...urlOnlyInput, url: 'https://example.test/another-article' },
+        shareOptions,
+      )
+      failListing = false
+      const actual = {
+        errorCode: result.isErr() ? result.error.code : null,
+        activeId: controller.state.activeDraft?.id ?? null,
+        canEdit: controller.state.canEdit,
+        isLoading: controller.state.isLoading,
+        savedDraftCount: valueOrThrow(await store.listDrafts()).drafts.length,
+      }
+      await controller.dispose()
+
+      expect(captureOutput(actual)).toEqual({
+        errorCode: 'storage-failed',
+        activeId: firstDraftId,
+        canEdit: true,
+        isLoading: false,
+        savedDraftCount: 1,
+      })
     })
 
     it('starts a new draft for a link that carries article text', async () => {
