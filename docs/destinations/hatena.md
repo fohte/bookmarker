@@ -33,4 +33,4 @@ The API process reads environment variables at startup and does not pick up chan
 
 Hatena accepts at most 10 tags and a comment of up to 100 characters. The adapter sends repeated `tags` form fields, UTF-8 form data, and `private=1` or `private=0`; it does not truncate input or request cross-posting to another service. Posting to an existing URL updates that bookmark. See the [bookmark API](https://developer.hatena.ne.jp/ja/documents/bookmark/apis/rest/bookmark/) and [data format](https://developer.hatena.ne.jp/ja/documents/bookmark/apis/rest/datatype/).
 
-The POST has no automatic retry. A definite provider rejection is reported as failed; a timeout, network error, server error, redirect, or unreadable success response is reported as unknown because the write may have reached Hatena.
+The POST has no automatic retry. Every unsuccessful delivery is reported as failed, and only a rate limit (`429`) is marked retryable. A timeout, network error, server error, redirect, or unreadable success response is not retryable because the write may have reached Hatena.

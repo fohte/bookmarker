@@ -15,7 +15,7 @@ Raindrop states that regular OAuth access tokens expire after two weeks, with Te
 
 ## What publishing does
 
-The adapter checks the article URL before writing. It creates a raindrop when none exists, updates the one matching item after verifying its URL, and refuses to choose an item when multiple IDs are returned. A failed read stops before any write. A write whose outcome cannot be confirmed is returned as unknown and is not retried automatically.
+The adapter checks the article URL before writing. It creates a raindrop when none exists, updates the one matching item after verifying its URL, and refuses to choose an item when multiple IDs are returned. A failed read stops before any write. A write whose outcome cannot be confirmed is returned as failed, is not marked retryable, and is not retried automatically.
 
 Comments are stored in the raindrop `note`; tags and the selected collection are sent with the item. Collection metadata includes root and child collections, the `Unsorted` system collection, and each collection's public flag. The adapter does not change collection visibility.
 
