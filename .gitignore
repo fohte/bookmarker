@@ -131,3 +131,6 @@ dist
 
 # Storybook build output
 storybook-static/
+
+# Captured VRT screenshots
+/web/__screenshots__/
