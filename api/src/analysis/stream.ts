@@ -11,6 +11,7 @@ import {
 } from 'neverthrow'
 import { z } from 'zod'
 
+import { summarizeZodIssues } from '#analysis/diagnostics'
 import type { AnalysisFailure } from '#analysis/types'
 
 const MAX_RECEIVED_BYTES = 1024 * 1024
@@ -38,21 +39,34 @@ type CompletionState = {
   done: boolean
 }
 
-const invalidResponse = (): AnalysisFailure => ({ kind: 'invalid-response' })
+const invalidResponse = (
+  reason: Extract<AnalysisFailure, { kind: 'invalid-response' }>['reason'],
+  details?: Extract<AnalysisFailure, { kind: 'invalid-response' }>['details'],
+): AnalysisFailure => ({
+  kind: 'invalid-response',
+  reason,
+  ...(details === undefined ? {} : { details }),
+})
 
 const parseChunk = (
   data: string,
 ): ResultType<z.infer<typeof ChatChunkSchema>, AnalysisFailure> => {
   const json = Result.fromThrowable(
     () => JSON.parse(data) as unknown,
-    invalidResponse,
+    () => invalidResponse('chunk-json', { outputLength: data.length }),
   )()
   if (json.isErr()) {
     return err(json.error)
   }
 
   const parsed = ChatChunkSchema.safeParse(json.value)
-  return parsed.success ? ok(parsed.data) : err(invalidResponse())
+  return parsed.success
+    ? ok(parsed.data)
+    : err(
+        invalidResponse('chunk-schema', {
+          ...summarizeZodIssues(parsed.error.issues),
+        }),
+      )
 }
 
 const processEvent = (
@@ -60,7 +74,7 @@ const processEvent = (
   state: CompletionState,
 ): ResultType<void, AnalysisFailure> => {
   if (state.done || (event.event !== undefined && event.event !== 'message')) {
-    return err(invalidResponse())
+    return err(invalidResponse('unexpected-event'))
   }
 
   if (event.data === '[DONE]') {
@@ -73,42 +87,66 @@ const processEvent = (
     return err(parsed.error)
   }
   if (Object.hasOwn(parsed.value, 'error')) {
-    return err(invalidResponse())
+    return err(invalidResponse('upstream-error-field'))
   }
 
   const { choices } = parsed.value
   if (choices.length === 0) {
     return state.finished && !Object.hasOwn(parsed.value, 'usage')
-      ? err(invalidResponse())
+      ? err(invalidResponse('empty-choices'))
       : ok(undefined)
   }
   if (state.finished) {
-    return err(invalidResponse())
+    return err(invalidResponse('unexpected-event'))
   }
 
   if (choices.length !== 1 || choices[0]?.index !== 0) {
-    return err(invalidResponse())
+    return err(
+      invalidResponse('choice-shape', {
+        choicesCount: choices.length,
+        ...(choices[0] === undefined ? {} : { choiceIndex: choices[0].index }),
+      }),
+    )
   }
 
   const choice = choices[0]
   const delta = choice.delta
   if (
-    (delta?.refusal !== undefined &&
-      delta.refusal !== null &&
-      delta.refusal.length > 0) ||
-    (delta?.tool_calls !== undefined &&
-      delta.tool_calls !== null &&
-      delta.tool_calls.length > 0) ||
-    delta?.function_call !== undefined
+    delta?.refusal !== undefined &&
+    delta.refusal !== null &&
+    delta.refusal.length > 0
   ) {
-    return err(invalidResponse())
+    return err(invalidResponse('refusal'))
+  }
+  if (delta?.tool_calls !== undefined && delta.tool_calls !== null) {
+    if (delta.tool_calls.length > 0) {
+      return err(
+        invalidResponse('tool-call', {
+          toolCallCount: delta.tool_calls.length,
+        }),
+      )
+    }
+  }
+  if (delta?.function_call !== undefined) {
+    return err(invalidResponse('tool-call', { hasFunctionCall: true }))
   }
 
   const finishesNow =
     choice.finish_reason !== undefined && choice.finish_reason !== null
   if (finishesNow) {
     if (choice.finish_reason !== 'stop') {
-      return err(invalidResponse())
+      const finishReason = choice.finish_reason
+      return err(
+        invalidResponse('finish-reason', {
+          finishReason:
+            finishReason === 'length' ||
+            finishReason === 'content_filter' ||
+            finishReason === 'tool_calls' ||
+            finishReason === 'function_call'
+              ? finishReason
+              : 'other',
+        }),
+      )
     }
   }
 
@@ -119,7 +157,12 @@ const processEvent = (
   ) {
     state.content += delta.content
     if (state.content.length > MAX_CONTENT_LENGTH) {
-      return err(invalidResponse())
+      return err(
+        invalidResponse('content-limit', {
+          contentLength: state.content.length,
+          limit: MAX_CONTENT_LENGTH,
+        }),
+      )
     }
   }
 
@@ -136,11 +179,13 @@ const decodeChunk = (
 ): ResultType<string, AnalysisFailure> =>
   Result.fromThrowable(
     () => decoder.decode(value, { stream: true }),
-    invalidResponse,
+    () => invalidResponse('invalid-utf8'),
   )()
 
 const readError = (signal: AbortSignal): AnalysisFailure =>
-  signal.aborted ? { kind: 'timeout' } : { kind: 'upstream-failure' }
+  signal.aborted
+    ? { kind: 'timeout', reason: 'stream-timeout' }
+    : { kind: 'upstream-failure', reason: 'stream-read-failed' }
 
 const finalizeCompletion = (
   state: CompletionState,
@@ -148,9 +193,14 @@ const finalizeCompletion = (
 ): ResultType<string, AnalysisFailure> =>
   state.done && state.finished
     ? signal.aborted
-      ? err({ kind: 'timeout' })
+      ? err({ kind: 'timeout', reason: 'stream-timeout' })
       : ok(state.content)
-    : err(invalidResponse())
+    : err(
+        invalidResponse('missing-completion', {
+          receivedDone: state.done,
+          receivedFinish: state.finished,
+        }),
+      )
 
 export const collectCompletion = (
   response: Response,
@@ -158,12 +208,12 @@ export const collectCompletion = (
 ): ResultAsync<string, AnalysisFailure> => {
   const body = response.body
   if (!body) {
-    return errAsync(invalidResponse())
+    return errAsync(invalidResponse('missing-body'))
   }
 
   const readerResult = Result.fromThrowable(
     () => body.getReader(),
-    invalidResponse,
+    () => invalidResponse('missing-body'),
   )()
   if (readerResult.isErr()) {
     return errAsync(readerResult.error)
@@ -194,27 +244,35 @@ export const collectCompletion = (
   })
 
   const feedParser = (text: string): ResultType<void, AnalysisFailure> => {
-    const feed = Result.fromThrowable(() => {
-      parser.feed(text)
-    }, invalidResponse)()
+    const feed = Result.fromThrowable(
+      () => {
+        parser.feed(text)
+      },
+      () => invalidResponse('sse-parser'),
+    )()
     if (eventFailure !== undefined) {
       return err(eventFailure)
     }
     if (feed.isErr() || parserFailure) {
-      return err(invalidResponse())
+      return err(invalidResponse('sse-parser'))
     }
     return ok(undefined)
   }
 
   const cancelReader = (): void => {
-    const cancellation = Result.fromThrowable(() => {
-      return reader.cancel()
-    }, invalidResponse)()
+    const cancellation = Result.fromThrowable(
+      () => {
+        return reader.cancel()
+      },
+      () => invalidResponse('sse-parser'),
+    )()
     if (cancellation.isErr()) {
       return
     }
 
-    void ResultAsync.fromPromise(cancellation.value, invalidResponse).match(
+    void ResultAsync.fromPromise(cancellation.value, () =>
+      invalidResponse('sse-parser'),
+    ).match(
       () => undefined,
       () => undefined,
     )
@@ -242,11 +300,16 @@ export const collectCompletion = (
 
       const bytes: unknown = read.value.value
       if (!(bytes instanceof Uint8Array)) {
-        return fail(invalidResponse())
+        return fail(invalidResponse('sse-parser'))
       }
       receivedBytes += bytes.byteLength
       if (receivedBytes > MAX_RECEIVED_BYTES) {
-        return fail(invalidResponse())
+        return fail(
+          invalidResponse('stream-limit', {
+            receivedBytes,
+            limit: MAX_RECEIVED_BYTES,
+          }),
+        )
       }
 
       const decoded = decodeChunk(decoder, bytes)
@@ -262,7 +325,7 @@ export const collectCompletion = (
 
     const finalText = Result.fromThrowable(
       () => decoder.decode(),
-      invalidResponse,
+      () => invalidResponse('invalid-utf8'),
     )()
     if (finalText.isErr()) {
       return fail(finalText.error)
