@@ -369,6 +369,33 @@ describe('POST /api/analysis/summary', () => {
     )
   })
 
+  it('retries a streamed invalid response once and returns a valid summary', async () => {
+    const responses = [
+      responseFromEvents([
+        dataEvent({
+          error: { message: 'fictional provider failure' },
+          choices: [],
+        }),
+      ]),
+      completionResponse('{"status":"ok","summary":"架空の記事です。"}'),
+    ]
+    let fetchCount = 0
+    const fetchImpl: typeof fetch = () =>
+      Promise.resolve(responses[fetchCount++] ?? completionResponse(''))
+    const app = createTestApp(fetchImpl)
+    const result = await post(app, '/api/analysis/summary', { article })
+
+    expect(JSON.stringify({ result, fetchCount })).toEqual(
+      JSON.stringify({
+        result: {
+          status: 200,
+          body: { summary: '架空の記事です。', partial: false },
+        },
+        fetchCount: 2,
+      }),
+    )
+  })
+
   it('returns invalid response after two invalid summaries', async () => {
     let fetchCount = 0
     const fetchImpl: typeof fetch = () => {
@@ -637,8 +664,10 @@ describe('POST /api/analysis/summary', () => {
   })
 
   it('returns a timeout error when the completion stream exceeds its deadline', async () => {
-    const fetchImpl: typeof fetch = (_input, init) =>
-      Promise.resolve(
+    let fetchCount = 0
+    const fetchImpl: typeof fetch = (_input, init) => {
+      fetchCount += 1
+      return Promise.resolve(
         new Response(
           new ReadableStream<Uint8Array>({
             start(controller) {
@@ -659,18 +688,24 @@ describe('POST /api/analysis/summary', () => {
           { headers: { 'content-type': 'text/event-stream' } },
         ),
       )
+    }
     const app = createTestApp(fetchImpl, { timeoutMs: 10 })
     const result = await post(app, '/api/analysis/summary', { article })
 
-    expect(result).toEqual({
-      status: 504,
-      body: {
-        error: {
-          code: 'ANALYSIS_TIMEOUT',
-          message: 'The analysis request timed out.',
+    expect(JSON.stringify({ result, fetchCount })).toEqual(
+      JSON.stringify({
+        result: {
+          status: 504,
+          body: {
+            error: {
+              code: 'ANALYSIS_TIMEOUT',
+              message: 'The analysis request timed out.',
+            },
+          },
         },
-      },
-    })
+        fetchCount: 1,
+      }),
+    )
   })
 
   it('rejects a non-stop finish reason', async () => {
@@ -773,6 +808,8 @@ describe('POST /api/analysis/verify', () => {
               'Use kind "unsupported" when a factual claim has no support in the article but is not contradicted.',
               'Use kind "uncertain" when the article leaves a factual claim ambiguous or there is not enough context to decide.',
               'Do not classify subjective opinions as factual errors.',
+              'For every issue, quote a non-empty exact excerpt from the comment and give a concise non-empty reason.',
+              'For error issues, evidence must be a non-empty exact excerpt from the article.',
               'Return exactly one JSON object matching one of these shapes:',
               '{"status":"ok","issues":[<issue>, ...]} where issues is an array of at most 20 issue objects; use an empty array when there are no issues.',
               'An error issue has exactly {"kind":"error","quote":"<non-empty string>","reason":"<non-empty string>","evidence":"<non-empty string>"}.',
@@ -1083,12 +1120,47 @@ describe('POST /api/analysis/verify', () => {
     )
   })
 
+  it('returns invalid response after two invalid verifications', async () => {
+    let fetchCount = 0
+    const fetchImpl: typeof fetch = () => {
+      fetchCount += 1
+      return Promise.resolve(
+        responseFromEvents([
+          dataEvent({
+            error: { message: 'fictional provider failure' },
+            choices: [],
+          }),
+        ]),
+      )
+    }
+    const app = createTestApp(fetchImpl)
+    const result = await post(app, '/api/analysis/verify', {
+      article,
+      comment: '青い箱は毎日確認します。',
+    })
+
+    expect(JSON.stringify({ result, fetchCount })).toEqual(
+      JSON.stringify({
+        result: {
+          status: 502,
+          body: {
+            error: {
+              code: 'INVALID_ANALYSIS_RESPONSE',
+              message: 'The analysis service returned an invalid response.',
+            },
+          },
+        },
+        fetchCount: 2,
+      }),
+    )
+  })
+
   it('returns insufficient when the model includes extra keys with that status', async () => {
     let fetchCount = 0
     const fetchImpl: typeof fetch = () => {
       fetchCount += 1
       return Promise.resolve(
-        completionResponse('{"status":"insufficient","issues":[]}'),
+        completionResponse('{"status":"insufficient","detail":"fictional"}'),
       )
     }
     const app = createTestApp(fetchImpl)

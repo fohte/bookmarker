@@ -42,6 +42,8 @@ export const createVerificationMessages = (
       'Use kind "unsupported" when a factual claim has no support in the article but is not contradicted.',
       'Use kind "uncertain" when the article leaves a factual claim ambiguous or there is not enough context to decide.',
       'Do not classify subjective opinions as factual errors.',
+      'For every issue, quote a non-empty exact excerpt from the comment and give a concise non-empty reason.',
+      'For error issues, evidence must be a non-empty exact excerpt from the article.',
       'Return exactly one JSON object matching one of these shapes:',
       '{"status":"ok","issues":[<issue>, ...]} where issues is an array of at most 20 issue objects; use an empty array when there are no issues.',
       'An error issue has exactly {"kind":"error","quote":"<non-empty string>","reason":"<non-empty string>","evidence":"<non-empty string>"}.',

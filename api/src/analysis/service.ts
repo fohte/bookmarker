@@ -46,21 +46,15 @@ const requestParsedCompletion = <Output>(
   timeoutMs: number,
   parse: (content: string) => ResultType<Output, AnalysisFailure>,
 ): ResultAsync<Output, AnalysisFailure> =>
-  requestCompletion(config, messages, fetchImpl, timeoutMs).andThen(
-    (content) => {
-      const parsed = parse(content)
-      if (parsed.isErr() && parsed.error.kind === 'invalid-response') {
-        return requestCompletion(
-          config,
-          messages,
-          fetchImpl,
-          timeoutMs,
-        ).andThen(parse)
-      }
-
-      return parsed
-    },
-  )
+  requestCompletion(config, messages, fetchImpl, timeoutMs)
+    .andThen(parse)
+    .orElse((failure) =>
+      failure.kind === 'invalid-response'
+        ? requestCompletion(config, messages, fetchImpl, timeoutMs).andThen(
+            parse,
+          )
+        : err(failure),
+    )
 
 export const summarizeArticle = (
   article: Article,
