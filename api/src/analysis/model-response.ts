@@ -15,9 +15,7 @@ const SummarySuccessSchema = z
   })
   .strict()
 
-const InsufficientSchema = z
-  .object({ status: z.literal('insufficient') })
-  .strict()
+const InsufficientSchema = z.object({ status: z.literal('insufficient') })
 
 const SummaryModelResponseSchema = z.discriminatedUnion('status', [
   SummarySuccessSchema,
