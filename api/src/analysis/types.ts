@@ -3,11 +3,11 @@ export type AnalysisDiagnosticIssue = {
   code: string
 }
 
-export type AnalysisDiagnosticDetails = Readonly<
+type AnalysisDiagnosticDetails = Readonly<
   Record<string, string | number | boolean | readonly AnalysisDiagnosticIssue[]>
 >
 
-export type InvalidResponseReason =
+type InvalidResponseReason =
   | 'content-type'
   | 'sse-parser'
   | 'chunk-json'
