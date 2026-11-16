@@ -5,6 +5,7 @@ import {
   parseVerificationModelResponse,
 } from '#analysis/model-response'
 import {
+  type ChatMessage,
   createSummaryMessages,
   createVerificationMessages,
 } from '#analysis/prompts'
@@ -40,7 +41,7 @@ const citationMatches = (source: string, citation: string): boolean => {
 
 const requestParsedCompletion = <Output>(
   config: AnalysisConfig,
-  messages: ReturnType<typeof createSummaryMessages>,
+  messages: ChatMessage[],
   fetchImpl: typeof fetch,
   timeoutMs: number,
   parse: (content: string) => ResultType<Output, AnalysisFailure>,
