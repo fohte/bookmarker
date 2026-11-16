@@ -64,7 +64,7 @@ const parseChunk = (
     ? ok(parsed.data)
     : err(
         invalidResponse('chunk-schema', {
-          issues: summarizeZodIssues(parsed.error.issues),
+          ...summarizeZodIssues(parsed.error.issues),
         }),
       )
 }

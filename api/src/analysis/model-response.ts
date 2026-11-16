@@ -104,7 +104,7 @@ const parseModelResponse = <Schema extends z.ZodType>(
         reason: 'model-schema',
         details: {
           outputLength: content.length,
-          issues: summarizeZodIssues(parsed.error.issues),
+          ...summarizeZodIssues(parsed.error.issues),
         },
       })
 }

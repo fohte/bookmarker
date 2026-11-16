@@ -18,10 +18,16 @@ const SAFE_PATH_SEGMENTS = new Set([
   'function_call',
 ])
 
+const MAX_REPORTED_ISSUES = 20
+
 export const summarizeZodIssues = (
   issues: readonly { path: readonly PropertyKey[]; code: string }[],
-): readonly AnalysisDiagnosticIssue[] =>
-  issues.map((issue) => ({
+): {
+  issues: readonly AnalysisDiagnosticIssue[]
+  issueCount: number
+  omittedIssueCount: number
+} => ({
+  issues: issues.slice(0, MAX_REPORTED_ISSUES).map((issue) => ({
     path: issue.path.map((segment) =>
       typeof segment === 'number'
         ? segment
@@ -30,4 +36,7 @@ export const summarizeZodIssues = (
           : '<unknown>',
     ),
     code: issue.code,
-  }))
+  })),
+  issueCount: issues.length,
+  omittedIssueCount: Math.max(0, issues.length - MAX_REPORTED_ISSUES),
+})

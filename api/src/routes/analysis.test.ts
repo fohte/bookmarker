@@ -394,6 +394,8 @@ describe('POST /api/analysis/summary', () => {
             reason: 'model-schema',
             details: {
               outputLength: 28,
+              issueCount: 2,
+              omittedIssueCount: 0,
               issues: [
                 { path: ['summary'], code: 'too_small' },
                 { path: ['summary'], code: 'custom' },
@@ -423,6 +425,8 @@ describe('POST /api/analysis/summary', () => {
             },
             extras: {
               outputLength: 28,
+              issueCount: 2,
+              omittedIssueCount: 0,
               issues: [
                 { path: ['summary'], code: 'too_small' },
                 { path: ['summary'], code: 'custom' },
@@ -706,17 +710,53 @@ describe('POST /api/analysis/summary', () => {
           { headers: { 'content-type': 'text/event-stream' } },
         ),
       )
-    const app = createTestApp(fetchImpl, { timeoutMs: 10 })
+    const observability = createObservabilityRecorder()
+    const app = createTestApp(fetchImpl, { timeoutMs: 10, ...observability })
     const result = await post(app, '/api/analysis/summary', { article })
 
-    expect(result).toEqual({
-      status: 504,
-      body: {
-        error: {
-          code: 'ANALYSIS_TIMEOUT',
-          message: 'The analysis request timed out.',
+    const observed = () => ({
+      response: result,
+      logs: observability.logs,
+      captures: observability.captures,
+    })
+    expect(observed()).toEqual({
+      response: {
+        status: 504,
+        body: {
+          error: {
+            code: 'ANALYSIS_TIMEOUT',
+            message: 'The analysis request timed out.',
+          },
         },
       },
+      logs: [
+        {
+          fields: {
+            endpoint: '/api/analysis/summary',
+            kind: 'timeout',
+            reason: 'stream-timeout',
+          },
+          message: 'Analysis failed: timeout (stream-timeout)',
+        },
+      ],
+      captures: [
+        {
+          error: {
+            name: 'Error',
+            message: 'Analysis failed: timeout (stream-timeout)',
+          },
+          fingerprintKey: ['analysis-failure', 'timeout', 'stream-timeout'],
+          context: {
+            level: 'error',
+            tags: {
+              endpoint: '/api/analysis/summary',
+              kind: 'timeout',
+              reason: 'stream-timeout',
+            },
+            extras: {},
+          },
+        },
+      ],
     })
   })
 
