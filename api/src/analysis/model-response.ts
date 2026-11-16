@@ -1,6 +1,7 @@
 import { err, ok, Result, type Result as ResultType } from 'neverthrow'
 import { z } from 'zod'
 
+import { summarizeZodIssues } from '#analysis/diagnostics'
 import type { AnalysisFailure } from '#analysis/types'
 
 const NonEmptyTextSchema = z
@@ -79,7 +80,11 @@ export type VerificationModelResponse = z.infer<
 const parseJson = (content: string): ResultType<unknown, AnalysisFailure> =>
   Result.fromThrowable(
     () => JSON.parse(content) as unknown,
-    (): AnalysisFailure => ({ kind: 'invalid-response' }),
+    (): AnalysisFailure => ({
+      kind: 'invalid-response',
+      reason: 'model-json',
+      details: { outputLength: content.length },
+    }),
   )()
 
 const parseModelResponse = <Schema extends z.ZodType>(
@@ -92,7 +97,16 @@ const parseModelResponse = <Schema extends z.ZodType>(
   }
 
   const parsed = schema.safeParse(json.value)
-  return parsed.success ? ok(parsed.data) : err({ kind: 'invalid-response' })
+  return parsed.success
+    ? ok(parsed.data)
+    : err({
+        kind: 'invalid-response',
+        reason: 'model-schema',
+        details: {
+          outputLength: content.length,
+          issues: summarizeZodIssues(parsed.error.issues),
+        },
+      })
 }
 
 export const parseSummaryModelResponse = (

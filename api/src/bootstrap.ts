@@ -7,4 +7,6 @@
 // `http.Server` is never patched.
 import { initObservabilityIfConfigured } from '@fohte/service-kit/observability'
 
-initObservabilityIfConfigured(process.env)
+import { logger } from '#logger'
+
+initObservabilityIfConfigured(process.env, { logger })

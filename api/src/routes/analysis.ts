@@ -1,9 +1,15 @@
+import type { Logger } from '@fohte/service-kit/logger'
+import { captureWithFingerprint } from '@fohte/service-kit/observability'
 import { type Context, Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { err, ok, type Result as ResultType, ResultAsync } from 'neverthrow'
 import { z } from 'zod'
 
 import { readAnalysisConfig } from '#analysis/config'
+import {
+  type AnalysisEndpoint,
+  reportAnalysisFailure,
+} from '#analysis/report-failure'
 import { summarizeArticle, verifyComment } from '#analysis/service'
 import type { AnalysisConfig, AnalysisFailure } from '#analysis/types'
 import { type Article, ArticleSchema } from '#contracts/article'
@@ -70,6 +76,8 @@ type AnalysisRouteOptions = {
   env?: () => Readonly<Record<string, string | undefined>>
   fetchImpl?: typeof fetch
   timeoutMs?: number
+  logger?: Pick<Logger, 'error'>
+  captureFailure?: typeof captureWithFingerprint
 }
 
 const MAX_REQUEST_BYTES = 1024 * 1024
@@ -116,9 +124,21 @@ export const createAnalysisRoute = (
   const getEnv = options.env ?? (() => process.env)
   const fetchImpl = options.fetchImpl ?? fetch
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  const reportFailure = (
+    endpoint: AnalysisEndpoint,
+    failure: AnalysisFailure,
+  ): void => {
+    reportAnalysisFailure(endpoint, failure, {
+      ...(options.logger === undefined ? {} : { logger: options.logger }),
+      ...(options.captureFailure === undefined
+        ? {}
+        : { capture: options.captureFailure }),
+    })
+  }
 
   const runAnalysis = <Output>(
     context: Context,
+    endpoint: AnalysisEndpoint,
     article: Article,
     analyze: (config: AnalysisConfig) => ResultAsync<Output, AnalysisFailure>,
   ) => {
@@ -133,7 +153,10 @@ export const createAnalysisRoute = (
 
     return analyze(config.value).match(
       (result) => context.json(result),
-      (failure) => jsonError(context, failure),
+      (failure) => {
+        reportFailure(endpoint, failure)
+        return jsonError(context, failure)
+      },
     )
   }
 
@@ -158,8 +181,12 @@ export const createAnalysisRoute = (
       return invalidRequestError(context, input.error)
     }
 
-    return runAnalysis(context, input.value.article, (config) =>
-      summarizeArticle(input.value.article, config, fetchImpl, timeoutMs),
+    return runAnalysis(
+      context,
+      '/api/analysis/summary',
+      input.value.article,
+      (config) =>
+        summarizeArticle(input.value.article, config, fetchImpl, timeoutMs),
     )
   })
 
@@ -169,14 +196,18 @@ export const createAnalysisRoute = (
       return invalidRequestError(context, input.error)
     }
 
-    return runAnalysis(context, input.value.article, (config) =>
-      verifyComment(
-        input.value.article,
-        input.value.comment,
-        config,
-        fetchImpl,
-        timeoutMs,
-      ),
+    return runAnalysis(
+      context,
+      '/api/analysis/verify',
+      input.value.article,
+      (config) =>
+        verifyComment(
+          input.value.article,
+          input.value.comment,
+          config,
+          fetchImpl,
+          timeoutMs,
+        ),
     )
   })
 

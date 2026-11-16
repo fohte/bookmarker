@@ -1,3 +1,6 @@
+import type { Logger } from '@fohte/service-kit/logger'
+import { noopLogger } from '@fohte/service-kit/logger'
+import { captureWithFingerprint } from '@fohte/service-kit/observability'
 import { Hono } from 'hono'
 import { describe, expect, it } from 'vitest'
 
@@ -92,6 +95,8 @@ const createTestApp = (
   options: {
     env?: Readonly<Record<string, string | undefined>>
     timeoutMs?: number
+    logger?: Pick<Logger, 'error'>
+    captureFailure?: typeof captureWithFingerprint
   } = {},
 ): Hono =>
   new Hono().route(
@@ -99,9 +104,14 @@ const createTestApp = (
     createAnalysisRoute({
       env: () => options.env ?? environment,
       fetchImpl,
+      logger: options.logger ?? noopLogger,
       ...(options.timeoutMs === undefined
         ? {}
         : { timeoutMs: options.timeoutMs }),
+      ...(options.logger === undefined ? {} : { logger: options.logger }),
+      ...(options.captureFailure === undefined
+        ? {}
+        : { captureFailure: options.captureFailure }),
     }),
   )
 
@@ -125,6 +135,34 @@ const withCancellation = <Response>(
   response,
   cancelled,
 })
+
+const createObservabilityRecorder = () => {
+  const logs: Array<{ fields: Record<string, unknown>; message: string }> = []
+  const captures: Array<{
+    error: unknown
+    fingerprintKey: string | readonly string[]
+    context: Parameters<typeof captureWithFingerprint>[2]
+  }> = []
+  const logger: Pick<Logger, 'error'> = {
+    error: (fields, message) => logs.push({ fields, message }),
+  }
+  const captureFailure: typeof captureWithFingerprint = (
+    error,
+    fingerprintKey,
+    context,
+  ) => {
+    captures.push({
+      error:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : error,
+      fingerprintKey,
+      context,
+    })
+  }
+
+  return { logs, captures, logger, captureFailure }
+}
 
 describe('POST /api/analysis/summary', () => {
   it('aggregates split SSE chunks into a summary', async () => {
@@ -329,17 +367,70 @@ describe('POST /api/analysis/summary', () => {
   it('returns an invalid response error for schema-invalid model JSON', async () => {
     const fetchImpl: typeof fetch = () =>
       Promise.resolve(completionResponse('{"status":"ok","summary":""}'))
-    const app = createTestApp(fetchImpl)
+    const observability = createObservabilityRecorder()
+    const app = createTestApp(fetchImpl, observability)
     const result = await post(app, '/api/analysis/summary', { article })
 
-    expect(result).toEqual({
-      status: 502,
-      body: {
-        error: {
-          code: 'INVALID_ANALYSIS_RESPONSE',
-          message: 'The analysis service returned an invalid response.',
+    const observed = () => ({
+      response: result,
+      logs: observability.logs,
+      captures: observability.captures,
+    })
+    expect(observed()).toEqual({
+      response: {
+        status: 502,
+        body: {
+          error: {
+            code: 'INVALID_ANALYSIS_RESPONSE',
+            message: 'The analysis service returned an invalid response.',
+          },
         },
       },
+      logs: [
+        {
+          fields: {
+            endpoint: '/api/analysis/summary',
+            kind: 'invalid-response',
+            reason: 'model-schema',
+            details: {
+              outputLength: 28,
+              issues: [
+                { path: ['summary'], code: 'too_small' },
+                { path: ['summary'], code: 'custom' },
+              ],
+            },
+          },
+          message: 'Analysis failed: invalid-response (model-schema)',
+        },
+      ],
+      captures: [
+        {
+          error: {
+            name: 'Error',
+            message: 'Analysis failed: invalid-response (model-schema)',
+          },
+          fingerprintKey: [
+            'analysis-failure',
+            'invalid-response',
+            'model-schema',
+          ],
+          context: {
+            level: 'error',
+            tags: {
+              endpoint: '/api/analysis/summary',
+              kind: 'invalid-response',
+              reason: 'model-schema',
+            },
+            extras: {
+              outputLength: 28,
+              issues: [
+                { path: ['summary'], code: 'too_small' },
+                { path: ['summary'], code: 'custom' },
+              ],
+            },
+          },
+        },
+      ],
     })
   })
 
@@ -355,18 +446,56 @@ describe('POST /api/analysis/summary', () => {
           new Response('fictional gateway response', { status: 503 }),
         ),
     ],
-  ])('returns an upstream failure for %s', async (_label, fetchImpl) => {
-    const app = createTestApp(fetchImpl)
+  ])('returns an upstream failure for %s', async (label, fetchImpl) => {
+    const observability = createObservabilityRecorder()
+    const app = createTestApp(fetchImpl, observability)
     const result = await post(app, '/api/analysis/summary', { article })
+    const reason =
+      label === 'a non-2xx response' ? 'http-error' : 'fetch-rejected'
+    const details = reason === 'http-error' ? { status: 503 } : {}
+    const message = `Analysis failed: upstream-failure (${reason})`
 
-    expect(result).toEqual({
-      status: 502,
-      body: {
-        error: {
-          code: 'ANALYSIS_UPSTREAM_FAILURE',
-          message: 'The analysis service could not complete the request.',
+    const observed = () => ({
+      response: result,
+      logs: observability.logs,
+      captures: observability.captures,
+    })
+    expect(observed()).toEqual({
+      response: {
+        status: 502,
+        body: {
+          error: {
+            code: 'ANALYSIS_UPSTREAM_FAILURE',
+            message: 'The analysis service could not complete the request.',
+          },
         },
       },
+      logs: [
+        {
+          fields: {
+            endpoint: '/api/analysis/summary',
+            kind: 'upstream-failure',
+            reason,
+            ...(Object.keys(details).length === 0 ? {} : { details }),
+          },
+          message,
+        },
+      ],
+      captures: [
+        {
+          error: { name: 'Error', message },
+          fingerprintKey: ['analysis-failure', 'upstream-failure', reason],
+          context: {
+            level: 'error',
+            tags: {
+              endpoint: '/api/analysis/summary',
+              kind: 'upstream-failure',
+              reason,
+            },
+            extras: details,
+          },
+        },
+      ],
     })
   })
 
@@ -598,17 +727,58 @@ describe('POST /api/analysis/summary', () => {
           finishReason: 'length',
         }),
       )
-    const app = createTestApp(fetchImpl)
+    const observability = createObservabilityRecorder()
+    const app = createTestApp(fetchImpl, observability)
     const result = await post(app, '/api/analysis/summary', { article })
 
-    expect(result).toEqual({
-      status: 502,
-      body: {
-        error: {
-          code: 'INVALID_ANALYSIS_RESPONSE',
-          message: 'The analysis service returned an invalid response.',
+    const observed = () => ({
+      response: result,
+      logs: observability.logs,
+      captures: observability.captures,
+    })
+    expect(observed()).toEqual({
+      response: {
+        status: 502,
+        body: {
+          error: {
+            code: 'INVALID_ANALYSIS_RESPONSE',
+            message: 'The analysis service returned an invalid response.',
+          },
         },
       },
+      logs: [
+        {
+          fields: {
+            endpoint: '/api/analysis/summary',
+            kind: 'invalid-response',
+            reason: 'finish-reason',
+            details: { finishReason: 'length' },
+          },
+          message: 'Analysis failed: invalid-response (finish-reason)',
+        },
+      ],
+      captures: [
+        {
+          error: {
+            name: 'Error',
+            message: 'Analysis failed: invalid-response (finish-reason)',
+          },
+          fingerprintKey: [
+            'analysis-failure',
+            'invalid-response',
+            'finish-reason',
+          ],
+          context: {
+            level: 'error',
+            tags: {
+              endpoint: '/api/analysis/summary',
+              kind: 'invalid-response',
+              reason: 'finish-reason',
+            },
+            extras: { finishReason: 'length' },
+          },
+        },
+      ],
     })
   })
 

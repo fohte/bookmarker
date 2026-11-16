@@ -12,7 +12,10 @@ const cancelResponseBody = (response: Response): void => {
 
   const cancellation = Result.fromThrowable(
     () => body.cancel(),
-    (): AnalysisFailure => ({ kind: 'upstream-failure' }),
+    (): AnalysisFailure => ({
+      kind: 'upstream-failure',
+      reason: 'stream-read-failed',
+    }),
   )()
   if (cancellation.isErr()) {
     return
@@ -20,6 +23,7 @@ const cancelResponseBody = (response: Response): void => {
 
   void ResultAsync.fromPromise(cancellation.value, (): AnalysisFailure => ({
     kind: 'upstream-failure',
+    reason: 'stream-read-failed',
   })).match(
     () => undefined,
     () => undefined,
@@ -48,11 +52,17 @@ export const requestCompletion = (
   )
 
   return ResultAsync.fromPromise(request, (): AnalysisFailure =>
-    signal.aborted ? { kind: 'timeout' } : { kind: 'upstream-failure' },
+    signal.aborted
+      ? { kind: 'timeout', reason: 'request-timeout' }
+      : { kind: 'upstream-failure', reason: 'fetch-rejected' },
   ).andThen((response) => {
     if (!response.ok) {
       cancelResponseBody(response)
-      return err({ kind: 'upstream-failure' } as const)
+      return err({
+        kind: 'upstream-failure',
+        reason: 'http-error',
+        details: { status: response.status },
+      } as const)
     }
 
     const mediaType = response.headers
@@ -62,7 +72,17 @@ export const requestCompletion = (
       .toLowerCase()
     if (mediaType !== 'text/event-stream') {
       cancelResponseBody(response)
-      return err({ kind: 'invalid-response' } as const)
+      return err({
+        kind: 'invalid-response',
+        reason: 'content-type',
+        details: {
+          contentType:
+            mediaType !== undefined &&
+            /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(mediaType)
+              ? mediaType
+              : 'other',
+        },
+      } as const)
     }
 
     return collectCompletion(response, signal)
