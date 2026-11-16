@@ -1,10 +1,11 @@
-import { err, ok, ResultAsync } from 'neverthrow'
+import { err, ok, type Result as ResultType, ResultAsync } from 'neverthrow'
 
 import {
   parseSummaryModelResponse,
   parseVerificationModelResponse,
 } from '#analysis/model-response'
 import {
+  type ChatMessage,
   createSummaryMessages,
   createVerificationMessages,
 } from '#analysis/prompts'
@@ -38,27 +39,41 @@ const citationMatches = (source: string, citation: string): boolean => {
   )
 }
 
+const requestParsedCompletion = <Output>(
+  config: AnalysisConfig,
+  messages: ChatMessage[],
+  fetchImpl: typeof fetch,
+  timeoutMs: number,
+  parse: (content: string) => ResultType<Output, AnalysisFailure>,
+): ResultAsync<Output, AnalysisFailure> =>
+  requestCompletion(config, messages, fetchImpl, timeoutMs)
+    .andThen(parse)
+    .orElse((failure) =>
+      failure.kind === 'invalid-response'
+        ? requestCompletion(config, messages, fetchImpl, timeoutMs).andThen(
+            parse,
+          )
+        : err(failure),
+    )
+
 export const summarizeArticle = (
   article: Article,
   config: AnalysisConfig,
   fetchImpl: typeof fetch,
   timeoutMs: number,
 ): ResultAsync<Summary, AnalysisFailure> => {
-  return requestCompletion(
+  return requestParsedCompletion(
     config,
     createSummaryMessages(article),
     fetchImpl,
     timeoutMs,
-  ).andThen((content) => {
-    const parsed = parseSummaryModelResponse(content)
-    if (parsed.isErr()) {
-      return err(parsed.error)
-    }
-    if (parsed.value.status === 'insufficient') {
+    parseSummaryModelResponse,
+  ).andThen((parsed) => {
+    if (parsed.status === 'insufficient') {
       return err({ kind: 'insufficient' } as const)
     }
 
-    return ok({ summary: parsed.value.summary, partial: article.partial })
+    return ok({ summary: parsed.summary, partial: article.partial })
   })
 }
 
@@ -69,27 +84,24 @@ export const verifyComment = (
   fetchImpl: typeof fetch,
   timeoutMs: number,
 ): ResultAsync<Verification, AnalysisFailure> => {
-  return requestCompletion(
+  return requestParsedCompletion(
     config,
     createVerificationMessages(article, comment),
     fetchImpl,
     timeoutMs,
-  ).andThen((content) => {
-    const parsed = parseVerificationModelResponse(content)
-    if (parsed.isErr()) {
-      return err(parsed.error)
-    }
-    if (parsed.value.status === 'insufficient') {
+    parseVerificationModelResponse,
+  ).andThen((parsed) => {
+    if (parsed.status === 'insufficient') {
       return err({ kind: 'insufficient' } as const)
     }
 
-    const issues = parsed.value.issues.filter(
+    const issues = parsed.issues.filter(
       (issue) =>
         citationMatches(comment, issue.quote) &&
         (issue.evidence === undefined ||
           citationMatches(article.text, issue.evidence)),
     )
-    const omittedIssueCount = parsed.value.issues.length - issues.length
+    const omittedIssueCount = parsed.issues.length - issues.length
 
     return ok({
       issues,
